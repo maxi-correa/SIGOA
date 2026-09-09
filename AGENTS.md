@@ -63,18 +63,45 @@ Nunca eliminar datos o estructura existente para simplificar una tarea sin autor
 
 ## 4. Documentación
 
-`docs/SIGOA.md` es la referencia técnica y funcional del proyecto.
+docs/SIGOA.md es la referencia técnica y funcional principal del proyecto.
 
-Sus decisiones consolidadas deben respetarse.
+Consultar este documento cuando una tarea requiera contexto del sistema, reglas de negocio, estructura de datos, arquitectura o decisiones previamente tomadas.
 
-Si el código existente contradice la documentación:
+docs/REQUERIMIENTOS_NO_FUNCIONALES.md es la referencia oficial para la interfaz de usuario y los criterios visuales del sistema.
 
-1. investigar la causa;
-2. verificar migraciones y estructura real;
-3. determinar qué está realmente implementado;
-4. informar el conflicto si puede afectar datos o arquitectura.
+Debe consultarse especialmente cuando una tarea involucre:
 
-No corregir automáticamente mediante cambios destructivos.
+páginas;
+Views;
+formularios;
+botones;
+tablas;
+tarjetas;
+navegación;
+colores;
+tipografía;
+iconografía;
+mensajes;
+validaciones visuales;
+estados de obra;
+responsive;
+diseño mobile-first;
+organización de CSS;
+componentes visuales;
+funcionamiento de la interfaz sin conexión.
+
+Las decisiones visuales definidas en docs/REQUERIMIENTOS_NO_FUNCIONALES.md deben considerarse consolidadas.
+
+No introducir colores, estilos, iconos, tipografías o patrones visuales nuevos que contradigan ese documento sin autorización explícita.
+
+Si una necesidad de interfaz no está definida:
+
+revisar primero docs/REQUERIMIENTOS_NO_FUNCIONALES.md;
+revisar el código existente;
+mantener la solución coherente con el sistema;
+consultar antes de establecer una nueva decisión visual permanente.
+
+Si el código existente contradice la documentación, no realizar una refactorización masiva automáticamente. Identificar el conflicto, informar qué archivos están involucrados y proponer una corrección incremental.
 
 ---
 
