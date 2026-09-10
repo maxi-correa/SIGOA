@@ -4,41 +4,192 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= esc($titulo) ?> — SIGOA</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background: #f5f6f8; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .login-card { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.1); padding: 2rem; width: 100%; max-width: 380px; }
-        .login-card h1 { font-size: 1.4rem; margin-bottom: .25rem; color: #212529; }
-        .login-card .subtitle { font-size: .85rem; color: #6c757d; margin-bottom: 1.5rem; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; font-size: .85rem; font-weight: 600; margin-bottom: .3rem; color: #495057; }
-        .form-group input { width: 100%; padding: .55rem .75rem; font-size: .95rem; border: 1px solid #ced4da; border-radius: 4px; }
-        .form-group input:focus { outline: none; border-color: #dd4814; box-shadow: 0 0 0 2px rgba(221,72,20,.25); }
-        .btn { display: block; width: 100%; padding: .6rem; font-size: .95rem; font-weight: 600; color: #fff; background: #dd4814; border: none; border-radius: 4px; cursor: pointer; }
-        .btn:hover { background: #c03d11; }
-        .error-msg { background: #f8d7da; color: #842029; border: 1px solid #f5c2c7; border-radius: 4px; padding: .55rem .75rem; font-size: .85rem; margin-bottom: 1rem; }
-    </style>
+
+    <!-- Tipografía Inter (local sería ideal; CDN como respaldo) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap Icons (local sería ideal; CDN como respaldo) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <!-- Estilos SIGOA -->
+    <link rel="stylesheet" href="<?= base_url('assets/css/app.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('assets/css/components/forms.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('assets/css/components/buttons.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('assets/css/components/alerts.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('assets/css/pages/login.css') ?>">
 </head>
 <body>
-    <div class="login-card">
-        <h1>SIGOA</h1>
-        <p class="subtitle">Sistema de Inspección de Obras de Arquitectura</p>
+    <main class="login-page">
+        <div class="login-card">
 
-        <?php if (session()->getFlashdata('error')): ?>
-            <div class="error-msg"><?= esc(session()->getFlashdata('error')) ?></div>
-        <?php endif; ?>
+            <!-- Encabezado -->
+            <div class="login-header">
+                <h1 class="login-brand">SIGOA</h1>
+                <p class="login-subtitle">Sistema de Inspección de Obras de Arquitectura</p>
+            </div>
 
-        <form method="post" action="<?= site_url('/login') ?>">
-            <div class="form-group">
-                <label for="usuario">Usuario</label>
-                <input type="text" id="usuario" name="usuario" value="<?= esc(old('usuario')) ?>" required autofocus>
-            </div>
-            <div class="form-group">
-                <label for="password">Contraseña</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            <button type="submit" class="btn">Ingresar</button>
-        </form>
-    </div>
+            <!-- Error de autenticación (credenciales incorrectas) -->
+            <?php if (session()->getFlashdata('error')): ?>
+                <div class="alert alert-danger" role="alert">
+                    <span class="alert-icon"><i class="bi bi-exclamation-circle"></i></span>
+                    <span><?= esc(session()->getFlashdata('error')) ?></span>
+                </div>
+            <?php endif; ?>
+
+            <!-- Formulario -->
+            <form method="post" action="<?= site_url('/login') ?>" class="login-form" novalidate id="loginForm">
+
+                <!-- Usuario -->
+                <div class="form-group">
+                    <label for="usuario">Usuario</label>
+                    <input
+                        type="text"
+                        id="usuario"
+                        name="usuario"
+                        class="form-control"
+                        value="<?= esc(old('usuario')) ?>"
+                        placeholder="Ingrese su usuario"
+                        autocomplete="username"
+                        autofocus
+                    >
+                    <span class="field-error" id="error-usuario" role="alert" aria-live="polite"></span>
+                </div>
+
+                <!-- Contraseña -->
+                <div class="form-group">
+                    <label for="password">Contraseña</label>
+                    <div class="input-icon-wrapper">
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            class="form-control"
+                            placeholder="Ingrese su contraseña"
+                            autocomplete="current-password"
+                        >
+                        <button
+                            type="button"
+                            class="input-icon-action"
+                            aria-label="Mostrar contraseña"
+                            id="togglePassword"
+                        >
+                            <i class="bi bi-eye icon-show"></i>
+                            <i class="bi bi-eye-slash icon-hide" style="display:none"></i>
+                        </button>
+                    </div>
+                    <span class="field-error" id="error-password" role="alert" aria-live="polite"></span>
+                </div>
+
+                <!-- Recordar usuario -->
+                <div class="form-group login-remember">
+                    <label class="form-check">
+                        <input type="checkbox" id="remember_user" name="remember_user" value="1">
+                        <span class="form-check-label">Recordar usuario</span>
+                    </label>
+                </div>
+
+                <!-- Botón ingresar -->
+                <button type="submit" class="btn btn-success" id="btnLogin">
+                    <i class="bi bi-box-arrow-in-right"></i>
+                    Ingresar
+                </button>
+
+            </form>
+
+        </div>
+    </main>
+
+    <!-- JavaScript login -->
+    <script src="<?= base_url('assets/js/login.js') ?>"></script>
+
+    <!-- Validación frontend -->
+    <script>
+    (function () {
+        'use strict';
+
+        var form = document.getElementById('loginForm');
+        var usuarioInput = document.getElementById('usuario');
+        var passwordInput = document.getElementById('password');
+        var errorUsuario = document.getElementById('error-usuario');
+        var errorPassword = document.getElementById('error-password');
+
+        function clearErrors() {
+            errorUsuario.textContent = '';
+            errorPassword.textContent = '';
+            usuarioInput.classList.remove('is-invalid');
+            passwordInput.classList.remove('is-invalid');
+        }
+
+        function showError(input, errorEl, message) {
+            errorEl.textContent = message;
+            input.classList.add('is-invalid');
+        }
+
+        function validatePasswordRules(pw) {
+            if (pw.length < 9) {
+                return 'La contraseña debe tener al menos 9 caracteres.';
+            }
+            if (!/[A-Z]/.test(pw)) {
+                return 'La contraseña debe contener al menos una letra mayúscula.';
+            }
+            if (!/[0-9]/.test(pw)) {
+                return 'La contraseña debe contener al menos un número.';
+            }
+            return '';
+        }
+
+        form.addEventListener('submit', function (e) {
+            clearErrors();
+
+            var usuario = usuarioInput.value.trim();
+            var password = passwordInput.value;
+            var hasError = false;
+
+            /* 1. Campos obligatorios */
+            if (usuario === '' && password === '') {
+                showError(usuarioInput, errorUsuario, 'Debe completar el usuario y la contraseña.');
+                hasError = true;
+            } else if (usuario === '') {
+                showError(usuarioInput, errorUsuario, 'Falta ingresar el usuario.');
+                hasError = true;
+            } else if (password === '') {
+                showError(passwordInput, errorPassword, 'Falta completar la contraseña.');
+                hasError = true;
+            }
+
+            if (hasError) {
+                e.preventDefault();
+                return;
+            }
+
+            /* 2. Reglas de contraseña */
+            var ruleError = validatePasswordRules(password);
+            if (ruleError) {
+                showError(passwordInput, errorPassword, ruleError);
+                e.preventDefault();
+                return;
+            }
+
+            /* 3. Si pasa todo, el formulario se envía al servidor */
+        });
+
+        /* Limpiar error individual al escribir */
+        usuarioInput.addEventListener('input', function () {
+            if (errorUsuario.textContent) {
+                errorUsuario.textContent = '';
+                usuarioInput.classList.remove('is-invalid');
+            }
+        });
+
+        passwordInput.addEventListener('input', function () {
+            if (errorPassword.textContent) {
+                errorPassword.textContent = '';
+                passwordInput.classList.remove('is-invalid');
+            }
+        });
+    })();
+    </script>
 </body>
 </html>

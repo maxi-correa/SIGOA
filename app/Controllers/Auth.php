@@ -17,7 +17,6 @@ class Auth extends BaseController
     {
         $data = [
             'titulo' => 'Iniciar sesión',
-            'error'  => '',
         ];
 
         return view('auth/login', $data);
@@ -25,23 +24,63 @@ class Auth extends BaseController
 
     public function attemptLogin()
     {
-        $usuario  = $this->request->getPost('usuario');
-        $password = $this->request->getPost('password');
+        $usuario  = trim((string) $this->request->getPost('usuario'));
+        $password = (string) $this->request->getPost('password');
 
-        $user = $this->usuarioModel->findByUsuario((string) $usuario);
-
-        if ($user === null || ! password_verify((string) $password, $user->password_hash)) {
+        /* --- 1. Campos obligatorios --- */
+        if ($usuario === '' && $password === '') {
             return redirect()->back()
                 ->withInput()
-                ->with('error', 'Credenciales incorrectas.');
+                ->with('error', 'Debe completar el usuario y la contraseña.');
+        }
+
+        if ($usuario === '') {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Falta ingresar el usuario.');
+        }
+
+        if ($password === '') {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Falta completar la contraseña.');
+        }
+
+        /* --- 2. Reglas de contraseña --- */
+        if (strlen($password) < 9) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'La contraseña debe tener al menos 9 caracteres.');
+        }
+
+        if (! preg_match('/[A-Z]/', $password)) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'La contraseña debe contener al menos una letra mayúscula.');
+        }
+
+        if (! preg_match('/[0-9]/', $password)) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'La contraseña debe contener al menos un número.');
+        }
+
+        /* --- 3. Autenticación --- */
+        $user = $this->usuarioModel->findByUsuario($usuario);
+
+        if ($user === null || ! password_verify($password, $user->password_hash)) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Los datos ingresados no son correctos.');
         }
 
         if (! $user->activo) {
             return redirect()->back()
                 ->withInput()
-                ->with('error', 'Credenciales incorrectas.');
+                ->with('error', 'Los datos ingresados no son correctos.');
         }
 
+        /* --- 4. Sesión --- */
         $session = session();
 
         $session->set([
@@ -51,7 +90,22 @@ class Auth extends BaseController
             'username'   => $user->usuario,
         ]);
 
-        return redirect()->to('/dashboard');
+        /* --- 5. Recordar usuario --- */
+        if ($this->request->getPost('remember_user')) {
+            $this->response->setCookie([
+                'name'     => 'sigoa_remember_user',
+                'value'    => $user->usuario,
+                'expire'   => 30 * 86400,
+                'path'     => '/',
+                'secure'   => false,
+                'httponly' => false,
+                'samesite' => 'Lax',
+            ]);
+        } elseif ($this->request->getCookie('sigoa_remember_user') !== null) {
+            $this->response->deleteCookie('sigoa_remember_user');
+        }
+
+        return redirect()->to('/dashboard')->withCookies();
     }
 
     public function dashboard(): string

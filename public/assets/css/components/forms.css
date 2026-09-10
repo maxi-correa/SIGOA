@@ -1,0 +1,119 @@
+/* ===================================================================
+   SIGOA — Componente: Formularios
+   =================================================================== */
+
+.form-group {
+    margin-bottom: var(--space-md);
+}
+
+.form-group label {
+    display: block;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: var(--space-xs);
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    color: var(--color-text);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.form-control::placeholder {
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--color-border-focus);
+    box-shadow: 0 0 0 3px rgba(36, 52, 76, 0.15);
+}
+
+.form-control.is-invalid {
+    border-color: var(--color-danger);
+}
+
+.form-control.is-invalid:focus {
+    box-shadow: 0 0 0 3px rgba(184, 74, 74, 0.15);
+}
+
+/* --- Input con icono (posición relativa) --- */
+.input-icon-wrapper {
+    position: relative;
+}
+
+.input-icon-wrapper .form-control {
+    padding-right: 2.75rem;
+}
+
+.input-icon-wrapper .input-icon-action {
+    position: absolute;
+    top: 50%;
+    right: 0.5rem;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: color 0.2s, background-color 0.2s;
+    font-size: 1.1rem;
+}
+
+.input-icon-wrapper .input-icon-action:hover {
+    color: var(--color-text);
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.input-icon-wrapper .input-icon-action:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(36, 52, 76, 0.2);
+}
+
+/* --- Checkbox --- */
+.form-check {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    cursor: pointer;
+}
+
+.form-check input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.form-check-label {
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    cursor: pointer;
+    user-select: none;
+}
+
+/* --- Mensajes de error por campo --- */
+.field-error {
+    display: block;
+    font-size: var(--font-size-xs);
+    color: var(--color-danger);
+    margin-top: var(--space-xs);
+    line-height: 1.4;
+}

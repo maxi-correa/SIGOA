@@ -1,0 +1,48 @@
+/* ===================================================================
+   SIGOA — Componente: Alertas / Mensajes
+   =================================================================== */
+
+.alert {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    padding: 0.65rem 0.85rem;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+    margin-bottom: var(--space-md);
+}
+
+.alert .alert-icon {
+    flex-shrink: 0;
+    font-size: 1.1rem;
+    margin-top: 1px;
+}
+
+/* Error */
+.alert-danger {
+    background-color: #fdf0f0;
+    color: var(--color-danger);
+    border: 1px solid #f0c4c4;
+}
+
+/* Éxito */
+.alert-success {
+    background-color: #f0f8f3;
+    color: var(--color-success);
+    border: 1px solid #c4dece;
+}
+
+/* Advertencia */
+.alert-warning {
+    background-color: #fdf6ec;
+    color: var(--color-warning);
+    border: 1px solid #e8d5b0;
+}
+
+/* Información */
+.alert-info {
+    background-color: #edf4fb;
+    color: var(--color-info);
+    border: 1px solid #b8d4ec;
+}

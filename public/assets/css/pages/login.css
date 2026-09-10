@@ -1,0 +1,83 @@
+/* ===================================================================
+   SIGOA — Página: Login
+   =================================================================== */
+
+.login-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: var(--space-md);
+}
+
+.login-card {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: var(--space-xl);
+    width: 100%;
+    max-width: 400px;
+}
+
+/* --- Encabezado --- */
+.login-header {
+    text-align: center;
+    margin-bottom: var(--space-xl);
+}
+
+.login-brand {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    letter-spacing: 0.02em;
+    margin-bottom: var(--space-xs);
+}
+
+.login-subtitle {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+}
+
+/* --- Formulario --- */
+.login-form .form-group {
+    margin-bottom: var(--space-lg);
+}
+
+.login-form .form-control {
+    font-size: 0.95rem;
+}
+
+/* --- Checkbox recordar --- */
+.login-remember {
+    margin-bottom: var(--space-lg);
+}
+
+/* --- Botón ingresa --- */
+.login-form .btn {
+    margin-top: var(--space-sm);
+}
+
+/* --- Responsive --- */
+@media (max-width: 480px) {
+    .login-page {
+        padding: var(--space-sm);
+        align-items: flex-start;
+        padding-top: 15vh;
+    }
+
+    .login-card {
+        padding: var(--space-lg);
+        border-radius: var(--radius-md);
+    }
+
+    .login-brand {
+        font-size: 1.35rem;
+    }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+    .login-card {
+        max-width: 380px;
+    }
+}
