@@ -5,13 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= esc($titulo) ?> — SIGOA</title>
 
-    <!-- Tipografía Inter (local sería ideal; CDN como respaldo) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Tipografía Inter (local) -->
+    <link rel="stylesheet" href="<?= base_url('assets/fonts/inter/fonts.css') ?>">
 
-    <!-- Bootstrap Icons (local sería ideal; CDN como respaldo) -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <!-- Bootstrap Icons 1.11.3 (local) -->
+    <link rel="stylesheet" href="<?= base_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css') ?>">
 
     <!-- Estilos SIGOA -->
     <link rel="stylesheet" href="<?= base_url('assets/css/app.css') ?>">
@@ -102,94 +100,6 @@
     </main>
 
     <!-- JavaScript login -->
-    <script src="<?= base_url('assets/js/login.js') ?>"></script>
-
-    <!-- Validación frontend -->
-    <script>
-    (function () {
-        'use strict';
-
-        var form = document.getElementById('loginForm');
-        var usuarioInput = document.getElementById('usuario');
-        var passwordInput = document.getElementById('password');
-        var errorUsuario = document.getElementById('error-usuario');
-        var errorPassword = document.getElementById('error-password');
-
-        function clearErrors() {
-            errorUsuario.textContent = '';
-            errorPassword.textContent = '';
-            usuarioInput.classList.remove('is-invalid');
-            passwordInput.classList.remove('is-invalid');
-        }
-
-        function showError(input, errorEl, message) {
-            errorEl.textContent = message;
-            input.classList.add('is-invalid');
-        }
-
-        function validatePasswordRules(pw) {
-            if (pw.length < 9) {
-                return 'La contraseña debe tener al menos 9 caracteres.';
-            }
-            if (!/[A-Z]/.test(pw)) {
-                return 'La contraseña debe contener al menos una letra mayúscula.';
-            }
-            if (!/[0-9]/.test(pw)) {
-                return 'La contraseña debe contener al menos un número.';
-            }
-            return '';
-        }
-
-        form.addEventListener('submit', function (e) {
-            clearErrors();
-
-            var usuario = usuarioInput.value.trim();
-            var password = passwordInput.value;
-            var hasError = false;
-
-            /* 1. Campos obligatorios */
-            if (usuario === '' && password === '') {
-                showError(usuarioInput, errorUsuario, 'Debe completar el usuario y la contraseña.');
-                hasError = true;
-            } else if (usuario === '') {
-                showError(usuarioInput, errorUsuario, 'Falta ingresar el usuario.');
-                hasError = true;
-            } else if (password === '') {
-                showError(passwordInput, errorPassword, 'Falta completar la contraseña.');
-                hasError = true;
-            }
-
-            if (hasError) {
-                e.preventDefault();
-                return;
-            }
-
-            /* 2. Reglas de contraseña */
-            var ruleError = validatePasswordRules(password);
-            if (ruleError) {
-                showError(passwordInput, errorPassword, ruleError);
-                e.preventDefault();
-                return;
-            }
-
-            /* 3. Si pasa todo, el formulario se envía al servidor */
-        });
-
-        /* Limpiar error individual al escribir */
-        usuarioInput.addEventListener('input', function () {
-            if (errorUsuario.textContent) {
-                errorUsuario.textContent = '';
-                usuarioInput.classList.remove('is-invalid');
-            }
-        });
-
-        passwordInput.addEventListener('input', function () {
-            if (errorPassword.textContent) {
-                errorPassword.textContent = '';
-                passwordInput.classList.remove('is-invalid');
-            }
-        });
-    })();
-    </script>
+    <script src="<?= base_url('assets/js/pages/login.js') ?>"></script>
 </body>
 </html>

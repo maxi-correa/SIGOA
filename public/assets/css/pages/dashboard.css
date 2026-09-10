@@ -1,0 +1,68 @@
+/* ===================================================================
+   SIGOA — Página: Dashboard
+   =================================================================== */
+
+/* --- Topbar --- */
+.topbar {
+    background: var(--color-primary);
+    padding: .6rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.topbar .brand {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--color-text-on-primary);
+}
+
+.topbar .user-info {
+    font-size: .85rem;
+    color: rgba(255, 255, 255, .8);
+}
+
+.topbar .user-info strong {
+    color: var(--color-text-on-primary);
+}
+
+.topbar a {
+    color: rgba(255, 255, 255, .7);
+    text-decoration: none;
+    font-size: .85rem;
+    margin-left: 1rem;
+}
+
+.topbar a:hover {
+    color: var(--color-text-on-primary);
+}
+
+/* --- Contenido --- */
+.content {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 0 1.5rem;
+}
+
+.content h1 {
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+    color: var(--color-primary);
+}
+
+/* --- Welcome box --- */
+.welcome-box {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+}
+
+.welcome-box p {
+    line-height: 1.6;
+    color: var(--color-text);
+}
+
+.welcome-box-secondary {
+    margin-top: 1rem;
+}

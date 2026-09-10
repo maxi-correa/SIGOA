@@ -30,29 +30,29 @@
 /* Primario — azul institucional */
 .btn-primary {
     background-color: var(--color-primary);
-    color: #FFFFFF;
+    color: var(--color-text-on-primary);
 }
 
 .btn-primary:hover:not(:disabled) {
-    background-color: #1a2838;
+    background-color: var(--color-primary-hover);
 }
 
 .btn-primary:active:not(:disabled) {
-    background-color: #141f2d;
+    background-color: var(--color-primary-active);
 }
 
 /* Confirmación — verde */
 .btn-success {
     background-color: var(--color-success);
-    color: #FFFFFF;
+    color: var(--color-text-on-primary);
 }
 
 .btn-success:hover:not(:disabled) {
-    background-color: #356a4b;
+    background-color: var(--color-success-hover);
 }
 
 .btn-success:active:not(:disabled) {
-    background-color: #2d5a40;
+    background-color: var(--color-success-active);
 }
 
 /* Secundario */
@@ -69,9 +69,9 @@
 /* Peligro — rojo */
 .btn-danger {
     background-color: var(--color-danger);
-    color: #FFFFFF;
+    color: var(--color-text-on-primary);
 }
 
 .btn-danger:hover:not(:disabled) {
-    background-color: #a04040;
+    background-color: var(--color-danger-hover);
 }

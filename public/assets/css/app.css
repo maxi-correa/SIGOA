@@ -6,6 +6,8 @@
 :root {
     /* Institucionales */
     --color-primary: #24344C;
+    --color-primary-hover: #1a2838;
+    --color-primary-active: #141f2d;
     --color-accent: #8E7058;
 
     /* Neutros */
@@ -13,12 +15,26 @@
     --color-surface: #FFFFFF;
     --color-text: #2C3036;
     --color-text-secondary: #6B7078;
+    --color-text-on-primary: #FFFFFF;
 
     /* Funcionales */
     --color-success: #3F7D5A;
+    --color-success-hover: #356a4b;
+    --color-success-active: #2d5a40;
     --color-warning: #B8862F;
     --color-danger: #B84A4A;
+    --color-danger-hover: #a04040;
     --color-info: #3B6E9E;
+
+    /* Fondos de alertas */
+    --color-danger-bg: #fdf0f0;
+    --color-danger-border: #f0c4c4;
+    --color-success-bg: #f0f8f3;
+    --color-success-border: #c4dece;
+    --color-warning-bg: #fdf6ec;
+    --color-warning-border: #e8d5b0;
+    --color-info-bg: #edf4fb;
+    --color-info-border: #b8d4ec;
 
     /* Estados de obra */
     --color-state-previo: #F5F3F0;
