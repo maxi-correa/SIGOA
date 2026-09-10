@@ -31,4 +31,23 @@ class UsuarioModel extends Model
     {
         return $this->where('usuario', $usuario)->first();
     }
+
+    /**
+     * Obtiene los nombres de los roles activos de un usuario.
+     *
+     * @return list<string>
+     */
+    public function findRolesByUsuarioId(int $usuarioId): array
+    {
+        $roles = $this->db
+            ->table('usuarios_roles')
+            ->select('roles.nombre')
+            ->join('roles', 'roles.id = usuarios_roles.rol_id', 'inner')
+            ->where('usuarios_roles.usuario_id', $usuarioId)
+            ->where('roles.activo', 1)
+            ->get()
+            ->getResultArray();
+
+        return array_column($roles, 'nombre');
+    }
 }

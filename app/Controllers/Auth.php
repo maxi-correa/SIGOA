@@ -13,8 +13,14 @@ class Auth extends BaseController
         $this->usuarioModel = new UsuarioModel();
     }
 
-    public function login(): string
+    public function login()
     {
+        $session = session();
+
+        if ($session->get('logged_in')) {
+            return redirect()->to($this->getDashboardPath($session->get('roles') ?? []));
+        }
+
         $data = [
             'titulo' => 'Iniciar sesión',
         ];
@@ -80,17 +86,30 @@ class Auth extends BaseController
                 ->with('error', 'Los datos ingresados no son correctos.');
         }
 
-        /* --- 4. Sesión --- */
+        /* --- 4. Obtener roles --- */
+        $roles = $this->usuarioModel->findRolesByUsuarioId((int) $user->id);
+
+        if ($roles === []) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Su usuario no tiene roles asignados. Contacte al administrador.');
+        }
+
+        /* --- 5. Sesión --- */
         $session = session();
 
+        $session->regenerate(true);
+
         $session->set([
-            'logged_in'  => true,
-            'user_id'    => $user->id,
-            'user_name'  => $user->nombre . ' ' . $user->apellido,
-            'username'   => $user->usuario,
+            'logged_in' => true,
+            'user_id'   => $user->id,
+            'user_name' => $user->nombre . ' ' . $user->apellido,
+            'username'  => $user->usuario,
+            'roles'     => $roles,
+            'activo'    => true,
         ]);
 
-        /* --- 5. Recordar usuario --- */
+        /* --- 6. Recordar usuario --- */
         if ($this->request->getPost('remember_user')) {
             $this->response->setCookie([
                 'name'     => 'sigoa_remember_user',
@@ -105,26 +124,59 @@ class Auth extends BaseController
             $this->response->deleteCookie('sigoa_remember_user');
         }
 
-        return redirect()->to('/dashboard')->withCookies();
+        return redirect()->to($this->getDashboardPath($roles))->withCookies();
     }
 
-    public function dashboard(): string
+    /**
+     * Redirige al usuario autenticado a su dashboard correspondiente.
+     * Utilizado por la ruta /dashboard.
+     */
+    public function redirectToDashboard()
     {
-        $data = [
-            'titulo'    => 'Panel de control',
-            'user_name' => session()->get('user_name'),
-            'username'  => session()->get('username'),
-        ];
+        $roles = session()->get('roles') ?? [];
 
-        return view('auth/dashboard', $data);
+        if ($roles === []) {
+            $session = session();
+            $session->destroy();
+
+            return redirect()->to('/login')
+                ->with('error', 'Su usuario no tiene roles asignados.');
+        }
+
+        return redirect()->to($this->getDashboardPath($roles));
     }
 
     public function logout()
     {
         $session = session();
-
         $session->destroy();
 
         return redirect()->to('/login');
+    }
+
+    /**
+     * Determina el dashboard correspondiente según la jerarquía de roles.
+     *
+     * @param list<string> $roles
+     */
+    private function getDashboardPath(array $roles): string
+    {
+        if (in_array('SUPERADMINISTRADOR', $roles, true)) {
+            return '/superadmin/dashboard';
+        }
+
+        if (in_array('ADMINISTRADOR', $roles, true)) {
+            return '/admin/dashboard';
+        }
+
+        if (in_array('INSPECTOR', $roles, true)) {
+            return '/inspector/dashboard';
+        }
+
+        if (in_array('CONSULTA', $roles, true)) {
+            return '/consulta/dashboard';
+        }
+
+        return '/login';
     }
 }

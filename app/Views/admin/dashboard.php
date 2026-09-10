@@ -11,9 +11,14 @@
             Bienvenido/a, <strong><?= esc($user_name) ?></strong>.<br>
             Ha iniciado sesión correctamente en SIGOA.
         </p>
-        <p class="welcome-box-secondary">
-            Esta es una página de verificación para comprobar que el mecanismo de autenticación
-            funciona correctamente. El acceso a esta página requiere sesión activa.
+        <p>
+            Rol activo: <strong><?= esc(implode(', ', $roles)) ?></strong>
         </p>
     </div>
+<?php if (session()->getFlashdata('warning')): ?>
+    <div class="alert alert-warning" role="alert">
+        <span class="alert-icon"><i class="bi bi-exclamation-triangle"></i></span>
+        <span><?= esc(session()->getFlashdata('warning')) ?></span>
+    </div>
+<?php endif; ?>
 <?= $this->endSection() ?>

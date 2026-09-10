@@ -92,6 +92,19 @@ Las migraciones existentes fueron ejecutadas correctamente.
 
 Los datos maestros iniciales también fueron cargados mediante seeders.
 
+Adicionalmente, se encuentra implementada la infraestructura de autenticación y autorización:
+
+* autenticación mediante usuario y contraseña;
+* carga de roles desde `usuarios_roles` durante el login;
+* sesión enriquecida con roles como array;
+* regeneración segura de sesión después del login;
+* `AuthFilter` — protección de rutas autenticadas;
+* `RoleFilter` — autorización por rol mediante filtros paramétricos de CI4;
+* routing separado por área/rol mediante route groups;
+* redirección automática al dashboard correspondiente según jerarquía de roles;
+* dashboards mínimos independientes para cada rol;
+* logout con destrucción de sesión;
+
 ---
 
 ## 4.2 PENDIENTE
@@ -102,7 +115,7 @@ Quedan pendientes, entre otras:
 
 * interfaz de gestión de obras;
 * gestión de usuarios;
-* autenticación y autorización completa;
+* interfaces;
 * gestión de inspectores;
 * registro de inspecciones;
 * carga y visualización de fotografías;
@@ -732,6 +745,25 @@ El sistema deberá contemplar:
 
 La seguridad debe considerarse desde el desarrollo inicial y no como una etapa posterior.
 
+### Implementado
+
+* autenticación mediante usuario y contraseña (`AuthFilter`);
+* autorización por rol (`RoleFilter` paramétrico);
+* protección de rutas autenticadas;
+* regeneración de sesión después del login (`session()->regenerate(true)`);
+* logout con destrucción de sesión;
+* verificación de usuario activo en cada request autenticado.
+
+### Pendiente (seguridad)
+
+* CSRF;
+* recuperación de contraseña;
+* 2FA;
+* bloqueo por intentos;
+* auditoría avanzada;
+* permisos granulares;
+* protección de archivos;
+
 ---
 
 # 33. ARCHIVOS Y FOTOGRAFÍAS
@@ -832,7 +864,15 @@ Para evitar interpretaciones incorrectas durante el desarrollo:
 * 5 tipos de licitación;
 * 4 tipos de resolución;
 * 16 tipos de documento;
-* 4 roles.
+* 4 roles;
+* autenticación mediante usuario y contraseña;
+* sesión enriquecida con roles;
+* `AuthFilter` — protección de rutas autenticadas;
+* `RoleFilter` — autorización por rol;
+* routing por área/rol mediante route groups;
+* redirección al dashboard correspondiente;
+* dashboards mínimos por rol;
+* logout con destrucción de sesión;
 
 ### DECIDIDO
 
@@ -850,8 +890,6 @@ Para evitar interpretaciones incorrectas durante el desarrollo:
 ### PENDIENTE
 
 * interfaces;
-* autenticación completa;
-* autorización;
 * CRUD de entidades;
 * inspecciones;
 * fotografías;
@@ -863,7 +901,7 @@ Para evitar interpretaciones incorrectas durante el desarrollo:
 * recepciones;
 * alertas;
 * auditoría funcional;
-* API/mecanismo de comunicación definitivo.
+* API/mecanismo de comunicación definitivo;
 
 ### NO HACER
 

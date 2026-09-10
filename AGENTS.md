@@ -133,6 +133,12 @@ Respetar las siguientes decisiones:
 * Las inspecciones pertenecen a obras.
 * Los nombres administrativos se almacenan en mayúsculas cuando corresponda.
 * Los importes monetarios utilizan `DECIMAL(15,3)`.
+* La sesión almacena los roles como array (`session('roles')`), no como valor único.
+* La autorización se gestiona mediante `RoleFilter` con syntax `role:NOMBRE_ROL` en las rutas.
+* La autenticación se gestiona mediante `AuthFilter` verificando `session('activo')`.
+* Cada rol tiene su propio dashboard y route group.
+* `getDashboardPath()` define la jerarquía de redirección: SUPERADMINISTRADOR → ADMINISTRADOR → INSPECTOR → CONSULTA.
+* SUPERADMINISTRADOR no accede automáticamente a otras áreas.
 
 ---
 
