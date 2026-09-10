@@ -706,6 +706,15 @@ El sistema debe mantener una separación clara entre:
 
 No incorporar complejidad arquitectónica innecesaria.
 
+## 31.1 Frontend
+
+* CSS vanilla con variables CSS (design tokens).
+* JavaScript vanilla, sin frameworks ni bundlers.
+* CodeIgniter 4 layout system para páginas autenticadas.
+* Organización de archivos: `public/assets/css/`, `public/assets/js/`, `public/assets/fonts/`, `public/assets/vendor/`.
+* Fuentes e iconos almacenados localmente.
+* Decisiones visuales detalladas en `docs/REQUERIMIENTOS_NO_FUNCIONALES.md`.
+
 ---
 
 # 32. SEGURIDAD
@@ -798,6 +807,10 @@ Las siguientes decisiones deben considerarse consolidadas:
 16. Los datos maestros se cargan mediante seeders.
 17. Los datos operativos se generan mediante la aplicación.
 18. Las migraciones ejecutadas no deben modificarse.
+19. El frontend utiliza CSS vanilla con variables CSS y JavaScript vanilla.
+20. Los recursos de interfaz (tipografía, iconos) se almacenan localmente.
+21. Las páginas autenticadas extienden un layout común de CodeIgniter 4.
+22. Los estilos y scripts se organizan en `components/` (reutilizables) y `pages/` (específicos).
 
 ---
 

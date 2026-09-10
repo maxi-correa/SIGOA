@@ -136,7 +136,55 @@ Respetar las siguientes decisiones:
 
 ---
 
-## 7. Desarrollo incremental
+## 7. Frontend
+
+### Arquitectura general
+
+* CSS vanilla con variables CSS (design tokens).
+* JavaScript vanilla, sin frameworks ni bundlers.
+* CodeIgniter 4 layout system para páginas autenticadas.
+* Organización de archivos en `public/assets/`.
+* Referencia oficial para decisiones visuales: `docs/REQUERIMIENTOS_NO_FUNCIONALES.md`.
+
+### Layouts
+
+* Las páginas autenticadas extienden `app/Views/layouts/auth.php` mediante `$this->extend('layouts/auth')`.
+* El login es una pantalla pública y no extiende ningún layout.
+* El layout contiene únicamente estructura común: head, topbar, contenedor de contenido, scripts. No contiene contenido específico de ninguna página.
+
+### CSS
+
+* Los estilos se cargan desde archivos externos en `public/assets/css/`.
+* No colocar bloques de CSS embebido en Views.
+* Utilizar variables CSS para todos los colores del sistema, incluyendo hover, active, focus y fondos derivados.
+* Crear componentes CSS (`components/`) solo cuando exista reutilización real entre 2+ páginas.
+* Crear estilos de página (`pages/`) solo cuando la página tenga estilos propios.
+* No crear archivos CSS vacíos ni anticipados.
+
+### JavaScript
+
+* El JavaScript se carga desde archivos externos en `public/assets/js/`.
+* Las Views no contienen bloques extensos de JavaScript.
+* Crear componentes JS (`components/`) solo cuando exista reutilización real entre páginas.
+* No crear `app.js` hasta que exista una responsabilidad global concreta.
+* No crear componentes JS por anticipado.
+
+### Recursos
+
+* Fuentes e iconos se almacenan localmente en `public/assets/fonts/` y `public/assets/vendor/`.
+* No depender de CDN como mecanismo primario de carga.
+* Favorecer recursos locales para funcionamiento offline y PWA.
+* Bootstrap Icons es la biblioteca oficial de iconografía de SIGOA.
+
+### Criterio general
+
+* No crear infraestructura anticipada: componentes, archivos y herramientas aparecen cuando la funcionalidad los requiere.
+* Desarrollo incremental: cada archivo nuevo tiene un contenido real que justifica su existencia.
+* Mobile-first: el diseño se adapta progresivamente de teléfono a escritorio.
+
+---
+
+## 8. Desarrollo incremental
 
 Realizar cambios pequeños y verificables.
 
@@ -153,7 +201,7 @@ No realizar refactorizaciones amplias que no sean necesarias para la tarea.
 
 ---
 
-## 8. Funcionalidades pendientes
+## 9. Funcionalidades pendientes
 
 No tratar como implementadas las funcionalidades que `docs/SIGOA.md` identifica como pendientes.
 
@@ -173,7 +221,7 @@ Entre ellas se encuentran actualmente:
 
 ---
 
-## 9. Seguridad
+## 10. Seguridad
 
 La seguridad debe considerarse desde el desarrollo inicial.
 
@@ -190,7 +238,7 @@ No implementar atajos inseguros simplemente para acelerar el desarrollo.
 
 ---
 
-## 10. Criterio ante dudas
+## 11. Criterio ante dudas
 
 Si una tarea presenta una decisión arquitectónica o de negocio que no está definida:
 
@@ -206,7 +254,7 @@ Primero:
 
 ---
 
-## 11. Principio general
+## 12. Principio general
 
 Prioridades del proyecto:
 

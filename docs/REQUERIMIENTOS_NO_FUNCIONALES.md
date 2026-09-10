@@ -1256,7 +1256,7 @@ Los estilos no deberán incorporarse directamente dentro de las Views, salvo cas
 
 Los recursos visuales deberán centralizarse dentro de `public/`.
 
-Estructura propuesta:
+Estructura conceptual:
 
 ```text
 public/
@@ -1280,11 +1280,21 @@ public/
     ├── js/
     │
     ├── fonts/
+    │   └── inter/
+    │
+    ├── vendor/
+    │   └── bootstrap-icons/
     │
     └── images/
 ```
 
-La carpeta `fonts/` podrá utilizarse para incorporar localmente la tipografía Inter.
+Los componentes CSS en `components/` y los estilos de página en `pages/` se crearán cuando exista contenido real que justifique cada archivo.
+
+No deberán crearse archivos vacíos ni anticipados.
+
+La carpeta `fonts/` almacena localmente la tipografía Inter.
+
+La carpeta `vendor/` almacena dependencias externas incorporadas al proyecto, como Bootstrap Icons.
 
 ---
 
@@ -1292,7 +1302,7 @@ La carpeta `fonts/` podrá utilizarse para incorporar localmente la tipografía 
 
 `app.css` deberá contener los elementos comunes del sistema:
 
-* variables de colores;
+* variables de colores (incluyendo estados hover, active, focus y fondos derivados);
 * tipografía;
 * tamaños base;
 * estilos generales;
@@ -1395,6 +1405,72 @@ Esto facilitará:
 
 ---
 
+# 41b. Organización de archivos JavaScript
+
+Los scripts no deberán incorporarse directamente dentro de las Views, salvo inicializaciones mínimas que no justifiquen un archivo externo.
+
+Los recursos JavaScript deberán centralizarse dentro de `public/assets/js/`.
+
+Estructura conceptual:
+
+```text
+public/
+└── assets/
+    └── js/
+        ├── app.js                  (globales, cuando existan)
+        ├── components/             (reutilizables, bajo necesidad real)
+        └── pages/
+            └── login.js
+```
+
+La carpeta `pages/` contendrá scripts específicos de determinadas páginas.
+
+La carpeta `components/` contendrá comportamientos reutilizables en varias pantallas. Los componentes JavaScript deberán crearse únicamente cuando exista reutilización real entre múltiples pantallas.
+
+`app.js` contendrá comportamientos JavaScript necesarios en todas las páginas. Se creará cuando exista una responsabilidad global concreta.
+
+No deberán crearse archivos vacíos ni anticipados.
+
+---
+
+# 41c. Layouts
+
+Las páginas autenticadas deberán extender un layout común mediante el sistema de templates de CodeIgniter 4.
+
+El layout contendrá exclusivamente elementos comunes:
+
+* estructura HTML base (`<html>`, `<head>`, `<body>`);
+* carga de recursos globales (tipografía, iconografía, estilos base);
+* barra superior de navegación;
+* contenedor principal para el contenido de cada página;
+* carga de scripts globales.
+
+El layout no deberá contener contenido específico de ninguna página.
+
+Las páginas colocarán su contenido y sus recursos específicos mediante las secciones definidas por el layout.
+
+El login es una pantalla pública y no deberá extender el layout autenticado.
+
+---
+
+# 41d. Carga selectiva de recursos
+
+Cada página deberá cargar únicamente los CSS y JS que necesita.
+
+Los recursos globales (app.css, tipografía, iconografía) se cargan una sola vez, ya sea en el layout o en la página.
+
+Los componentes CSS y los estilos de página se cargan solamente en las páginas que los utilizan.
+
+Lo mismo aplica para los scripts JavaScript.
+
+Esto evita:
+
+* duplicación de carga de recursos;
+* sobrecarga innecesaria;
+* tiempos de carga mayores.
+
+---
+
 # 42. Recursos externos y funcionamiento offline
 
 SIGOA tendrá funcionalidades que deberán poder utilizarse en condiciones de conectividad limitada o inexistente.
@@ -1406,6 +1482,11 @@ Por este motivo, el funcionamiento básico de la interfaz no deberá depender in
 * bibliotecas remotas;
 * iconos descargados en tiempo real;
 * servicios externos indispensables para representar la interfaz.
+
+Los recursos incorporados localmente son parte de la arquitectura aprobada y deberán incluirse en las primeras fases de implementación:
+
+* **Inter** se almacena en `public/assets/fonts/inter/` con sus definiciones `@font-face`.
+* **Bootstrap Icons** se almacena en `public/assets/vendor/bootstrap-icons/` con su hoja de estilos y fuentes.
 
 Cuando resulte conveniente, los recursos necesarios para la interfaz deberán incorporarse localmente al proyecto.
 
@@ -1753,6 +1834,9 @@ Las definiciones visuales principales se consideran establecidas.
 | Tipografía Inter                   | Definida        |
 | Biblioteca de iconos               | Bootstrap Icons |
 | Organización CSS                   | Definida        |
+| Organización JavaScript            | Definida        |
+| Layouts                            | Definidos       |
+| Recursos locales                   | Definidos       |
 | Responsive Design                  | Requerido       |
 | Soporte de dispositivos móviles    | Requerido       |
 | Funcionamiento offline             | Requerido       |
