@@ -36,6 +36,13 @@ $routes->get('/usuarios', 'Usuarios::index', [
 ]);
 
 // =============================================
+// OBRAS — alta inicial (ADMIN y SUPERADMIN)
+// =============================================
+$routes->post('/obras/crear', 'Obras::crear', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+
+// =============================================
 // ÁREA SUPERADMINISTRADOR
 // =============================================
 $routes->group('superadmin', [

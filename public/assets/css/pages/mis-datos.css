@@ -226,90 +226,6 @@
 }
 
 /* ===================================================================
-   MODAL
-   =================================================================== */
-
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(20, 31, 45, 0.55);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-md);
-    z-index: 1000;
-    backdrop-filter: blur(2px);
-}
-
-.modal-overlay[hidden] {
-    display: none;
-}
-
-.modal {
-    background: var(--color-surface);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
-    width: 100%;
-    max-width: 420px;
-    padding: var(--space-lg);
-    max-height: 90vh;
-    overflow-y: auto;
-}
-
-.modal-title {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: var(--color-primary);
-    margin-bottom: var(--space-sm);
-}
-
-.modal-title i {
-    font-size: 1.1rem;
-}
-
-.modal-message {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    line-height: 1.5;
-    margin-bottom: var(--space-md);
-}
-
-.modal .form-control {
-    padding: 0.75rem 0.9rem;
-}
-
-/* Espacio para el ícono de ojo integrado (mismo patrón que el Login) */
-.modal .input-icon-wrapper .form-control {
-    padding-right: 2.75rem;
-}
-
-.modal-error {
-    background-color: var(--color-danger-bg);
-    color: var(--color-danger);
-    border: 1px solid var(--color-danger-border);
-    border-radius: var(--radius-sm);
-    padding: 0.55rem 0.75rem;
-    font-size: var(--font-size-sm);
-    margin-bottom: var(--space-md);
-    line-height: 1.4;
-}
-
-.modal-error[hidden] {
-    display: none;
-}
-
-.modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-sm);
-    margin-top: var(--space-md);
-}
-
-.modal-actions .btn {
-    width: auto;
-}
-
-/* ===================================================================
    RESPONSIVE
    =================================================================== */
 
@@ -349,11 +265,6 @@
 
     .card-footer-acciones .btn {
         flex: 1;
-    }
-
-    .modal {
-        padding: var(--space-md);
-        max-width: 100%;
     }
 }
 

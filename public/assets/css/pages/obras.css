@@ -1,0 +1,264 @@
+/* ===================================================================
+   SIGOA — Página: Dashboard administrativo / Obras
+   =================================================================== */
+
+/* --- Encabezado de la sección --- */
+.obras-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-lg);
+}
+
+.obras-header-texto h1 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1.3;
+    margin: 0;
+}
+
+.obras-subtitulo {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    font-weight: 600;
+    margin-top: var(--space-xs);
+    letter-spacing: 0.04em;
+}
+
+.obras-btn-agregar {
+    width: auto;
+}
+
+/* --- Zona reservada: buscador y filtros futuros --- */
+.obras-filtros {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-lg);
+}
+
+.obras-filtros-item {
+    flex: 0 0 auto;
+}
+
+.obras-filtros-buscador {
+    flex: 1 1 16rem;
+    min-width: 12rem;
+}
+
+.obras-filtros select.form-control {
+    width: auto;
+    min-width: 10rem;
+}
+
+.obras-filtros .form-control:disabled {
+    background-color: var(--color-background);
+    color: var(--color-text-secondary);
+    opacity: 0.9;
+    cursor: not-allowed;
+}
+
+/* --- Tabla --- */
+.obras-tabla .obras-nombre {
+    font-weight: 500;
+}
+
+.obras-sd {
+    color: var(--color-text-secondary);
+    font-style: italic;
+    font-size: var(--font-size-xs);
+}
+
+/* --- Estado de obra (colores oficiales — REQUERIMIENTOS §8 y §9) --- */
+.obras-estado {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.obras-estado-previo {
+    background-color: var(--color-state-previo);
+    color: #4a4f57;
+    border: 1px solid var(--color-border);
+}
+
+.obras-estado-ejecucion {
+    background-color: var(--color-state-ejecucion);
+    color: var(--color-text-on-primary);
+}
+
+.obras-estado-neutralizada {
+    background-color: var(--color-state-neutralizada);
+    color: var(--color-text-on-primary);
+}
+
+.obras-estado-conservacion {
+    background-color: var(--color-state-conservacion);
+    color: #083344;
+}
+
+.obras-estado-finalizada {
+    background-color: var(--color-state-finalizada);
+    color: var(--color-text-on-primary);
+}
+
+/* --- Celda acciones (reservada) --- */
+.obras-acciones-cell {
+    white-space: nowrap;
+}
+
+.obras-chip-pendiente {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.25rem 0.55rem;
+    white-space: nowrap;
+    background: var(--color-surface);
+}
+
+/* --- Estado vacío --- */
+.obras-vacio {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl) var(--space-lg);
+    text-align: center;
+}
+
+.obras-vacio-titulo {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: var(--space-sm);
+}
+
+.obras-vacio-texto {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+/* --- Paginación --- */
+.obras-paginacion {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+    margin-top: var(--space-md);
+}
+
+.obras-paginacion-info {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.obras-paginacion-lista {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex-wrap: wrap;
+}
+
+.obras-paginacion-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.35rem 0.7rem;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-primary);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    line-height: 1.4;
+    text-decoration: none;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.obras-paginacion-link:hover {
+    background-color: var(--color-primary);
+    color: var(--color-text-on-primary);
+    border-color: var(--color-primary);
+    text-decoration: none;
+}
+
+.obras-paginacion-link.is-current {
+    background-color: var(--color-primary);
+    color: var(--color-text-on-primary);
+    border-color: var(--color-primary);
+    cursor: default;
+}
+
+.obras-paginacion-link.is-disabled {
+    color: var(--color-text-secondary);
+    background: var(--color-background);
+    border-color: var(--color-border);
+    opacity: 0.7;
+    cursor: not-allowed;
+    text-decoration: none;
+}
+
+/* --- Modal: estado predeterminado --- */
+.obras-estado-preview {
+    background-color: var(--color-background);
+    color: var(--color-text-secondary);
+    font-style: italic;
+    opacity: 1;
+    cursor: not-allowed;
+}
+
+.obras-estado-nota {
+    display: block;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin-top: var(--space-xs);
+    line-height: 1.4;
+}
+
+.obras-requerido {
+    color: var(--color-danger);
+    font-weight: 700;
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+    .obras-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .obras-btn-agregar {
+        width: 100%;
+    }
+}
+
+@media (max-width: 580px) {
+    .obras-filtros {
+        flex-direction: column;
+    }
+
+    .obras-filtros-item,
+    .obras-filtros select.form-control {
+        width: 100%;
+    }
+
+    .obras-paginacion {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

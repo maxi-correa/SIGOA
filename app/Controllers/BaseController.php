@@ -80,4 +80,36 @@ abstract class BaseController extends Controller
             default              => '/login',
         };
     }
+
+    /**
+     * Datos del dashboard administrativo (sección Obras).
+     *
+     * Compartido por SUPERADMINISTRADOR y ADMINISTRADOR en esta fase.
+     * Las obras se listan paginadas (10 por página) y ordenadas por
+     * created_at DESC. Incluye los catálogos necesarios para el modal
+     * de alta inicial.
+     *
+     * @return array<string, mixed>
+     */
+    protected function datosDashboardObras(): array
+    {
+        $session = session();
+
+        $obraModel = new \App\Models\ObraModel();
+        $obras     = $obraModel->listarPaginado(10);
+
+        return [
+            'titulo'               => 'Obras',
+            'user_name'            => $session->get('user_name'),
+            'username'             => $session->get('username'),
+            'roles'                => $session->get('roles') ?? [],
+            'obras'                => $obras,
+            'pager'                => $obraModel->pager,
+            'per_page'             => 10,
+            'barrios'              => (new \App\Models\BarrioModel())->findAllActivos(),
+            'empresas'             => (new \App\Models\EmpresaModel())->findAllActivas(),
+            'tipos_licitacion'     => (new \App\Models\TipoLicitacionModel())->findAllActivos(),
+            'estado_previo_inicio' => (new \App\Models\EstadoObraModel())->findPrevioInicio(),
+        ];
+    }
 }

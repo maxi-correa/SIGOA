@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="<?= base_url('assets/css/components/navbar.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/sidebar.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/tables.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('assets/css/components/modal.css') ?>">
 
     <?= $this->renderSection('styles') ?>
 </head>

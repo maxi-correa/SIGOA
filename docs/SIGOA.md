@@ -112,6 +112,7 @@ Adicionalmente, se encuentra implementada la infraestructura de autenticación y
 * topbar de identidad: la navegación principal ya no vive en la barra superior; "Mis Datos" y "Cerrar sesión" se movieron a la zona inferior del sidebar;
 * página **Gestión de usuarios** (consulta/listado) para SUPERADMINISTRADOR y ADMINISTRADOR — ver §46;
 * refactor de `getDashboardPath()` y `getRolPrincipal()` a `BaseController`;
+* **dashboard administrativo** (SUPERADMINISTRADOR y ADMINISTRADOR) con la sección **Obras** como eje principal — listado, paginación y alta inicial de obras — ver §47;
 
 ---
 
@@ -1207,3 +1208,108 @@ No se implementan búsqueda, filtros, paginación ni selección masiva (la canti
 * `public/assets/js/components/sidebar.js` — toggle del drawer responsive, cargado desde el layout (reutilización real en todas las páginas autenticadas).
 
 El topbar (`components/navbar.css`) se simplificó: conserva la identidad y la información de sesión, y ya no contiene enlaces de "Mis Datos" ni "Cerrar sesión". El bloque `.content` (dimensionamiento del área principal) pasó al shell de `sidebar.css`.
+
+---
+
+# 47. DECISIONES — DASHBOARD ADMINISTRATIVO Y ALTA INICIAL DE OBRAS
+
+## 47.1 Dashboard administrativo compartido
+
+El dashboard de **SUPERADMINISTRADOR** y **ADMINISTRADOR** dejó de ser un placeholder y pasó a tener como eje principal la sección **Obras**.
+
+* Encabezado: **Dirección General de Ejecución de Obras de Arquitectura**.
+* Subtítulo: **Obras**.
+* Ambos roles comparten la misma pantalla en esta fase, pero mantienen **controladores independientes** (`Admin\Dashboard` y `Superadmin\Dashboard`) para permitir diferenciación futura de permisos.
+* La vista es única y compartida: `app/Views/obras/index.php`. Se integra al shell autenticado y al sidebar de la Fase 7 (sigue accediéndose mediante el ítem **Inicio**).
+* Los datos del listado y los catálogos se ensamblan en `BaseController::datosDashboardObras()`, reutilizado por ambos controladores.
+* Las vistas placeholder `admin/dashboard.php` y `superadmin/dashboard.php` fueron eliminadas al quedar sin referencia.
+
+## 47.2 Listado de Obras
+
+Columnas (en este orden): **N° Expte. · Nombre de obra · Barrio · Empresa · Tipo Licitación · N° de Licitación · Estado · Acciones**.
+
+* Las columnas opcionales sin información se muestran como **S/D (Sin datos)**, con estilo secundario. No se utilizan valores ambiguos como `-`, `N/A` o `S/I`.
+* La columna **Estado** se implementa desde esta versión con los cinco estados documentados, respetando exactamente los colores oficiales de REQUERIMIENTOS §8/§9.
+* La columna **Acciones** queda reservada y muestra la etiqueta neutra "En preparación", consistente con la página de usuarios. No se implementan acciones en esta fase.
+* **Orden por defecto**: `created_at DESC` (las obras más recientes primero). No se implementa ordenamiento manual por columnas en esta fase.
+* **Paginación**: 10 obras por página, realizada por consulta backend (`ObraModel::listarPaginado()` usa `paginate()`). Permite avanzar/retroceder y acceder a páginas concretas, con información contextual "Mostrando X–Y de Z obras".
+* **Estado vacío**: si no existen obras se muestra "Aún no hay obras cargadas." con indicación de usar "Agregar obra". El botón de alta permanece visible.
+
+## 47.3 Zona reservada para buscador y filtros
+
+Debajo del encabezado existe una zona preparada (visualmente deshabilitada) para el futuro **buscador** y **filtros** (principalmente el filtro por **Estado**; más adelante también Barrio, Empresa y Tipo de Licitación). No hay búsqueda ni filtrado funcional en esta fase.
+
+## 47.4 Alta inicial de obras
+
+El botón **+ Agregar obra** (disponible para SUPERADMINISTRADOR y ADMINISTRADOR, con autorización backend mediante `RoleFilter`) abre un modal con el **alta inicial** de la obra. Representa solo el expediente inicial; los datos de adjudicación, documentación, inspecciones, certificados, etc. se completarán en fases futuras.
+
+Campos:
+
+| Campo               | Opcional | Notas |
+| ------------------- | -------- | ----- |
+| N° de Expte.        | No       | Obligatorio. Placeholder `Ej.: 1234-M-2026`. Máximo 30. Único. |
+| Nombre de obra      | No       | Obligatorio. Máximo 255. |
+| Barrio              | Sí       | Selector desde el catálogo de barrios activos (`barrios`). |
+| Empresa             | Sí       | Selector desde el catálogo de empresas activas (`empresas`). No se permite tipeo libre. |
+| Tipo de Licitación  | Sí       | Selector desde el catálogo (`tipos_licitacion`). |
+| N° de Licitación    | Sí       | Placeholder `Ej.: 34/2026`. Máximo 30. |
+| Estado              | Sistema  | Se muestra `PREVIO INICIO` deshabilitado y en gris; lo impone el backend. |
+
+La obra puede crearse únicamente con **N° de Expte. + Nombre de obra** (regla: el expediente puede existir previo a la adjudicación).
+
+Validaciones backend:
+
+* obligatoriedad de N° de Expte. y Nombre;
+* duplicidad de expediente municipal (único);
+* integridad referencial de los catálogos seleccionados.
+
+## 47.5 Estado inicial obligatorio: PREVIO INICIO
+
+Toda obra nueva nace **indefectiblemente** en **PREVIO INICIO**:
+
+* El modal lo muestra deshabilitado ("Valor asignado automáticamente por el sistema"), sin permitir edición.
+* El backend impone `estado_obra_id` = id de `PREVIO INICIO` (consultado desde `estados_obra`) **independientemente** de cualquier dato enviado por el cliente. El formulario no envía el estado.
+
+## 47.6 Código SIGOA
+
+`obras.codigo` se genera automáticamente en el backend con formato secuencial:
+
+```text
+OBR-000001, OBR-000002, ...
+```
+
+El usuario no lo ingresa. Implementado en `ObraModel::generarCodigo()`.
+
+## 47.7 Estructura reutilizada y ajustes
+
+* Se reutilizaron las tablas existentes `obras`, `empresas`, `barrios`, `tipos_licitacion` y `estados_obra` (migraciones consolidadas). No se crearon tablas ni catálogos nuevos.
+* **Migración nueva** `ObrasTipoLicitacionOpcional`: `obras.tipo_licitacion_id` pasó de `NOT NULL` a `NULL`, porque en el alta inicial el tipo de licitación es opcional (el expediente puede existir antes de la licitación). Las migraciones anteriores no fueron modificadas.
+* `obras.barrio_id` y `obras.empresa_id` ya eran opcionales (`NULL`), por lo que no requirieron cambios.
+* **Modelos nuevos**: `ObraModel`, `EstadoObraModel`, `BarrioModel`, `EmpresaModel`, `TipoLicitacionModel` (patrón de `UsuarioModel`: `returnType = 'object'`, timestamps manuales).
+* **Componente modal** (`components/modal.css`): los estilos de modal de Mis Datos se promovieron a componente compartido al existir reutilización real entre dos páginas, y se incluyen desde el layout autenticado.
+
+## 47.8 Rutas
+
+```php
+$routes->post('/obras/crear', 'Obras::crear', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+```
+
+La creación solo es accesible para SUPERADMINISTRADOR y ADMINISTRADOR. El listado se sirve desde los dashboards existentes (`/admin/dashboard`, `/superadmin/dashboard`).
+
+## 47.9 Alcance actual y pendiente
+
+**Implementado en esta fase:**
+
+* dashboard administrativo con listado de obras;
+* paginación (10/página) y orden `created_at DESC`;
+* estado de obra con colores oficiales;
+* presentación `S/D` para datos faltantes;
+* zona reservada para buscador/filtros;
+* alta inicial de obra (modal);
+* estado obligatorio PREVIO INICIO;
+* generación automática de código OBR-XXXXXX;
+* componentes CSS/JS nuevos solo donde fueron necesarios.
+
+**Fuera de alcance (fases futuras):** edición completa de obras, eliminación, cambio manual de estado, gestión completa de estados/transiciones, detalle completo, certificados/certificaciones, inspecciones, fotografías, documentación, contratos, actas, búsquedas y filtros avanzados, acciones masivas, y dashboards diferenciados entre roles.
