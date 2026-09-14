@@ -108,7 +108,9 @@ Adicionalmente, se encuentra implementada la infraestructura de autenticación y
 * modificación de correo electrónico (solo ADMINISTRADOR y SUPERADMINISTRADOR);
 * cambio de contraseña (operativo tras verificar la contraseña actual — ver §45.5);
 * verificación de contraseña mediante modal (ojo), con estado "Verificada";
-* barra de navegación común con acceso a "Mis Datos" desde la navbar;
+* estructura de navegación autenticada con **sidebar** lateral (escritorio) y drawer/off-canvas responsive (móvil) — ver §46;
+* topbar de identidad: la navegación principal ya no vive en la barra superior; "Mis Datos" y "Cerrar sesión" se movieron a la zona inferior del sidebar;
+* página **Gestión de usuarios** (consulta/listado) para SUPERADMINISTRADOR y ADMINISTRADOR — ver §46;
 * refactor de `getDashboardPath()` y `getRolPrincipal()` a `BaseController`;
 
 ---
@@ -120,7 +122,7 @@ La existencia de una tabla o estructura de base de datos no implica que la funci
 Quedan pendientes, entre otras:
 
 * interfaz de gestión de obras;
-* gestión de usuarios;
+* gestión completa de usuarios (CRUD: creación, edición, eliminación, cambio de roles, activación/desactivación);
 * interfaces;
 * gestión de inspectores;
 * registro de inspecciones;
@@ -1119,3 +1121,89 @@ Problema detectado: `forms.css` estaba incluido únicamente en el login (`auth/l
 **Corrección**: incluir `forms.css` en `layouts/auth.php` después de `app.css`. Así, todos los campos de contraseña (Login, Verificar contraseña y Cambiar contraseña) comparten el mismo patrón visual y funcional. El login, que ya carga sus propios estilos, no se afecta.
 
 Regla para el futuro: cualquier campo de contraseña del sistema debe usar `.input-icon-wrapper` + `.form-control` (con padding derecho suficiente para el ícono) + `.input-icon-action` de `forms.css` — no debe crearse un patrón visual alternativo. En modales, el padding vertical del campo puede ajustarse por página (`.modal .form-control`), conservando el espacio reservado para el ícono mediante `.input-icon-wrapper .form-control { padding-right: 2.75rem }`.
+
+---
+
+# 46. DECISIONES — NAVEGACIÓN AUTENTICADA Y GESTIÓN DE USUARIOS
+
+## 46.1 Estructura de navegación autenticada
+
+La aplicación autenticada adopta un **shell de navegación** con dos zonas bien diferenciadas:
+
+1. **Topbar (barra superior)**: identidad institucional (marca SIGOA) y datos del usuario en sesión. Ya no contiene navegación funcional ni acciones personales.
+2. **Sidebar (barra lateral izquierda)**: navegación principal de la aplicación autenticada. Reemplaza a los enlaces que antes vivían en el topbar.
+
+La sección 13 de `docs/REQUERIMIENTOS_NO_FUNCIONALES.md` fue actualizada para reflejar esta estructura.
+
+## 46.2 Sidebar centralizada y reutilizable
+
+La sidebar se define una única vez en:
+
+* `app/Views/layouts/partials/sidebar.php` — definición de navegación (reglas de roles + enlaces);
+* `app/Views/layouts/auth.php` — inserción de la sidebar dentro del shell (`aside.sidebar` dentro de `.app-layout`).
+
+Toda página autenticada hereda la sidebar desde el layout. No se duplica en cada vista.
+
+## 46.3 Zonas y separador conceptual
+
+La sidebar se divide en dos zonas separadas por una línea divisoria (`.sidebar-divider`):
+
+* **Zona funcional** (por encima de la línea): `Inicio`, `Gestión de usuarios`. Toda nueva funcionalidad del sistema debe incorporarse aquí, por encima del separador.
+* **Zona personal/sesión** (por debajo de la línea): `Mis datos`, `Cerrar sesión`. Reservada para acciones personales o de sesión, comunes a todos los usuarios autenticados.
+
+## 46.4 Enlace "Inicio"
+
+El ítem "Inicio" apunta a `/dashboard`, que es la ruta genérica existente (`Auth::redirectToDashboard()`) y resuelve el dashboard según la jerarquía de roles de `getDashboardPath()`. Se reutiliza la infraestructura existente en lugar de duplicar la lógica de jerarquía dentro de la sidebar. Los dashboards por rol no fueron modificados en esta fase.
+
+## 46.5 Visibilidad por rol y protección en backend
+
+La visibilidad de los ítems en la sidebar se calcula contra `session('roles')` (array):
+
+* SUPERADMINISTRADOR y ADMINISTRADOR: Inicio, Gestión de usuarios, Mis datos, Cerrar sesión.
+* INSPECTOR y CONSULTA: Inicio, Mis datos, Cerrar sesión (no ven Gestión de usuarios).
+
+La protección real se realiza en **backend** mediante `RoleFilter` en la ruta:
+
+```php
+$routes->get('/usuarios', 'Usuarios::index', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+```
+
+Un INSPECTOR o CONSULTA que ingrese manualmente a `/usuarios` es redirigido a su dashboard con mensaje de advertencia. El ocultamiento del enlace es solamente una mejora de usabilidad, nunca el mecanismo de seguridad.
+
+## 46.6 Comportamiento responsive (una única navegación)
+
+La sidebar es **una única estructura lógica**; cambia únicamente su presentación según el viewport:
+
+* **Escritorio** (`> 768px`): sidebar lateral fija (`.sidebar` con `position: sticky` y `height: 100vh`), fija respecto del scroll del contenido; el contenido principal ocupa el espacio restante a la derecha; el botón hamburguesa está oculto.
+* **Tablets pequeñas y celulares** (`≤ 768px`): la sidebar se oculta fuera de pantalla (off-canvas) y se despliega mediante el botón hamburguesa (`☰`) del topbar. Incluye backdrop que oscurece el fondo, y cierre mediante: botón `×` del drawer, clic en el backdrop, tecla `Escape`, o al pulsar un enlace de navegación.
+
+El estado abierto/cerrado se refleja en `aria-expanded` y en `aria-label` del botón hamburguesa. La lógica vive en `public/assets/js/components/sidebar.js`.
+
+## 46.7 Página "Gestión de usuarios" (consulta/listado)
+
+Primera funcionalidad administrativa accesible desde la sidebar. **Solo consulta**: no implementa CRUD.
+
+* Ruta: `GET /usuarios` (protegida — ver §46.5).
+* Controlador: `app/Controllers/Usuarios.php` (`Usuarios::index`).
+* Dato: `UsuarioModel::findAllConRoles()` — obtiene todos los usuarios ordenados por apellido/nombre y agrega `roles` por usuario reutilizando `findRolesByUsuarioId()`. No se duplica lógica de acceso a datos.
+* Vista: `app/Views/usuarios/index.php`.
+
+Columnas de la tabla: Nombre · Apellido · Usuario · Email · Rol · Estado · Acciones. No se muestran `password_hash` ni campos técnicos.
+
+* **Rol**: se muestran todos los roles del usuario como badges (la relación `usuarios_roles` es muchos a muchos; no se fuerza un único rol).
+* **Estado**: indicador circular de color (verde = Activo, rojo = Inactivo) siempre acompañado por texto — no se depende exclusivamente del color (REQUERIMIENTOS §34).
+* **Acciones**: reservada para funcionalidad futura. Para usuarios distintos del autenticado se muestra un chip "En preparación"; para el propio usuario se muestra un guion ("—") sin acción especial (la acción específica para el propio usuario queda abierta a futura definición).
+
+No se implementan búsqueda, filtros, paginación ni selección masiva (la cantidad actual de usuarios no lo justifica); la estructura queda preparada para incorporarlos.
+
+## 46.8 Componentes CSS/JS nuevos
+
+* `public/assets/css/components/sidebar.css` — shell `.app-layout`, sidebar, drawer móvil, backdrop y botón hamburguesa.
+* `public/assets/css/components/tables.css` — primer componente de tabla real del sistema (REQUERIMIENTOS §24), con desplazamiento horizontal en pantallas pequeñas (REQUERIMIENTOS §33).
+* `public/assets/css/components/badges.css` — badge de rol extraído de `mis-datos.css`: al existir reutilización real entre Mis Datos y Gestión de usuarios, el estilo se consolida en un componente compartido.
+* `public/assets/css/pages/usuarios.css` — estilos específicos de la página (estado, rol, acciones).
+* `public/assets/js/components/sidebar.js` — toggle del drawer responsive, cargado desde el layout (reutilización real en todas las páginas autenticadas).
+
+El topbar (`components/navbar.css`) se simplificó: conserva la identidad y la información de sesión, y ya no contiene enlaces de "Mis Datos" ni "Cerrar sesión". El bloque `.content` (dimensionamiento del área principal) pasó al shell de `sidebar.css`.

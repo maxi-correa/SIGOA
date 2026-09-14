@@ -5,7 +5,7 @@
 **Documento:** `docs/REQUERIMIENTOS_NO_FUNCIONALES.md`
 **Sistema:** SIGOA — Sistema de Gestión e Inspección de Obras de Arquitectura
 **Estado:** Definitivo
-**Versión:** 1.2
+**Versión:** 1.3
 
 ---
 
@@ -564,31 +564,44 @@ Podrá utilizar tamaños menores, pero nunca deberá resultar difícil de leer e
 
 ---
 
-# 13. Barra de navegación
+# 13. Navegación autenticada (topbar + sidebar)
 
-La navegación principal utilizará el azul institucional `#24344C`.
+La aplicación autenticada utiliza una estructura de navegación de dos zonas.
+
+La identidad institucional (azul `#24344C`) se conserva en la **barra superior (topbar)**.
+
+La **navegación principal** se encuentra en un **sidebar lateral izquierdo**.
 
 Conceptualmente:
 
 ```text
-┌─────────────────────────────────────────────────────────┐
-│ SIGOA   OBRAS   INSPECCIONES   DOCUMENTOS       USUARIO │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│ SIGOA  ☰                       Sesión: Mariana (mariana)        │
+├───────────────┬─────────────────────────────────────────────────┤
+│ Inicio        │                                                 │
+│ Gestión       │              CONTENIDO PRINCIPAL                │
+│ de usuarios   │                                                 │
+│               │                                                 │
+│ ───────────   │                                                 │
+│               │                                                 │
+│ Mis datos     │                                                 │
+│ Cerrar sesión │                                                 │
+└───────────────┴─────────────────────────────────────────────────┘
 ```
 
 Características:
 
-* fondo azul institucional;
+* fondo azul institucional en el topbar;
 * texto claro;
-* identificación visible del usuario;
+* identificación visible del usuario en el topbar;
+* sidebar de navegación con una **zona funcional** (por encima del separador) y una **zona personal/sesión** (por debajo: Mis datos, Cerrar sesión);
+* los ítems del sidebar se muestran según el rol del usuario (los roles protegidos se validan siempre en backend);
 * navegación sencilla;
-* acceso a cierre de sesión;
-* adaptación a dispositivos móviles;
 * comportamiento consistente en todas las secciones.
 
-La navegación móvil podrá utilizar un menú desplegable o equivalente.
+La navegación móvil utiliza el mismo sidebar en modalidad **off-canvas/drawer**: oculto por defecto y desplegado mediante el botón de menú (`☰`), con una forma clara de cierre (botón propio, clic en el fondo oscurecido o tecla `Escape`). No existen dos sistemas de navegación independientes: cambia la presentación según el viewport, no la lógica.
 
-La estructura visual deberá conservar la identidad de la navegación principal.
+En pantallas de escritorio el sidebar permanece fijo/lateral sin desplazarse junto con el contenido.
 
 ---
 
@@ -1283,8 +1296,10 @@ public/
     │   │   ├── buttons.css
     │   │   ├── forms.css
     │   │   ├── tables.css
+    │   │   ├── badges.css
     │   │   ├── alerts.css
-    │   │   └── navbar.css
+    │   │   ├── navbar.css
+    │   │   └── sidebar.css
     │   │
     │   └── pages/
     │       ├── login.css
@@ -1365,8 +1380,10 @@ Ejemplo:
 buttons.css
 forms.css
 tables.css
+badges.css
 alerts.css
 navbar.css
+sidebar.css
 ```
 
 Cuando un componente se utilice en varias pantallas deberá existir un único patrón visual.

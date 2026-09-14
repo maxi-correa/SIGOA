@@ -94,19 +94,6 @@
     min-width: 0;
 }
 
-/* --- Badge de rol --- */
-.badge-rol {
-    display: inline-block;
-    background-color: var(--color-primary);
-    color: var(--color-text-on-primary);
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    padding: 0.25rem 0.65rem;
-    border-radius: var(--radius-sm);
-    letter-spacing: 0.01em;
-    white-space: nowrap;
-}
-
 /* --- Valores auxiliares --- */
 .dato-sin-valor {
     color: var(--color-text-secondary);
@@ -345,10 +332,6 @@
     .dato-email-fila,
     .dato-password-fila {
         justify-content: flex-start;
-    }
-
-    .badge-rol {
-        font-size: 0.72rem;
     }
 
     .datos-form-editar {

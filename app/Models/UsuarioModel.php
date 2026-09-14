@@ -61,6 +61,26 @@ class UsuarioModel extends Model
     }
 
     /**
+     * Devuelve todos los usuarios ordenados alfabéticamente,
+     * con los roles asociados a cada uno.
+     *
+     * @return list<object>
+     */
+    public function findAllConRoles(): array
+    {
+        $usuarios = $this
+            ->orderBy('apellido', 'ASC')
+            ->orderBy('nombre', 'ASC')
+            ->findAll();
+
+        foreach ($usuarios as $usuario) {
+            $usuario->roles = $this->findRolesByUsuarioId((int) $usuario->id);
+        }
+
+        return $usuarios;
+    }
+
+    /**
      * Obtiene los nombres de los roles activos de un usuario.
      *
      * @return list<string>

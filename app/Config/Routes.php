@@ -29,6 +29,13 @@ $routes->post('/mis-datos/password', 'MisDatos::changePassword', ['filter' => 'a
 $routes->post('/mis-datos/verificar-password', 'MisDatos::verifyPassword', ['filter' => 'auth']);
 
 // =============================================
+// GESTIÓN DE USUARIOS — consulta/listado (ADMIN y SUPERADMIN)
+// =============================================
+$routes->get('/usuarios', 'Usuarios::index', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+
+// =============================================
 // ÁREA SUPERADMINISTRADOR
 // =============================================
 $routes->group('superadmin', [

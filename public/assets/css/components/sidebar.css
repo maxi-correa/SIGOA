@@ -1,0 +1,222 @@
+/* ===================================================================
+   SIGOA — Componente: Sidebar y estructura de aplicación autenticada
+   =================================================================== */
+
+/* --- Contenedor principal: sidebar + contenido --- */
+.app-layout {
+    display: flex;
+    align-items: stretch;
+}
+
+/* --- Sidebar --- */
+.sidebar {
+    width: 16rem;
+    flex-shrink: 0;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-md) var(--space-sm) var(--space-lg);
+}
+
+/* --- Cabecera del sidebar (solo visible en el drawer móvil) --- */
+.sidebar-header {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-sm);
+    padding: 0 var(--space-sm);
+}
+
+.sidebar-brand {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--color-primary);
+}
+
+.sidebar-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-secondary);
+    font-size: 1.1rem;
+    cursor: pointer;
+}
+
+.sidebar-close:hover {
+    background-color: var(--color-background);
+    color: var(--color-primary);
+}
+
+.sidebar-close:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+/* --- Navegación --- */
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    flex: 1;
+}
+
+.sidebar-menu {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+}
+
+.sidebar-item {
+    margin: 0;
+}
+
+.sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 0.55rem 0.75rem;
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.sidebar-link i {
+    font-size: 1.05rem;
+    width: 1.25rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.sidebar-link:hover {
+    background-color: var(--color-background);
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.sidebar-link:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+}
+
+.sidebar-link.is-active {
+    background-color: var(--color-primary);
+    color: var(--color-text-on-primary);
+}
+
+.sidebar-link-logout {
+    color: var(--color-danger);
+}
+
+.sidebar-link-logout:hover {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+}
+
+/* --- Separador entre zona funcional y zona personal --- */
+.sidebar-divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: var(--space-xs) 0;
+}
+
+/* --- Botón hamburguesa (solo móvil) --- */
+.sidebar-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-on-primary);
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.sidebar-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-toggle:focus-visible {
+    outline: 2px solid var(--color-text-on-primary);
+    outline-offset: 2px;
+}
+
+/* --- Backdrop (solo móvil) --- */
+.sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 990;
+    background: rgba(20, 31, 45, 0.45);
+}
+
+/* --- Contenido principal --- */
+.content {
+    flex: 1;
+    min-width: 0;
+    padding: var(--space-xl) 1.5rem;
+}
+
+.content h1 {
+    font-size: 1.4rem;
+    margin-bottom: var(--space-md);
+    color: var(--color-primary);
+}
+
+/* ===================================================================
+   RESPONSIVE — tablets pequeñas y celulares (off-canvas)
+   =================================================================== */
+
+@media (max-width: 768px) {
+    .sidebar-toggle {
+        display: inline-flex;
+    }
+
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 1000;
+        width: 16rem;
+        height: 100vh;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .sidebar-header {
+        display: flex;
+    }
+
+    body.nav-open .sidebar {
+        transform: translateX(0);
+    }
+
+    body.nav-open .sidebar-backdrop {
+        display: block;
+    }
+
+    .content {
+        padding: var(--space-lg) 1rem;
+        width: 100%;
+    }
+}

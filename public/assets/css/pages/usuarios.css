@@ -1,0 +1,92 @@
+/* ===================================================================
+   SIGOA — Página: Gestión de usuarios
+   =================================================================== */
+
+/* --- Intro --- */
+.usuarios-intro {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-md);
+}
+
+/* --- Columna roles (badges apilados) --- */
+.usuarios-rol-cell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+/* --- Estado del usuario --- */
+.usuarios-estado {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 600;
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
+}
+
+.usuarios-estado-dot {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background-color: currentColor;
+}
+
+.usuarios-estado-activo {
+    color: var(--color-success);
+}
+
+.usuarios-estado-inactivo {
+    color: var(--color-danger);
+}
+
+/* --- Email vacío --- */
+.usuarios-email-vacio {
+    color: var(--color-text-secondary);
+    font-style: italic;
+    font-size: var(--font-size-xs);
+}
+
+/* --- Celda acciones --- */
+.usuarios-acciones-cell {
+    white-space: nowrap;
+}
+
+/* Chip propio usuario */
+.usuarios-chip-propio {
+    display: inline-block;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.2rem 0.55rem;
+    background: var(--color-background);
+}
+
+/* Chip funcionalidad en preparación */
+.usuarios-chip-pendiente {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.25rem 0.55rem;
+    white-space: nowrap;
+    background: var(--color-surface);
+}
+
+/* --- Responsive --- */
+@media (max-width: 580px) {
+    .usuarios-estado {
+        font-size: 0.72rem;
+    }
+
+    .usuarios-chip-propio,
+    .usuarios-chip-pendiente {
+        font-size: 0.72rem;
+    }
+}

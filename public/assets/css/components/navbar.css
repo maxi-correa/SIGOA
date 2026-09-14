@@ -5,85 +5,56 @@
 /* --- Topbar --- */
 .topbar {
     background: var(--color-primary);
-    padding: .6rem 1.5rem;
+    padding: 0.6rem 1.5rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: var(--space-md);
+}
+
+.topbar-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    min-width: 0;
 }
 
 .topbar .brand {
     font-weight: 700;
     font-size: 1.1rem;
     color: var(--color-text-on-primary);
+    white-space: nowrap;
 }
 
-/* --- Zona derecha: info de usuario + acciones --- */
+/* --- Zona derecha: información del usuario --- */
 .topbar-user {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    flex-wrap: wrap;
     justify-content: flex-end;
+    min-width: 0;
 }
 
 .topbar .user-info {
-    font-size: .85rem;
-    color: rgba(255, 255, 255, .8);
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.8);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .topbar .user-info strong {
     color: var(--color-text-on-primary);
 }
 
-.topbar a {
-    color: rgba(255, 255, 255, .7);
-    text-decoration: none;
-    font-size: .85rem;
-    white-space: nowrap;
-    display: inline-flex;
-    align-items: center;
-    gap: .35rem;
-}
-
-.topbar a:hover {
-    color: var(--color-text-on-primary);
-    text-decoration: none;
-}
-
-/* --- Contenido principal de las páginas autenticadas --- */
-.content {
-    max-width: 800px;
-    margin: 2rem auto;
-    padding: 0 1.5rem;
-}
-
-.content h1 {
-    font-size: 1.4rem;
-    margin-bottom: 1rem;
-    color: var(--color-primary);
-}
-
 /* --- Responsive --- */
 @media (max-width: 640px) {
     .topbar {
-        flex-direction: column;
+        padding: 0.5rem 1rem;
         gap: var(--space-sm);
-        padding: .5rem 1rem;
-    }
-
-    .topbar-user {
-        width: 100%;
-        justify-content: flex-end;
-        gap: .75rem;
-        flex-wrap: wrap;
     }
 
     .topbar .user-info {
-        font-size: .8rem;
-    }
-
-    .content {
-        margin: 1.5rem auto;
-        padding: 0 1rem;
+        font-size: 0.8rem;
     }
 }

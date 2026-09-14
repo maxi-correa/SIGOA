@@ -1,0 +1,55 @@
+/* ===================================================================
+   SIGOA — Componente: Tablas
+   =================================================================== */
+
+.sigoa-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.sigoa-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    font-size: var(--font-size-sm);
+    overflow: hidden;
+}
+
+.sigoa-table th {
+    background-color: var(--color-primary);
+    color: var(--color-text-on-primary);
+    font-weight: 600;
+    font-size: var(--font-size-xs);
+    text-align: left;
+    padding: 0.7rem 1rem;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+}
+
+.sigoa-table td {
+    padding: 0.7rem 1rem;
+    border-top: 1px solid var(--color-border);
+    vertical-align: middle;
+    color: var(--color-text);
+}
+
+.sigoa-table tbody tr:nth-child(even) {
+    background-color: var(--color-background);
+}
+
+.sigoa-table tbody tr:hover {
+    background-color: rgba(36, 52, 76, 0.04);
+}
+
+/* Tablas anchas: permiten desplazamiento horizontal en pantallas pequeñas */
+.sigoa-table {
+    min-width: 38rem;
+}
+
+@media (max-width: 768px) {
+    .sigoa-table {
+        min-width: 40rem;
+    }
+}

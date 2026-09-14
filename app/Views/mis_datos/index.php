@@ -64,7 +64,7 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
 
             <div class="dato-fila">
                 <dt>Rol</dt>
-                <dd><span class="badge-rol"><?= esc($rol_principal) ?></span></dd>
+                <dd><span class="badge badge-rol"><?= esc($rol_principal) ?></span></dd>
             </div>
 
             <!-- Correo electrónico -->
