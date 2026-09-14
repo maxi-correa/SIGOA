@@ -19,6 +19,16 @@ $routes->get('/logout', 'Auth::logout');
 $routes->get('/dashboard', 'Auth::redirectToDashboard', ['filter' => 'auth']);
 
 // =============================================
+// MIS DATOS — datos personales del usuario autenticado
+// =============================================
+$routes->get('/mis-datos', 'MisDatos::index', ['filter' => 'auth']);
+$routes->post('/mis-datos/email', 'MisDatos::updateEmail', [
+    'filter' => ['auth', 'role:ADMINISTRADOR,SUPERADMINISTRADOR'],
+]);
+$routes->post('/mis-datos/password', 'MisDatos::changePassword', ['filter' => 'auth']);
+$routes->post('/mis-datos/verificar-password', 'MisDatos::verifyPassword', ['filter' => 'auth']);
+
+// =============================================
 // ÁREA SUPERADMINISTRADOR
 // =============================================
 $routes->group('superadmin', [

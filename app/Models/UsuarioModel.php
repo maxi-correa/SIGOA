@@ -33,6 +33,34 @@ class UsuarioModel extends Model
     }
 
     /**
+     * Actualiza el correo electrónico de un usuario y su updated_at.
+     *
+     * El modelo no utiliza timestamps automáticos (useTimestamps = false),
+     * por lo que updated_at se asigna explícitamente.
+     */
+    public function updateEmail(int $usuarioId, string $email): bool
+    {
+        return $this->update($usuarioId, [
+            'email'      => $email,
+            'updated_at' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
+     * Actualiza el password_hash de un usuario y su updated_at.
+     *
+     * Recibe el hash ya generado. Nunca se almacena una contraseña en
+     * texto plano.
+     */
+    public function updatePassword(int $usuarioId, string $passwordHash): bool
+    {
+        return $this->update($usuarioId, [
+            'password_hash' => $passwordHash,
+            'updated_at'    => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
      * Obtiene los nombres de los roles activos de un usuario.
      *
      * @return list<string>

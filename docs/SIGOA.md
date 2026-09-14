@@ -104,6 +104,12 @@ Adicionalmente, se encuentra implementada la infraestructura de autenticación y
 * redirección automática al dashboard correspondiente según jerarquía de roles;
 * dashboards mínimos independientes para cada rol;
 * logout con destrucción de sesión;
+* módulo "Mis Datos" — pantalla de datos personales para todos los roles;
+* modificación de correo electrónico (solo ADMINISTRADOR y SUPERADMINISTRADOR);
+* cambio de contraseña (backend listo, interfaz bloqueada — ver §45.5);
+* verificación de contraseña mediante modal (ojo), con estado "Verificada";
+* barra de navegación común con acceso a "Mis Datos" desde la navbar;
+* refactor de `getDashboardPath()` y `getRolPrincipal()` a `BaseController`;
 
 ---
 
@@ -1013,3 +1019,74 @@ Con la estructura de base de datos y los datos maestros consolidados, la siguien
 El desarrollo debe comenzar sobre la estructura existente y avanzar incrementalmente.
 
 No se debe reconstruir la base de datos desde cero para continuar el desarrollo.
+
+---
+
+# 45. DECISIONES — MÓDULO "MIS DATOS"
+
+## 45.1 Obtención del rol
+
+El rol del usuario se obtiene desde la sesión (`session('roles')`), que se carga durante el login mediante la tabla `usuarios_roles`. El "rol principal" se calcula siguiendo la jerarquía: SUPERADMINISTRADOR → ADMINISTRADOR → INSPECTOR → CONSULTA.
+
+La función `getRolPrincipal()` fue implementada en `BaseController` para reutilización. El método `getDashboardPath()` también fue movido a `BaseController` desde `Auth`.
+
+## 45.2 Identificación del usuario autenticado
+
+El usuario se identifica mediante `session('user_id')`. Nunca se confía en un ID enviado desde el frontend. Se consulta `UsuarioModel::find()` con el ID de sesión para obtener datos frescos y verificar que el usuario esté activo.
+
+## 45.3 Validación de contraseña actual
+
+La verificación se realiza mediante `password_verify()` de PHP, que compara la contraseña ingresada con el `password_hash` almacenado. Se utiliza en dos contextos:
+- Verificación AJAX (modal de ojo): retorna JSON con resultado.
+- Cambio de contraseña (POST): valida antes de persistir.
+
+En ambos contextos se usa el mismo mensaje genérico "La contraseña ingresada no es correcta" para no revelar información adicional.
+
+## 45.4 Imposibilidad de mostrar la contraseña original
+
+Las contraseñas se almacenan mediante `password_hash()` (bcrypt/argon2), que es una función de una sola dirección. La contraseña original NO puede recuperarse del hash. El modal de verificación (ícono ojo) confirma la contraseña actual pero no puede mostrarla. Esta es una decisión técnica de seguridad fundamental.
+
+## 45.5 Cambio de contraseña
+
+Diseñado para **todos** los usuarios autenticados (ADMINISTRADOR, SUPERADMINISTRADOR, INSPECTOR, CONSULTA), pero **aún no operativo**: se decidió bloquearlo visualmente en las tareas de Mis Datos para su revisión posterior. Los botones "Cambiar contraseña" permanecen deshabilitados (`disabled`) en la vista; la verificación por ojo muestra "Verificada" sin habilitar el cambio. El backend (`POST /mis-datos/password` / `changePassword()`) existe y queda listo para activarse en una tarea futura.
+
+Reglas de contraseña (consistente con el login):
+- Mínimo 9 caracteres.
+- Al menos una letra mayúscula.
+- Al menos un número.
+- Debe ser distinta de la actual.
+
+El hash se genera con `password_hash($nueva, PASSWORD_DEFAULT)`.
+
+## 45.6 Roles que pueden modificar email
+
+Solo **ADMINISTRADOR** y **SUPERADMINISTRADOR**. Controlado en:
+- Ruta: filtro `role:ADMINISTRADOR,SUPERADMINISTRADOR`.
+- Controlador: verificación adicional de roles (defensa en profundista).
+- Vista: botón "Modificar" condicional (`$puede_modificar_email`).
+
+## 45.7 Actualización de `updated_at`
+
+El modelo `UsuarioModel` tiene `useTimestamps = false` (timestamps automáticos de CI4 desactivados). Cuando se modifica email o contraseña, `updated_at` se asigna explícitamente en los métodos del modelo: `updateEmail()` y `updatePassword()`.
+
+Esto es consistente con el patrón existente del proyecto, donde `created_at` y `updated_at` se manejan manualmente en seeders y migraciones.
+
+## 45.8 CSRF
+
+Protección CSRF está **desactivada** globalmente en el proyecto actual (`Config\Filters::$globals['before']` tiene CSRF comentado). Todos los formularios existentes (login, etc.) operan sin token CSRF. El módulo Mis Datos mantiene esta coherencia.
+
+La protección CSRF está documentada como pendiente en SIGOA.md §32. Habilitarla es una decisión global que debe implementarse de forma transversal y afecta todos los formularios del sistema.
+
+## 45.9 Regla de verificación previa a cambio de contraseña
+
+Para poder cambiar la contraseña, el usuario debe pasar el "test del ojo": un modal que verifica la contraseña actual mediante AJAX. La contraseña original NO se muestra nunca, solo se indica "Verificada" con un ícono de check. Esta decisión es funcional de diseño, no de seguridad: el cambio de contraseña ya valida la contraseña actual en servidor.
+
+Nota actual: mientras la funcionalidad de cambio de contraseña permanezca bloqueada, la verificación por ojo solo muestra el estado "Verificada"; no habilita el botón "Cambiar contraseña". La interfaz está preparada para activarlo en una tarea futura.
+
+## 45.10 Corrección de la verificación AJAX de contraseña
+
+Se detectó que al ingresar la contraseña correcta en el modal del ojo aparecía un error. **Causa raíz**: el formulario `#formVerificar` no declaraba el atributo `action`. En JavaScript, `formVerificar.action` (propiedad IDL del formulario) resuelve a la URL de la página actual (`/mis-datos`) — y nunca a cadena vacía —, por lo que el `fetch` enviaba el POST a `/mis-datos` (ruta solo GET) en lugar de `/mis-datos/verificar-password`. El servidor respondía con error/no-JSON y el bloque `.catch` mostraba el mensaje de verificación fallida.
+
+**Corrección**: declarar `action="<?= site_url('/mis-datos/verificar-password') ?>"` en `#formVerificar`. El fallback `|| '/mis-datos/verificar-password'` del frontend nunca podía activarse porque `form.action` nunca es falsy.
+
+Regla para el futuro: todo formulario que se envíe por `fetch` debe declarar su `action` explícito; no depender de la propiedad `.action` como fallback.

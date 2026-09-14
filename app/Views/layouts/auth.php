@@ -14,17 +14,19 @@
     <!-- Estilos SIGOA -->
     <link rel="stylesheet" href="<?= base_url('assets/css/app.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/buttons.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('assets/css/components/navbar.css') ?>">
 
     <?= $this->renderSection('styles') ?>
 </head>
 <body>
     <div class="topbar">
         <span class="brand">SIGOA</span>
-        <div>
+        <div class="topbar-user">
             <span class="user-info">
                 Sesión: <strong><?= esc($user_name) ?></strong> (<?= esc($username) ?>)
             </span>
-            <a href="<?= site_url('/logout') ?>">Cerrar sesión</a>
+            <a href="<?= site_url('/mis-datos') ?>"><i class="bi bi-person"></i> Mis Datos</a>
+            <a href="<?= site_url('/logout') ?>"><i class="bi bi-box-arrow-right"></i> Cerrar sesión</a>
         </div>
     </div>
 

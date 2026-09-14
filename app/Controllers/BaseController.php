@@ -42,4 +42,42 @@ abstract class BaseController extends Controller
         // Preload any models, libraries, etc, here.
         // $this->session = service('session');
     }
+
+    /**
+     * Devuelve el rol principal del usuario según la jerarquía de SIGOA.
+     *
+     * La sesión almacena los roles como array. Este método resuelve el rol
+     * de mayor jerarquía siguiendo el orden del sistema:
+     * SUPERADMINISTRADOR → ADMINISTRADOR → INSPECTOR → CONSULTA.
+     *
+     * @param list<string> $roles
+     */
+    protected function getRolPrincipal(array $roles): string
+    {
+        $jerarquia = ['SUPERADMINISTRADOR', 'ADMINISTRADOR', 'INSPECTOR', 'CONSULTA'];
+
+        foreach ($jerarquia as $rol) {
+            if (in_array($rol, $roles, true)) {
+                return $rol;
+            }
+        }
+
+        return $roles[0] ?? '';
+    }
+
+    /**
+     * Determina el dashboard correspondiente según la jerarquía de roles.
+     *
+     * @param list<string> $roles
+     */
+    protected function getDashboardPath(array $roles): string
+    {
+        return match ($this->getRolPrincipal($roles)) {
+            'SUPERADMINISTRADOR' => '/superadmin/dashboard',
+            'ADMINISTRADOR'      => '/admin/dashboard',
+            'INSPECTOR'          => '/inspector/dashboard',
+            'CONSULTA'           => '/consulta/dashboard',
+            default              => '/login',
+        };
+    }
 }

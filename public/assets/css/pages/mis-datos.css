@@ -1,0 +1,376 @@
+/* ===================================================================
+   SIGOA — Página: Mis Datos
+   =================================================================== */
+
+/* --- Card general --- */
+.datos-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+/* --- Encabezado: avatar + nombre --- */
+.datos-encabezado {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-lg);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.avatar {
+    width: 4rem;
+    height: 4rem;
+    background-color: var(--color-primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.avatar-iniciales {
+    color: var(--color-text-on-primary);
+    font-weight: 700;
+    font-size: 1.2rem;
+    letter-spacing: 0.02em;
+    user-select: none;
+}
+
+.datos-encabezado-texto {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.datos-nombre-completo {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-text);
+    margin: 0;
+}
+
+.datos-usuario-texto {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+/* --- Lista de datos (definition list estilizada) --- */
+.datos-lista {
+    display: flex;
+    flex-direction: column;
+}
+
+.dato-fila {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.dato-fila:last-child {
+    border-bottom: none;
+}
+
+.dato-fila dt {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    min-width: 8rem;
+    flex-shrink: 0;
+}
+
+.dato-fila dd {
+    font-size: var(--font-size-base);
+    color: var(--color-text);
+    margin: 0;
+    text-align: right;
+    word-break: break-word;
+    min-width: 0;
+}
+
+/* --- Badge de rol --- */
+.badge-rol {
+    display: inline-block;
+    background-color: var(--color-primary);
+    color: var(--color-text-on-primary);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    padding: 0.25rem 0.65rem;
+    border-radius: var(--radius-sm);
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+}
+
+/* --- Valores auxiliares --- */
+.dato-sin-valor {
+    color: var(--color-text-secondary);
+    font-style: italic;
+    font-size: var(--font-size-sm);
+}
+
+.password-mask {
+    letter-spacing: 0.15em;
+    font-weight: 600;
+}
+
+.contrasena-verificada {
+    color: var(--color-success);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.contrasena-verificada[hidden] {
+    display: none;
+}
+
+.nota-contrasena {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin-top: var(--space-sm);
+}
+
+/* --- Filas que combinan valor + acciones --- */
+.dato-email-fila,
+.dato-password-fila {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.dato-valor {
+    font-size: var(--font-size-base);
+}
+
+/* --- Botones inline (accion por fila) --- */
+.btn-accion-inline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    background: var(--color-surface);
+    color: var(--color-primary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.3rem 0.6rem;
+    font-family: var(--font-family);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.btn-accion-inline:hover:not(:disabled) {
+    background-color: var(--color-primary);
+    color: var(--color-text-on-primary);
+    border-color: var(--color-primary);
+}
+
+.btn-accion-inline:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(36, 52, 76, 0.2);
+}
+
+.btn-accion-inline:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.btn-accion-inline i {
+    font-size: 0.85rem;
+}
+
+/* --- Formulario de edición de email (inline) --- */
+.datos-form-editar {
+    padding: var(--space-md) var(--space-lg);
+    background-color: var(--color-background);
+    border-top: 1px solid var(--color-border);
+}
+
+.datos-form-editar[hidden] {
+    display: none;
+}
+
+.datos-form-editar .form-group {
+    margin-bottom: var(--space-md);
+}
+
+.datos-form-editar .form-control {
+    max-width: 28rem;
+    padding: 0.75rem 0.9rem;
+}
+
+.datos-form-acciones {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+}
+
+.datos-form-acciones .btn {
+    width: auto;
+}
+
+/* --- Footer acciones del card --- */
+.card-footer-acciones {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-md) var(--space-lg);
+    border-top: 1px solid var(--color-border);
+    flex-wrap: wrap;
+}
+
+.card-footer-acciones .btn {
+    width: auto;
+}
+
+/* ===================================================================
+   MODAL
+   =================================================================== */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 31, 45, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-md);
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+}
+
+.modal-overlay[hidden] {
+    display: none;
+}
+
+.modal {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    width: 100%;
+    max-width: 420px;
+    padding: var(--space-lg);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    margin-bottom: var(--space-sm);
+}
+
+.modal-title i {
+    font-size: 1.1rem;
+}
+
+.modal-message {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    margin-bottom: var(--space-md);
+}
+
+.modal .form-control {
+    padding: 0.75rem 0.9rem;
+}
+
+.modal-error {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger-border);
+    border-radius: var(--radius-sm);
+    padding: 0.55rem 0.75rem;
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-md);
+    line-height: 1.4;
+}
+
+.modal-error[hidden] {
+    display: none;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+}
+
+.modal-actions .btn {
+    width: auto;
+}
+
+/* ===================================================================
+   RESPONSIVE
+   =================================================================== */
+
+@media (max-width: 580px) {
+    .datos-encabezado {
+        padding: var(--space-md);
+    }
+
+    .datos-lista .dato-fila {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-xs);
+        padding: var(--space-md);
+    }
+
+    .dato-fila dd {
+        text-align: left;
+    }
+
+    .dato-email-fila,
+    .dato-password-fila {
+        justify-content: flex-start;
+    }
+
+    .badge-rol {
+        font-size: 0.72rem;
+    }
+
+    .datos-form-editar {
+        padding: var(--space-md);
+    }
+
+    .datos-form-editar .form-control {
+        max-width: 100%;
+    }
+
+    .card-footer-acciones {
+        padding: var(--space-md);
+        justify-content: stretch;
+    }
+
+    .card-footer-acciones .btn {
+        flex: 1;
+    }
+
+    .modal {
+        padding: var(--space-md);
+        max-width: 100%;
+    }
+}
+
+@media (min-width: 581px) and (max-width: 768px) {
+    .datos-form-editar .form-control {
+        max-width: 100%;
+    }
+}

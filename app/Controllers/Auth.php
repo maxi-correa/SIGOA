@@ -153,30 +153,4 @@ class Auth extends BaseController
 
         return redirect()->to('/login');
     }
-
-    /**
-     * Determina el dashboard correspondiente según la jerarquía de roles.
-     *
-     * @param list<string> $roles
-     */
-    private function getDashboardPath(array $roles): string
-    {
-        if (in_array('SUPERADMINISTRADOR', $roles, true)) {
-            return '/superadmin/dashboard';
-        }
-
-        if (in_array('ADMINISTRADOR', $roles, true)) {
-            return '/admin/dashboard';
-        }
-
-        if (in_array('INSPECTOR', $roles, true)) {
-            return '/inspector/dashboard';
-        }
-
-        if (in_array('CONSULTA', $roles, true)) {
-            return '/consulta/dashboard';
-        }
-
-        return '/login';
-    }
 }
