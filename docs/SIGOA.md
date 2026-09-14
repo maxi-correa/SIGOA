@@ -106,7 +106,7 @@ Adicionalmente, se encuentra implementada la infraestructura de autenticación y
 * logout con destrucción de sesión;
 * módulo "Mis Datos" — pantalla de datos personales para todos los roles;
 * modificación de correo electrónico (solo ADMINISTRADOR y SUPERADMINISTRADOR);
-* cambio de contraseña (backend listo, interfaz bloqueada — ver §45.5);
+* cambio de contraseña (operativo tras verificar la contraseña actual — ver §45.5);
 * verificación de contraseña mediante modal (ojo), con estado "Verificada";
 * barra de navegación común con acceso a "Mis Datos" desde la navbar;
 * refactor de `getDashboardPath()` y `getRolPrincipal()` a `BaseController`;
@@ -1037,8 +1037,8 @@ El usuario se identifica mediante `session('user_id')`. Nunca se confía en un I
 ## 45.3 Validación de contraseña actual
 
 La verificación se realiza mediante `password_verify()` de PHP, que compara la contraseña ingresada con el `password_hash` almacenado. Se utiliza en dos contextos:
-- Verificación AJAX (modal de ojo): retorna JSON con resultado.
-- Cambio de contraseña (POST): valida antes de persistir.
+- Verificación AJAX (modal de ojo): retorna JSON con resultado. Al verificar exitosamente, establece `session('contrasena_verificada') = true`.
+- Cambio de contraseña (POST): no solicita la contraseña actual. Valida que exista la bandera de sesión `contrasena_verificada`; de lo contrario rechaza la operación.
 
 En ambos contextos se usa el mismo mensaje genérico "La contraseña ingresada no es correcta" para no revelar información adicional.
 
@@ -1048,7 +1048,15 @@ Las contraseñas se almacenan mediante `password_hash()` (bcrypt/argon2), que es
 
 ## 45.5 Cambio de contraseña
 
-Diseñado para **todos** los usuarios autenticados (ADMINISTRADOR, SUPERADMINISTRADOR, INSPECTOR, CONSULTA), pero **aún no operativo**: se decidió bloquearlo visualmente en las tareas de Mis Datos para su revisión posterior. Los botones "Cambiar contraseña" permanecen deshabilitados (`disabled`) en la vista; la verificación por ojo muestra "Verificada" sin habilitar el cambio. El backend (`POST /mis-datos/password` / `changePassword()`) existe y queda listo para activarse en una tarea futura.
+Disponible para **todos** los usuarios autenticados (ADMINISTRADOR, SUPERADMINISTRADOR, INSPECTOR, CONSULTA). El flujo es:
+
+1. El usuario presiona el ícono de ojo y verifica su contraseña actual.
+2. Al verificar exitosamente, se habilitan los botones "Cambiar contraseña" y se muestra el estado "Verificada".
+3. El modal de cambio contiene dos campos: **Nueva contraseña** y **Repetir nueva contraseña** (sin solicitar nuevamente la contraseña actual).
+4. Al enviar, el servidor valida la bandera de sesión `contrasena_verificada`, las reglas de contraseña, la coincidencia entre los dos campos, y que la nueva sea distinta de la actual (mediante `password_verify()`).
+5. Al modificar exitosamente, la bandera `contrasena_verificada` se elimina de la sesión.
+
+**Protección server-side**: el cambio de contraseña no acepta la contraseña actual por POST. Solo permite la operación si la sesión indica que la contraseña fue validada exitosamente previamente (`session('contrasena_verificada')`), evitando que la funcionalidad pueda activarse manipulando únicamente el frontend.
 
 Reglas de contraseña (consistente con el login):
 - Mínimo 9 caracteres.
@@ -1079,9 +1087,12 @@ La protección CSRF está documentada como pendiente en SIGOA.md §32. Habilitar
 
 ## 45.9 Regla de verificación previa a cambio de contraseña
 
-Para poder cambiar la contraseña, el usuario debe pasar el "test del ojo": un modal que verifica la contraseña actual mediante AJAX. La contraseña original NO se muestra nunca, solo se indica "Verificada" con un ícono de check. Esta decisión es funcional de diseño, no de seguridad: el cambio de contraseña ya valida la contraseña actual en servidor.
+Para poder cambiar la contraseña, el usuario debe pasar el "test del ojo": un modal que verifica la contraseña actual mediante AJAX. La contraseña original NO se muestra nunca, solo se indica "Verificada" con un ícono de check.
 
-Nota actual: mientras la funcionalidad de cambio de contraseña permanezca bloqueada, la verificación por ojo solo muestra el estado "Verificada"; no habilita el botón "Cambiar contraseña". La interfaz está preparada para activarlo en una tarea futura.
+Al verificar exitosamente:
+- Se establece `session('contrasena_verificada') = true` (protección server-side).
+- Se habilitan los botones "Cambiar contraseña" en la interfaz.
+- Se oculta la nota informativa para usuarios sin permiso de modificar email.
 
 ## 45.10 Corrección de la verificación AJAX de contraseña
 
@@ -1090,3 +1101,21 @@ Se detectó que al ingresar la contraseña correcta en el modal del ojo aparecí
 **Corrección**: declarar `action="<?= site_url('/mis-datos/verificar-password') ?>"` en `#formVerificar`. El fallback `|| '/mis-datos/verificar-password'` del frontend nunca podía activarse porque `form.action` nunca es falsy.
 
 Regla para el futuro: todo formulario que se envíe por `fetch` debe declarar su `action` explícito; no depender de la propiedad `.action` como fallback.
+
+## 45.11 Componente de alertas y carga en el layout
+
+`components/alerts.css` define los estilos para `.alert`, `.alert-success`, `.alert-danger`, `.alert-warning` e `.alert-info`. Cada variante utiliza colores de fondo, borde y color de texto del Design Token del sistema, con un **borde izquierdo de 4px** en color funcional para una diferenciación clara del tipo de mensaje.
+
+Problema detectado: `alerts.css` estaba incluido en la página pública de login pero **no** en `layouts/auth.php`. Las páginas autenticadas (incluyendo Mis Datos) mostraban los mensajes `.alert-success` y `.alert-danger` sin estilos — el navegador mostraba solo el texto con color por defecto, que parecía azul de enlace.
+
+**Corrección**: incluir `alerts.css` en `layouts/auth.php` después de `buttons.css`. Esto aplica el componente de alertas a todas las páginas autenticadas. Los colores Success (verde) y Danger (rojo) quedan claramente diferenciados. El login, que ya carga sus propios estilos, no se afecta.
+
+## 45.12 Componente de formularios compartido (patterns de contraseña)
+
+`components/forms.css` define los estilos base del sistema de formularios: `.form-group`, `.form-control`, `.field-error`, `.input-icon-wrapper` y `.input-icon-action`. El patrón de campo de contraseña con ícono de ojo integrado (input a todo el ancho + ícono absoluto a la derecha) se define aquí y es **la referencia única** para cualquier campo de contraseña.
+
+Problema detectado: `forms.css` estaba incluido únicamente en el login (`auth/login.php`), **no** en `layouts/auth.php`. Los modales de Mis Datos reutilizaban las mismas clases (`.input-icon-wrapper` + `.input-icon-action`), pero al no cargarse el componente en páginas autenticadas, el ojo aparecía como un botón independiente al costado del input en lugar de quedar integrado.
+
+**Corrección**: incluir `forms.css` en `layouts/auth.php` después de `app.css`. Así, todos los campos de contraseña (Login, Verificar contraseña y Cambiar contraseña) comparten el mismo patrón visual y funcional. El login, que ya carga sus propios estilos, no se afecta.
+
+Regla para el futuro: cualquier campo de contraseña del sistema debe usar `.input-icon-wrapper` + `.form-control` (con padding derecho suficiente para el ícono) + `.input-icon-action` de `forms.css` — no debe crearse un patrón visual alternativo. En modales, el padding vertical del campo puede ajustarse por página (`.modal .form-control`), conservando el espacio reservado para el ícono mediante `.input-icon-wrapper .form-control { padding-right: 2.75rem }`.

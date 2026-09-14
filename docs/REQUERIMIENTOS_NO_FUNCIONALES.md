@@ -948,6 +948,21 @@ Ejemplo:
 
 ---
 
+## 25.5 Criterio de uso
+
+Cada tipo de mensaje se reserva para su finalidad específica:
+
+| Tipo | Uso |
+| --- | --- |
+| **Éxito** | Confirmación de una operación completada correctamente. Solo se usa el color verde `#3F7D5A`. |
+| **Advertencia** | Advertir sobre una situación que requiere atención pero no impide continuar. |
+| **Error** | Informar que una operación falló o que el ingreso de datos es inválido. |
+| **Información** | Notificación neutra sin connotación de éxito, error o advertencia. |
+
+El color azul Información `#3B6E9E` **no debe utilizarse** para confirmar operaciones exitosas; las confirmaciones siempre usan el verde Éxito.
+
+Los mensajes se implementan con el componente común `components/alerts.css`, que aplica un borde izquierdo de 4px en el color funcional para diferenciar visualmente cada tipo. No debe copiarse ni modificarse el estilo individualmente en cada View.
+
 # 26. Iconografía y biblioteca de iconos
 
 SIGOA deberá utilizar una **biblioteca de iconos propia de la aplicación**, evitando depender de los iconos visuales proporcionados por el sistema operativo.

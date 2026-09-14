@@ -121,7 +121,8 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
 
                     <?php if (! $puede_modificar_email): ?>
                         <p class="nota-contrasena" id="notaContrasenaBottom">
-                            El cambio de contraseña estará disponible próximamente.
+                            Presione el ícono del ojo para verificar su contraseña actual
+                            y habilitar el cambio.
                         </p>
                     <?php endif; ?>
                 </dd>
@@ -248,25 +249,6 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
               method="post"
               action="<?= site_url('/mis-datos/password') ?>"
               novalidate>
-
-            <div class="form-group">
-                <label for="password_actual_cambiar">Contraseña actual</label>
-                <div class="input-icon-wrapper">
-                    <input type="password"
-                           id="password_actual_cambiar"
-                           name="password_actual"
-                           class="form-control"
-                           autocomplete="current-password"
-                           required>
-                    <button type="button"
-                            class="input-icon-action toggle-modal-password"
-                            aria-label="Mostrar contraseña">
-                        <i class="bi bi-eye icon-show"></i>
-                        <i class="bi bi-eye-slash icon-hide" style="display:none"></i>
-                    </button>
-                </div>
-                <span class="field-error" role="alert" aria-live="polite"></span>
-            </div>
 
             <div class="form-group">
                 <label for="nueva_contrasena">Nueva contraseña</label>

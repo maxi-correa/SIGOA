@@ -197,7 +197,10 @@
             passwordVerificado.removeAttribute('hidden');
         }
 
-        /* El cambio de contraseña permanece deshabilitado (funcionalidad futura) */
+        /* Habilitar botones de cambio de contraseña */
+        for (var i = 0; i < btnsCambiar.length; i++) {
+            btnsCambiar[i].removeAttribute('disabled');
+        }
 
         /* Ocultar nota informativa */
         if (notaContrasenaBottom) {
@@ -289,7 +292,6 @@
             e.preventDefault();
 
             /* Validación frontend */
-            var actual   = document.getElementById('password_actual_cambiar');
             var nueva    = document.getElementById('nueva_contrasena');
             var confirmar = document.getElementById('confirmar_contrasena');
 
@@ -300,9 +302,6 @@
 
             var errores = [];
 
-            if (!actual.value) {
-                errores.push({ el: actual, msg: 'Debe ingresar su contraseña actual.' });
-            }
             if (!nueva.value) {
                 errores.push({ el: nueva, msg: 'Debe ingresar la nueva contraseña.' });
             }

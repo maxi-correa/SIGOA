@@ -291,6 +291,11 @@
     padding: 0.75rem 0.9rem;
 }
 
+/* Espacio para el ícono de ojo integrado (mismo patrón que el Login) */
+.modal .input-icon-wrapper .form-control {
+    padding-right: 2.75rem;
+}
+
 .modal-error {
     background-color: var(--color-danger-bg);
     color: var(--color-danger);

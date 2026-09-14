@@ -116,25 +116,23 @@ class MisDatos extends BaseController
             return redirect()->to('/login');
         }
 
-        $actual     = (string) $this->request->getPost('password_actual');
-        $nueva      = (string) $this->request->getPost('nueva_contrasena');
-        $confirmar  = (string) $this->request->getPost('confirmar_contrasena');
+        /* --- 0. Verificar que la contraseña actual haya sido validada previamente --- */
+        if (! $session->get('contrasena_verificada')) {
+            return redirect()->to('/mis-datos')
+                ->with('error', 'Debe verificar su contraseña actual antes de cambiarla.');
+        }
+
+        $nueva     = (string) $this->request->getPost('nueva_contrasena');
+        $confirmar = (string) $this->request->getPost('confirmar_contrasena');
 
         /* --- 1. Campos obligatorios --- */
-        if ($actual === '' || $nueva === '' || $confirmar === '') {
+        if ($nueva === '' || $confirmar === '') {
             return redirect()->back()
                 ->with('error', 'Debe completar todos los campos del formulario.')
                 ->with('reabrir_cambiar', true);
         }
 
-        /* --- 2. Validar contraseña actual --- */
-        if (! password_verify($actual, $usuario->password_hash)) {
-            return redirect()->back()
-                ->with('error', 'La contraseña actual no es correcta.')
-                ->with('reabrir_cambiar', true);
-        }
-
-        /* --- 3. Reglas de la nueva contraseña (mismas que el login) --- */
+        /* --- 2. Reglas de la nueva contraseña (mismas que el login) --- */
         if (strlen($nueva) < 9) {
             return redirect()->back()
                 ->with('error', 'La nueva contraseña debe tener al menos 9 caracteres.')
@@ -165,13 +163,15 @@ class MisDatos extends BaseController
                 ->with('reabrir_cambiar', true);
         }
 
-        /* --- 4. Generar hash y persistir --- */
+        /* --- 3. Generar hash y persistir --- */
         $hash = password_hash($nueva, PASSWORD_DEFAULT);
 
         if (! $this->usuarioModel->updatePassword((int) $usuario->id, $hash)) {
             return redirect()->to('/mis-datos')
                 ->with('error', 'No fue posible guardar la información.');
         }
+
+        $session->remove('contrasena_verificada');
 
         return redirect()->to('/mis-datos')
             ->with('success', 'Su contraseña fue actualizada correctamente.');
@@ -207,6 +207,9 @@ class MisDatos extends BaseController
             return $this->response
                 ->setJSON(['success' => false, 'error' => 'La contraseña ingresada no es correcta.']);
         }
+
+        $session = session();
+        $session->set('contrasena_verificada', true);
 
         return $this->response->setJSON(['success' => true]);
     }
