@@ -4,9 +4,10 @@ $gestionaUsuarios = array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $ro
 $currentPath   = trim((string) service('request')->getUri()->getPath(), '/');
 $primerSegmento = explode('/', $currentPath)[0] ?? '';
 
-$esInicio     = in_array($primerSegmento, ['', 'dashboard', 'superadmin', 'admin', 'inspector', 'consulta'], true);
-$esUsuarios   = $currentPath === 'usuarios';
-$esMisDatos   = $currentPath === 'mis-datos';
+$esInicio      = in_array($primerSegmento, ['', 'dashboard', 'superadmin', 'admin', 'inspector', 'consulta'], true);
+$esUsuarios    = $currentPath === 'usuarios';
+$esEmpresas    = $primerSegmento === 'empresas';
+$esMisDatos    = $currentPath === 'mis-datos';
 ?>
 
 <nav class="sidebar-nav" aria-label="Navegación principal">
@@ -23,6 +24,15 @@ $esMisDatos   = $currentPath === 'mis-datos';
                 <a class="sidebar-link<?= $esUsuarios ? ' is-active' : '' ?>" href="<?= site_url('/usuarios') ?>">
                     <i class="bi bi-person-gear" aria-hidden="true"></i>
                     <span>Gestión de usuarios</span>
+                </a>
+            </li>
+        <?php endif; ?>
+
+        <?php if ($gestionaUsuarios): ?>
+            <li class="sidebar-item">
+                <a class="sidebar-link<?= $esEmpresas ? ' is-active' : '' ?>" href="<?= site_url('/empresas') ?>">
+                    <i class="bi bi-building" aria-hidden="true"></i>
+                    <span>Empresas</span>
                 </a>
             </li>
         <?php endif; ?>

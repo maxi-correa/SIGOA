@@ -36,9 +36,43 @@ $routes->get('/usuarios', 'Usuarios::index', [
 ]);
 
 // =============================================
-// OBRAS — alta inicial (ADMIN y SUPERADMIN)
+// GESTIÓN DE EMPRESAS — CRUD (ADMIN y SUPERADMIN)
+// =============================================
+$routes->get('/empresas', 'Empresas::index', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->get('/empresas/nueva', 'Empresas::nueva', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->post('/empresas/crear', 'Empresas::crear', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->get('/empresas/editar/(:num)', 'Empresas::editar/$1', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->post('/empresas/actualizar/(:num)', 'Empresas::actualizar/$1', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+
+// LOGO DE EMPRESA — subir/reemplazar, eliminar y servir la imagen
+$routes->post('/empresas/logo/actualizar', 'Empresas::subirLogo', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->post('/empresas/logo/eliminar', 'Empresas::eliminarLogo', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->get('/empresas/logo/(:num)', 'Empresas::verLogo/$1', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+
+// =============================================
+// OBRAS — alta inicial y edición de datos básicos (ADMIN y SUPERADMIN)
 // =============================================
 $routes->post('/obras/crear', 'Obras::crear', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+
+$routes->post('/obras/actualizar', 'Obras::actualizar', [
     'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
 ]);
 

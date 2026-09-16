@@ -25,6 +25,19 @@ class EstadoObraModel extends Model
     }
 
     /**
+     * Estados de obra activos en orden lógico del catálogo.
+     *
+     * @return list<object>
+     */
+    public function findAllActivos(): array
+    {
+        return $this
+            ->where('activo', 1)
+            ->orderBy('id', 'ASC')
+            ->findAll();
+    }
+
+    /**
      * Estado inicial obligatorio de toda obra nueva.
      */
     public function findPrevioInicio(): ?object

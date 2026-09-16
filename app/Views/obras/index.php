@@ -17,6 +17,10 @@ $hasta          = min($paginaActual * $perPageReal, $obrasTotal);
 $oldBarrio  = old('barrio_id') ?? '';
 $oldEmpresa = old('empresa_id') ?? '';
 $oldTipo    = old('tipo_licitacion_id') ?? '';
+$oldEstado  = old('estado_obra_id') ?? '';
+
+$rolesNav          = $roles ?? [];
+$puedeEditarObras  = array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $rolesNav) !== [];
 ?>
 
 <div class="obras-page">
@@ -31,7 +35,7 @@ $oldTipo    = old('tipo_licitacion_id') ?? '';
                 class="btn btn-primary obras-btn-agregar"
                 id="btnAgregarObra"
                 aria-haspopup="dialog"
-                aria-controls="modalAgregarObra">
+                aria-controls="modalObra">
             <i class="bi bi-plus-lg" aria-hidden="true"></i>
             Agregar obra
         </button>
@@ -88,7 +92,7 @@ $oldTipo    = old('tipo_licitacion_id') ?? '';
     <?php else: ?>
 
         <div class="sigoa-table-wrap">
-            <table class="sigoa-table obras-tabla">
+            <table class="sigoa-table obras-tabla" id="obrasTabla">
                 <thead>
                     <tr>
                         <th scope="col">N° Expte.</th>
@@ -151,11 +155,28 @@ $oldTipo    = old('tipo_licitacion_id') ?? '';
                                 </span>
                             </td>
                             <td class="obras-acciones-cell">
-                                <span class="obras-chip-pendiente"
-                                      title="Las acciones estarán disponibles próximamente">
-                                    <i class="bi bi-hourglass-split" aria-hidden="true"></i>
-                                    En preparación
-                                </span>
+                                <?php if ($puedeEditarObras): ?>
+                                    <div class="obras-acciones">
+                                        <button type="button"
+                                                class="obras-btn-accion"
+                                                data-accion="editar"
+                                                data-id="<?= (int) $obra->id ?>"
+                                                data-codigo="<?= esc($obra->codigo) ?>"
+                                                data-expediente="<?= esc($obra->expediente_municipal) ?>"
+                                                data-nombre="<?= esc($obra->nombre) ?>"
+                                                data-barrio="<?= (int) $obra->barrio_id ?>"
+                                                data-empresa="<?= (int) $obra->empresa_id ?>"
+                                                data-tipo="<?= (int) $obra->tipo_licitacion_id ?>"
+                                                data-licitacion="<?= esc($obra->numero_licitacion ?? '') ?>"
+                                                data-estado="<?= (int) $obra->estado_obra_id ?>"
+                                                aria-haspopup="dialog"
+                                                aria-controls="modalObra"
+                                                title="Editar obra">
+                                            <i class="bi bi-pencil" aria-hidden="true"></i>
+                                            Editar
+                                        </button>
+                                    </div>
+                                <?php endif; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -208,28 +229,31 @@ $oldTipo    = old('tipo_licitacion_id') ?? '';
 </div>
 
 <!-- ================================================================
-     MODAL — Agregar obra (alta inicial)
+     MODAL — Agregar / Editar obra (estructura reutilizable)
      ================================================================ -->
 <?php
-$erroresModal = session()->getFlashdata('errores_obra');
-$reabrirModal = session()->getFlashdata('reabrir_modal_obra');
+$erroresModal  = session()->getFlashdata('errores_obra');
+$reabrirModal  = (string) (session()->getFlashdata('reabrir_modal_obra') ?? '0');
+$codigoEdicion = (string) (session()->getFlashdata('obra_edicion_codigo') ?? '');
 ?>
 <div class="modal-overlay"
-     id="modalAgregarObra"
+     id="modalObra"
      hidden
      aria-hidden="true"
-     data-reabrir="<?= $reabrirModal ? '1' : '0' ?>">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="agregarObraTitulo">
-        <h2 class="modal-title" id="agregarObraTitulo">
-            <i class="bi bi-plus-square" aria-hidden="true"></i>
-            Agregar obra
+     data-reabrir="<?= esc($reabrirModal) ?>"
+     data-accion-alta="<?= site_url('/obras/crear') ?>"
+     data-accion-edicion="<?= site_url('/obras/actualizar') ?>">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalObraTitulo">
+        <h2 class="modal-title" id="modalObraTitulo">
+            <i class="bi bi-plus-square" id="modalObraIcono" aria-hidden="true"></i>
+            <span id="modalObraTituloTexto">Agregar obra</span>
         </h2>
-        <p class="modal-message">
+        <p class="modal-message" id="modalObraMensaje">
             Registre el expediente inicial de la obra. La información de
             adjudicación podrá completarse posteriormente.
         </p>
 
-        <div class="modal-error" id="errorAgregarObra" role="alert" aria-live="polite"
+        <div class="modal-error" id="errorModalObra" role="alert" aria-live="polite"
              <?= $erroresModal ? '' : 'hidden' ?>>
             <?php if (is_array($erroresModal)): ?>
                 <?php foreach ($erroresModal as $errorObra): ?>
@@ -238,10 +262,17 @@ $reabrirModal = session()->getFlashdata('reabrir_modal_obra');
             <?php endif; ?>
         </div>
 
-        <form id="formAgregarObra"
+        <form id="formObra"
               method="post"
               action="<?= site_url('/obras/crear') ?>"
               novalidate>
+
+            <input type="hidden" name="obra_id" id="obra_id" value="<?= esc(old('obra_id', '')) ?>">
+
+            <div class="obras-codigo-info" id="bloqueCodigoObra" hidden>
+                <span class="obras-codigo-etiqueta">Código de obra:</span>
+                <strong id="codigoObra"><?= esc($codigoEdicion) ?></strong>
+            </div>
 
             <div class="form-group">
                 <label for="expediente_municipal">
@@ -325,7 +356,8 @@ $reabrirModal = session()->getFlashdata('reabrir_modal_obra');
                 <span class="field-error" role="alert" aria-live="polite"></span>
             </div>
 
-            <div class="form-group">
+            <!-- Estado — modo alta: impuesto por el sistema -->
+            <div class="form-group" id="bloqueEstadoAlta">
                 <label for="estado_obra_preview">Estado</label>
                 <input type="text"
                        id="estado_obra_preview"
@@ -337,13 +369,29 @@ $reabrirModal = session()->getFlashdata('reabrir_modal_obra');
                 </span>
             </div>
 
+            <!-- Estado — modo edición: selección libre del catálogo -->
+            <div class="form-group" id="bloqueEstadoEdicion" hidden>
+                <label for="estado_obra_id">Estado</label>
+                <select id="estado_obra_id" name="estado_obra_id" class="form-control">
+                    <?php foreach ($estados as $estado): ?>
+                        <option value="<?= (int) $estado->id ?>"
+                            <?= $oldEstado !== '' && (int) $oldEstado === (int) $estado->id ? 'selected' : '' ?>>
+                            <?= esc($estado->estado) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <span class="obras-estado-nota">
+                    Puede modificarse libremente en esta etapa para registrar obras existentes.
+                </span>
+            </div>
+
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarAgregarObra">
+                <button type="button" class="btn btn-secondary" id="btnCancelarObra">
                     Cancelar
                 </button>
-                <button type="submit" class="btn btn-success">
+                <button type="submit" class="btn btn-success" id="btnGuardarObra">
                     <i class="bi bi-check-lg" aria-hidden="true"></i>
-                    Guardar
+                    <span id="btnGuardarObraTexto">Guardar</span>
                 </button>
             </div>
 

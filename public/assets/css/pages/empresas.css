@@ -1,0 +1,303 @@
+/* ===================================================================
+   SIGOA — Página: Empresas
+   =================================================================== */
+
+/* --- Encabezado de la sección --- */
+.empresas-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-lg);
+}
+
+.empresas-header-texto h1 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1.3;
+    margin: 0;
+}
+
+.empresas-subtitulo {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    font-weight: 600;
+    margin-top: var(--space-xs);
+    letter-spacing: 0.04em;
+}
+
+.empresas-btn-alta {
+    width: auto;
+}
+
+.empresas-btn-volver {
+    width: auto;
+}
+
+/* --- Tabla --- */
+.empresas-tabla .empresas-nombre {
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.empresas-sd {
+    color: var(--color-text-secondary);
+    font-style: italic;
+    font-size: var(--font-size-xs);
+}
+
+/* --- Estado de la empresa --- */
+.empresas-estado {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 600;
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
+}
+
+.empresas-estado-dot {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background-color: currentColor;
+}
+
+.empresas-estado-activa {
+    color: var(--color-success);
+}
+
+.empresas-estado-inactiva {
+    color: var(--color-danger);
+}
+
+/* --- Celda acciones --- */
+.empresas-acciones-cell {
+    white-space: nowrap;
+}
+
+.empresas-btn-accion {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.65rem;
+    font-family: var(--font-family);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--color-primary);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.empresas-btn-accion:hover {
+    background-color: var(--color-primary);
+    color: var(--color-text-on-primary);
+    border-color: var(--color-primary);
+    text-decoration: none;
+}
+
+/* --- Logo de empresa --- */
+.empresas-logo-th {
+    width: 4.5rem;
+    min-width: 4.5rem;
+}
+
+.empresas-logo-cell {
+    width: 4.5rem;
+    min-width: 4.5rem;
+}
+
+.empresa-logo {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    margin: 0 auto;
+}
+
+.empresa-logo-form {
+    margin: 0;
+    padding: 0;
+    display: block;
+}
+
+.empresa-logo-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.empresa-logo-etiqueta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--color-surface);
+    text-decoration: none;
+    transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
+}
+
+.empresa-logo-etiqueta:hover {
+    text-decoration: none;
+}
+
+.empresa-logo-etiqueta img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.empresa-logo-vacio {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    border: 1.5px dashed var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-secondary);
+    font-size: 1.25rem;
+    transition: border-color 0.2s, color 0.2s, background-color 0.2s;
+}
+
+.empresa-logo-etiqueta:hover .empresa-logo-vacio {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background-color: rgba(36, 52, 76, 0.05);
+}
+
+.empresa-logo-eliminar {
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--color-danger-border);
+    border-radius: 50%;
+    background: var(--color-surface);
+    color: var(--color-danger);
+    cursor: pointer;
+    font-size: 0.75rem;
+    line-height: 1;
+    box-shadow: var(--shadow-sm);
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+    z-index: 1;
+}
+
+.empresa-logo-eliminar:hover {
+    background-color: var(--color-danger);
+    border-color: var(--color-danger);
+    color: var(--color-text-on-primary);
+}
+
+/* En dispositivos sin hover, la acción de eliminar siempre se muestra */
+@media (hover: none) {
+    .empresa-logo-eliminar {
+        opacity: 1;
+    }
+}
+
+/* --- Estado vacío --- */
+.empresas-vacio {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl) var(--space-lg);
+    text-align: center;
+}
+
+.empresas-vacio-titulo {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: var(--space-sm);
+}
+
+.empresas-vacio-texto {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-md);
+}
+
+.empresas-vacio-accion .btn {
+    width: auto;
+}
+
+/* --- Formulario (alta / edición) --- */
+.empresas-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    max-width: 720px;
+    box-shadow: var(--shadow-sm);
+}
+
+.empresas-card-acciones {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+    flex-wrap: wrap;
+}
+
+.empresas-card-acciones .btn {
+    width: auto;
+}
+
+.empresas-requerido {
+    color: var(--color-danger);
+    font-weight: 700;
+}
+
+.empresas-ayuda {
+    display: block;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin-top: var(--space-xs);
+    line-height: 1.4;
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+    .empresas-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .empresas-btn-alta {
+        width: 100%;
+    }
+}
+
+@media (max-width: 580px) {
+    .empresas-card-acciones {
+        flex-direction: column;
+    }
+
+    .empresas-card-acciones .btn {
+        width: 100%;
+    }
+}

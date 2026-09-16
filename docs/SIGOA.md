@@ -113,6 +113,7 @@ Adicionalmente, se encuentra implementada la infraestructura de autenticación y
 * página **Gestión de usuarios** (consulta/listado) para SUPERADMINISTRADOR y ADMINISTRADOR — ver §46;
 * refactor de `getDashboardPath()` y `getRolPrincipal()` a `BaseController`;
 * **dashboard administrativo** (SUPERADMINISTRADOR y ADMINISTRADOR) con la sección **Obras** como eje principal — listado, paginación y alta inicial de obras — ver §47;
+* **edición de datos básicos de obras** — modal reutilizable de alta/edición, estado libre en esta etapa, unicidad de expediente con exclusión — ver §48;
 
 ---
 
@@ -391,6 +392,20 @@ No debe asumirse que una empresa pertenece exclusivamente a una obra.
 El CUIT es opcional según la definición actual.
 
 El logo de la empresa también es opcional.
+
+### Almacenamiento del logo
+
+* Los archivos se almacenan bajo `<RAIZ_SIGOA>/EMPRESAS/`.
+* La raíz física (`SIGOA_STORAGE_PATH`) es configurable en `.env` e implementada en `Config\SigoaStorage`.
+* La tabla `empresas.ruta_logo` almacena únicamente una ruta relativa, nunca una ruta absoluta.
+* El formato de referencia es `EMPRESAS/000001-logo.ext` (el `id` de la empresa a seis dígitos, cero-padded).
+* El nombre físico del archivo se genera a partir del `id` de la empresa.
+* Se admiten únicamente los formatos JPG, JPEG, PNG y WEBP (validados por MIME real vía `finfo`).
+* El tamaño máximo por archivo es 2 MB.
+* Cada empresa tiene un único logo vigente.
+* Al reemplazar un logo, el archivo anterior se elimina del disco.
+* Al eliminar el logo, la referencia `ruta_logo` pasa a `NULL` en la base de datos.
+* Las operaciones sobre el logo actualizan `updated_at` pero no modifican `created_at`.
 
 ---
 
@@ -1313,3 +1328,133 @@ La creación solo es accesible para SUPERADMINISTRADOR y ADMINISTRADOR. El lista
 * componentes CSS/JS nuevos solo donde fueron necesarios.
 
 **Fuera de alcance (fases futuras):** edición completa de obras, eliminación, cambio manual de estado, gestión completa de estados/transiciones, detalle completo, certificados/certificaciones, inspecciones, fotografías, documentación, contratos, actas, búsquedas y filtros avanzados, acciones masivas, y dashboards diferenciados entre roles.
+
+---
+
+# 48. DECISIONES — EDICIÓN DE DATOS BÁSICOS DE OBRA
+
+## 48.1 Acción Editar
+
+La columna **Acciones** del listado incorpora la primera acción funcional: **Editar**, con el ícono `bi-pencil` (lápiz) de Bootstrap Icons, en el formato `[ ICONO ] TEXTO` establecido en REQUERIMIENTOS §28.
+
+La acción es visible únicamente para usuarios con rol `ADMINISTRADOR` o `SUPERADMINISTRADOR`. La vista verifica la sesión (`$roles`). En backend, la ruta está protegida por `RoleFilter` con el mismo criterio que el alta (`role:SUPERADMINISTRADOR,ADMINISTRADOR`).
+
+La columna mantiene flexibilidad visual para incorporar nuevas acciones futuras mediante contenedor `.obras-acciones` (flex wrap con gap).
+
+## 48.2 Modal reutilizable (alta + edición)
+
+No existe una pantalla independiente para editar. El **mismo modal** de Fase 8 se reutiliza en dos modos:
+
+| Característica | Alta | Edición |
+| --- | --- | --- |
+| Título | Agregar obra | Editar obra |
+| Ícono del título | `bi-plus-square` | `bi-pencil` |
+| Texto del botón de guardado | Guardar | Guardar cambios |
+| Acción del formulario | `POST /obras/crear` | `POST /obras/actualizar` |
+| Código de obra visible | No | Sí, informativo (`OBR-XXXXXX`) |
+| Estado | Campo deshabilitado (PREVIO INICIO) | Selector activo con todos los estados |
+| `obra_id` (hidden) | Vacío | ID interno de la obra |
+
+El modal se identifica ahora con el id `modalObra` (antes `modalAgregarObra`). Los IDs de los elementos internos (`formObra`, `obra_id`, `expediente_municipal`, etc.) son compartidos y el JavaScript distingue los modos mediante las funciones `configurarModoAlta()` y `configurarModoEdicion()`.
+
+Al hacer clic en **[ lápiz ] Editar** en la tabla, JavaScript captura los atributos `data-*` de la fila y abre el modal en modo edición con los valores precargados.
+
+## 48.3 Campos editables
+
+Los campos editables son los mismos que el alta, más el **estado**, que en edición sí puede modificarse libremente:
+
+* N.º de Expediente (obligatorio)
+* Nombre de obra (obligatorio)
+* Barrio (opcional)
+* Empresa (opcional)
+* Tipo de Licitación (opcional)
+* N.º de Licitación (opcional)
+* Estado (editable, del catálogo completo)
+
+El código `OBR-XXXXXX` se muestra como dato identificatorio informativo, pero nunca se incluye como campo editable ni se envía para modificación.
+
+## 48.4 Código de obra no editable
+
+El código generado por SIGOA se muestra en el modal de edición como:
+
+```
+Código de obra: OBR-000023
+```
+
+Visualmente deshabilitado, no se envía al backend como campo modificable. La obra se identifica mediante su `id` interno. No se regenera el código al editar.
+
+## 48.5 Estado: edición libre
+
+En esta etapa inicial del sistema, el **estado sí puede modificarse libremente**.
+
+La primera carga de SIGOA requiere registrar obras existentes que pueden encontrarse en cualquier estado. Por eso el backend acepta cualquier `estado_obra_id` válido del catálogo durante la edición.
+
+Esto puede cambiar en fases futuras cuando se implementen transiciones controladas con actas.
+
+Los estados disponibles son: `PREVIO INICIO`, `EN EJECUCIÓN`, `NEUTRALIZADA`, `EN PLAZO DE CONSERVACIÓN`, `FINALIZADA`.
+
+## 48.6 Validaciones
+
+Las validaciones para edición se reutilizan del alta con una única diferencia en unicidad de expediente:
+
+**Expediente único — con exclusión**: la obra debe poder conservar su propio expediente. Se verifica `existeExpediente(expediente, exceptoId)` que excluye la obra actual del conteo. La comparación se normaliza a mayúsculas (`mb_strtoupper`) porque el campo se almacena en mayúsculas.
+
+**Catálogos opcionales**: la integridad referencial de `barrio_id`, `empresa_id` y `tipo_licitacion_id` se valida como en el alta.
+
+**Estado obligatorio en edición**: `estado_obra_id` es requerido y se valida existencia en `estados_obra`.
+
+**Número de licitación**: no tiene restricción de unicidad en base de datos. Se acepta cualquier valor, incluido NULL.
+
+## 48.7 Backend
+
+### Endpoint de edición
+
+```php
+$routes->post('/obras/actualizar', 'Obras::actualizar', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+```
+
+El controlador `Obras` tiene ahora dos métodos públicos separados: `crear()` (alta) y `actualizar()` (edición), con validación compartida privada (`validarDatosObra()`).
+
+`actualizar()` recibe el `id` de la obra como campo `obra_id` en POST. Valida la existencia de la obra, aplica las validaciones con exclusión de expediente, ejecuta la actualización, y actualiza `updated_at` sin modificar `created_at`.
+
+### Extracción de validación
+
+La lógica de sanitización de entradas y validación está compartida entre alta y edición mediante los métodos privados:
+
+* `tomarDatosObra()` — normaliza las entradas del formulario.
+* `validarDatosObra(array $datos, ?int $exceptoObraId = null)` — valida obligatoriedad, unicidad (con/sin exclusión) e integridad referencial.
+
+### Timestamps
+
+`ObraModel` utiliza `useTimestamps = false` con timestamps manuales, siguiendo la convención establecida en Fase 8.
+
+* `created_at`: se asigna al crear y **no se modifica** nunca durante la edición.
+* `updated_at`: se actualiza a la fecha/hora de la modificación en cada `actualizar()`.
+
+### Modelo
+
+`ObraModel::actualizar(int $id, array $datos): bool` ejecuta `update()` con los campos permitidos, excluyendo `id`, `codigo` y `created_at`.
+
+## 48.8 Reapertura del modal tras errores
+
+El sistema de reapertura del modal tras error de validación distingue los modos:
+
+* `'alta'`: campos conservan `old()` del alta, el modal se reabre en modo alta.
+* `'edicion'`: campos conservan `old()` de la edición y el código de obra viene en flashdata. El modal se reabre en modo edición con el código visible.
+
+## 48.9 Alcance actual
+
+**Implementado en Fase 9:**
+
+* edición de datos básicos de obras mediante modal reutilizable;
+* botón **[ lápiz ] Editar** visible solo para ADMINISTRADOR/SUPERADMINISTRADOR;
+* código OBR-XXXXXX como dato informativo no editable;
+* estado editable libremente (carga inicial);
+* unicidad de expediente con exclusión de la propia obra;
+* actualización correcta de `updated_at` sin modificar `created_at`;
+* protección por roles en backend y vista;
+* validaciones reutilizadas de Fase 8, con la diferencia de exclusión por ID.
+
+**Fuera de alcance:** eliminación de obras, baja lógica, cambio automático de estado, restricciones de transición, historial de estados, actas, inspecciones, fotografías, certificados, documentación, ficha completa, auditoría, nuevas acciones adicionales.

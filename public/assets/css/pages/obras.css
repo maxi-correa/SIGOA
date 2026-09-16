@@ -110,22 +110,39 @@
     color: var(--color-text-on-primary);
 }
 
-/* --- Celda acciones (reservada) --- */
+/* --- Celda acciones (reservada para futuras acciones) --- */
 .obras-acciones-cell {
     white-space: nowrap;
 }
 
-.obras-chip-pendiente {
+.obras-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.obras-btn-accion {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
+    padding: 0.3rem 0.65rem;
+    font-family: var(--font-family);
     font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
-    border: 1px dashed var(--color-border);
-    border-radius: var(--radius-sm);
-    padding: 0.25rem 0.55rem;
-    white-space: nowrap;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--color-primary);
     background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.obras-btn-accion:hover {
+    background-color: var(--color-primary);
+    color: var(--color-text-on-primary);
+    border-color: var(--color-primary);
 }
 
 /* --- Estado vacío --- */
@@ -233,6 +250,24 @@
 .obras-requerido {
     color: var(--color-danger);
     font-weight: 700;
+}
+
+/* --- Modal: código de obra informativo (solo edición) --- */
+.obras-codigo-info {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    background-color: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.75rem;
+    margin-bottom: var(--space-md);
+    font-size: var(--font-size-sm);
+}
+
+.obras-codigo-etiqueta {
+    color: var(--color-text-secondary);
 }
 
 /* --- Responsive --- */

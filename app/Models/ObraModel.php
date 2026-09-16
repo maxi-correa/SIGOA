@@ -49,6 +49,7 @@ class ObraModel extends Model
     public function listarPaginado(int $perPage = 10): array
     {
         $this->select('obras.id, obras.codigo, obras.expediente_municipal, obras.nombre, obras.numero_licitacion, obras.created_at')
+            ->select('obras.barrio_id, obras.empresa_id, obras.tipo_licitacion_id, obras.estado_obra_id')
             ->select('barrios.nombre AS barrio_nombre')
             ->select('empresas.razon_social AS empresa_razon_social')
             ->select('tipos_licitacion.tipo_licitacion AS tipo_licitacion_nombre')
@@ -65,10 +66,20 @@ class ObraModel extends Model
 
     /**
      * Verifica si ya existe una obra con el expediente municipal indicado.
+     *
+     * El expediente se compara en mayúsculas, igual que como se almacena.
+     * Si se indica $exceptoId, la obra con ese ID no cuenta como duplicada
+     * (se usa al editar para permitir conservar el propio expediente).
      */
-    public function existeExpediente(string $expediente): bool
+    public function existeExpediente(string $expediente, ?int $exceptoId = null): bool
     {
-        return $this->where('expediente_municipal', $expediente)->countAllResults() > 0;
+        $this->where('expediente_municipal', mb_strtoupper($expediente));
+
+        if ($exceptoId !== null) {
+            $this->where('id !=', $exceptoId);
+        }
+
+        return $this->countAllResults() > 0;
     }
 
     /**
@@ -120,5 +131,27 @@ class ObraModel extends Model
         ];
 
         return (int) $this->insert($registro, true);
+    }
+
+    /**
+     * Actualiza únicamente los campos básicos de una obra existente.
+     *
+     * El código y la fecha de creación NO se tocan; `updated_at` se
+     * actualiza a la fecha/hora de la modificación.
+     */
+    public function actualizar(int $id, array $datos): bool
+    {
+        $registro = [
+            'expediente_municipal' => $datos['expediente_municipal'],
+            'nombre'               => $datos['nombre'],
+            'barrio_id'            => $datos['barrio_id'],
+            'empresa_id'           => $datos['empresa_id'],
+            'tipo_licitacion_id'   => $datos['tipo_licitacion_id'],
+            'numero_licitacion'    => $datos['numero_licitacion'],
+            'estado_obra_id'       => $datos['estado_obra_id'],
+            'updated_at'           => date('Y-m-d H:i:s'),
+        ];
+
+        return $this->update($id, $registro);
     }
 }

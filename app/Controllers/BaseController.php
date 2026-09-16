@@ -109,6 +109,7 @@ abstract class BaseController extends Controller
             'barrios'              => (new \App\Models\BarrioModel())->findAllActivos(),
             'empresas'             => (new \App\Models\EmpresaModel())->findAllActivas(),
             'tipos_licitacion'     => (new \App\Models\TipoLicitacionModel())->findAllActivos(),
+            'estados'              => (new \App\Models\EstadoObraModel())->findAllActivos(),
             'estado_previo_inicio' => (new \App\Models\EstadoObraModel())->findPrevioInicio(),
         ];
     }
