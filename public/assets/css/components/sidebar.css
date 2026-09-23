@@ -119,6 +119,19 @@
     color: var(--color-text-on-primary);
 }
 
+/* Enlace deshabilitado (funcionalidad futura) */
+.sidebar-link.is-disabled {
+    color: var(--color-text-secondary);
+    opacity: 0.75;
+    cursor: not-allowed;
+}
+
+.sidebar-link.is-disabled:hover {
+    background-color: transparent;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+}
+
 .sidebar-link-logout {
     color: var(--color-danger);
 }

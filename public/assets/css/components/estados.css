@@ -1,0 +1,50 @@
+/* ===================================================================
+   SIGOA — Componente: Estados de obra (badges)
+   ===================================================================
+   Badges de estado de obra con los colores oficiales
+   (REQUERIMIENTOS §8 y §9). Se reutilizan en el listado administrativo,
+   la ficha de obra y el dashboard del inspector.
+   =================================================================== */
+
+.estado-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.estado-previo {
+    background-color: var(--color-state-previo);
+    color: #4a4f57;
+    border: 1px solid var(--color-border);
+}
+
+.estado-ejecucion {
+    background-color: var(--color-state-ejecucion);
+    color: var(--color-text-on-primary);
+}
+
+.estado-neutralizada {
+    background-color: var(--color-state-neutralizada);
+    color: var(--color-text-on-primary);
+}
+
+.estado-conservacion {
+    background-color: var(--color-state-conservacion);
+    color: #083344;
+}
+
+.estado-finalizada {
+    background-color: var(--color-state-finalizada);
+    color: var(--color-text-on-primary);
+}
+
+@media (max-width: 580px) {
+    .estado-badge {
+        font-size: 0.72rem;
+    }
+}

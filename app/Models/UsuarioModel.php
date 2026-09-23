@@ -81,6 +81,31 @@ class UsuarioModel extends Model
     }
 
     /**
+     * Usuarios activos con rol INSPECTOR, ordenados alfabéticamente.
+     *
+     * Es la única fuente válida para asignar o cambiar el inspector de
+     * una obra. No se consideran usuarios inactivos ni otros roles.
+     *
+     * @return list<object>
+     */
+    public function findInspectoresActivos(): array
+    {
+        return $this->db
+            ->table('usuarios')
+            ->distinct()
+            ->select('usuarios.id, usuarios.nombre, usuarios.apellido')
+            ->join('usuarios_roles', 'usuarios_roles.usuario_id = usuarios.id', 'inner')
+            ->join('roles', 'roles.id = usuarios_roles.rol_id', 'inner')
+            ->where('roles.nombre', 'INSPECTOR')
+            ->where('roles.activo', 1)
+            ->where('usuarios.activo', 1)
+            ->orderBy('usuarios.apellido', 'ASC')
+            ->orderBy('usuarios.nombre', 'ASC')
+            ->get()
+            ->getResultObject();
+    }
+
+    /**
      * Obtiene los nombres de los roles activos de un usuario.
      *
      * @return list<string>

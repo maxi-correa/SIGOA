@@ -138,6 +138,7 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
               class="datos-form-editar"
               hidden
               novalidate>
+            <?= csrf_field('csrf_editar_email') ?>
             <div class="form-group">
                 <label for="email">Nuevo correo electrónico</label>
                 <input type="email"
@@ -249,6 +250,7 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
               method="post"
               action="<?= site_url('/mis-datos/password') ?>"
               novalidate>
+            <?= csrf_field('csrf_cambiar_contrasena') ?>
 
             <div class="form-group">
                 <label for="nueva_contrasena">Nueva contraseña</label>

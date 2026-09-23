@@ -66,6 +66,28 @@ $routes->get('/empresas/logo/(:num)', 'Empresas::verLogo/$1', [
 ]);
 
 // =============================================
+// REPRESENTANTES TÉCNICOS — CRUD (ADMIN y SUPERADMIN)
+// =============================================
+$routes->get('/representantes', 'RepresentantesTecnicos::index', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->get('/representantes/nuevo', 'RepresentantesTecnicos::nuevo', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->post('/representantes/crear', 'RepresentantesTecnicos::crear', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->get('/representantes/editar/(:num)', 'RepresentantesTecnicos::editar/$1', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->post('/representantes/actualizar/(:num)', 'RepresentantesTecnicos::actualizar/$1', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->post('/representantes/estado', 'RepresentantesTecnicos::cambiarEstado', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+
+// =============================================
 // OBRAS — alta inicial y edición de datos básicos (ADMIN y SUPERADMIN)
 // =============================================
 $routes->post('/obras/crear', 'Obras::crear', [
@@ -73,6 +95,26 @@ $routes->post('/obras/crear', 'Obras::crear', [
 ]);
 
 $routes->post('/obras/actualizar', 'Obras::actualizar', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+
+// FICHA DE OBRA — visualización (ADMIN, SUPERADMIN y CONSULTA)
+$routes->get('/obras/ver/(:num)', 'Obras::ver/$1', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR,CONSULTA'],
+]);
+
+// FICHA DE OBRA — edición de datos operativos (ADMIN y SUPERADMIN)
+$routes->post('/obras/ficha/actualizar', 'Obras::actualizarFicha', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+
+// FICHA DE OBRA — cambio de inspector vigente (ADMIN y SUPERADMIN)
+$routes->post('/obras/inspector/actualizar', 'Obras::actualizarInspector', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+
+// FICHA DE OBRA — cambio de representante técnico vigente (ADMIN y SUPERADMIN)
+$routes->post('/obras/representante/actualizar', 'Obras::actualizarRepresentante', [
     'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
 ]);
 
@@ -101,6 +143,9 @@ $routes->group('inspector', [
     'filter' => ['auth', 'role:INSPECTOR'],
 ], static function ($routes) {
     $routes->get('dashboard', 'Inspector\Dashboard::index');
+
+    // VISTA OPERATIVA DE LA OBRA (preparada) — accesible solo con asignación vigente
+    $routes->get('obras/ver/(:num)', 'Inspector\Obras::ver/$1');
 });
 
 // =============================================

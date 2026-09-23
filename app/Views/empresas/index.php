@@ -16,7 +16,7 @@
             </p>
         </div>
 
-        <a href="<?= site_url('/empresas/nueva') ?>" class="btn btn-primary empresas-btn-alta">
+        <a href="<?= site_url('/empresas/nueva') ?>" class="btn btn-success empresas-btn-alta">
             <i class="bi bi-plus-lg" aria-hidden="true"></i>
             Alta empresa
         </a>
@@ -80,6 +80,7 @@
                                           action="<?= site_url('/empresas/logo/actualizar') ?>"
                                           enctype="multipart/form-data"
                                           class="empresa-logo-form">
+                                        <?= csrf_field() ?>
                                         <input type="hidden" name="empresa_id" value="<?= (int) $empresa->id ?>">
                                         <input type="file"
                                                id="logo_<?= (int) $empresa->id ?>"
@@ -178,6 +179,7 @@
             El logo de esta empresa será eliminado de SIGOA. Esta acción no afecta los datos de la empresa.
         </p>
         <form method="post" action="<?= site_url('/empresas/logo/eliminar') ?>" id="formEliminarLogo" novalidate>
+            <?= csrf_field() ?>
             <input type="hidden" name="empresa_id" id="eliminar_empresa_id" value="">
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" id="btnCancelarEliminarLogo">

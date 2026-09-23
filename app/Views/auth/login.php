@@ -38,6 +38,7 @@
 
             <!-- Formulario -->
             <form method="post" action="<?= site_url('/login') ?>" class="login-form" novalidate id="loginForm">
+                <?= csrf_field() ?>
 
                 <!-- Usuario -->
                 <div class="form-group">

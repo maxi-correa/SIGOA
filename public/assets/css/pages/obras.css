@@ -72,44 +72,6 @@
     font-size: var(--font-size-xs);
 }
 
-/* --- Estado de obra (colores oficiales — REQUERIMIENTOS §8 y §9) --- */
-.obras-estado {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.25rem 0.65rem;
-    border-radius: var(--radius-sm);
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    line-height: 1.4;
-    white-space: nowrap;
-}
-
-.obras-estado-previo {
-    background-color: var(--color-state-previo);
-    color: #4a4f57;
-    border: 1px solid var(--color-border);
-}
-
-.obras-estado-ejecucion {
-    background-color: var(--color-state-ejecucion);
-    color: var(--color-text-on-primary);
-}
-
-.obras-estado-neutralizada {
-    background-color: var(--color-state-neutralizada);
-    color: var(--color-text-on-primary);
-}
-
-.obras-estado-conservacion {
-    background-color: var(--color-state-conservacion);
-    color: #083344;
-}
-
-.obras-estado-finalizada {
-    background-color: var(--color-state-finalizada);
-    color: var(--color-text-on-primary);
-}
-
 /* --- Celda acciones (reservada para futuras acciones) --- */
 .obras-acciones-cell {
     white-space: nowrap;
@@ -135,6 +97,7 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     cursor: pointer;
+    text-decoration: none;
     white-space: nowrap;
     transition: background-color 0.2s, color 0.2s, border-color 0.2s;
 }
@@ -143,6 +106,7 @@
     background-color: var(--color-primary);
     color: var(--color-text-on-primary);
     border-color: var(--color-primary);
+    text-decoration: none;
 }
 
 /* --- Estado vacío --- */
@@ -164,6 +128,10 @@
 .obras-vacio-texto {
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
+}
+
+.obras-vacio-accion .btn {
+    width: auto;
 }
 
 /* --- Paginación --- */

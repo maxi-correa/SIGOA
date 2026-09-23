@@ -62,6 +62,7 @@ $accionFormulario = $esEdicion
 
     <div class="empresas-card">
         <form method="post" action="<?= esc($accionFormulario) ?>" novalidate>
+            <?= csrf_field() ?>
 
             <div class="form-group">
                 <label for="razon_social">

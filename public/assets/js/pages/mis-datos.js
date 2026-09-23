@@ -6,6 +6,31 @@
     'use strict';
 
     /* ================================================================
+       Token CSRF
+       ================================================================ */
+    function obtenerTokenCsrf() {
+        var prefijo = 'csrf_cookie_name=';
+        var cookies = document.cookie.split(';');
+        for (var i = 0; i < cookies.length; i++) {
+            var par = cookies[i].trim();
+            if (par.indexOf(prefijo) === 0) {
+                return par.slice(prefijo.length);
+            }
+        }
+        return '';
+    }
+
+    function actualizarTokenCsrfFormulario(form, idCampoCsrf) {
+        if (!form || !idCampoCsrf) return;
+        var token = obtenerTokenCsrf();
+        if (token === '') return;
+        var campo = document.getElementById(idCampoCsrf);
+        if (campo) {
+            campo.value = token;
+        }
+    }
+
+    /* ================================================================
        Elementos del DOM
        ================================================================ */
     var datosLista      = document.getElementById('datosLista');
@@ -174,6 +199,12 @@
         });
     }
 
+    if (formEditarEmail) {
+        formEditarEmail.addEventListener('submit', function () {
+            actualizarTokenCsrfFormulario(formEditarEmail, 'csrf_editar_email');
+        });
+    }
+
     /* ================================================================
        Verificar contraseña (fetch AJAX)
        ================================================================ */
@@ -235,7 +266,10 @@
             fetch(formVerificar.action || '/mis-datos/verificar-password', {
                 method: 'POST',
                 body: formData,
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': obtenerTokenCsrf()
+                }
             })
             .then(function (resp) {
                 return resp.json();
@@ -330,7 +364,8 @@
                 return;
             }
 
-            /* Envío normal (full POST) */
+            /* Envío normal (full POST) con token CSRF vigente */
+            actualizarTokenCsrfFormulario(formCambiar, 'csrf_cambiar_contrasena');
             formCambiar.submit();
         });
     }

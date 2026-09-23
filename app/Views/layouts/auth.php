@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="<?= base_url('assets/css/components/buttons.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/alerts.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/badges.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('assets/css/components/estados.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/navbar.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/sidebar.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/tables.css') ?>">

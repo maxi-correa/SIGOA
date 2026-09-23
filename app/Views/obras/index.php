@@ -31,14 +31,16 @@ $puedeEditarObras  = array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $r
             <p class="obras-subtitulo">Obras</p>
         </div>
 
-        <button type="button"
-                class="btn btn-primary obras-btn-agregar"
-                id="btnAgregarObra"
-                aria-haspopup="dialog"
-                aria-controls="modalObra">
-            <i class="bi bi-plus-lg" aria-hidden="true"></i>
-            Agregar obra
-        </button>
+        <?php if ($puedeEditarObras): ?>
+            <button type="button"
+                    class="btn btn-success obras-btn-agregar"
+                    id="btnAgregarObra"
+                    aria-haspopup="dialog"
+                    aria-controls="modalObra">
+                <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                Agregar obra
+            </button>
+        <?php endif; ?>
     </header>
 
     <!-- Mensajes del sistema -->
@@ -53,6 +55,13 @@ $puedeEditarObras  = array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $r
         <div class="alert alert-danger" role="alert">
             <span class="alert-icon"><i class="bi bi-exclamation-circle"></i></span>
             <span><?= esc(session()->getFlashdata('error')) ?></span>
+        </div>
+    <?php endif; ?>
+
+    <?php if (session()->getFlashdata('warning')): ?>
+        <div class="alert alert-warning" role="alert">
+            <span class="alert-icon"><i class="bi bi-exclamation-triangle"></i></span>
+            <span><?= esc(session()->getFlashdata('warning')) ?></span>
         </div>
     <?php endif; ?>
 
@@ -87,6 +96,17 @@ $puedeEditarObras  = array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $r
             <p class="obras-vacio-texto">
                 Utilice <strong>“Agregar obra”</strong> para registrar la primera obra.
             </p>
+            <?php if ($puedeEditarObras): ?>
+                <p class="obras-vacio-accion">
+                    <button type="button"
+                            class="btn btn-success obras-btn-agregar"
+                            aria-haspopup="dialog"
+                            aria-controls="modalObra">
+                        <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                        Agregar obra
+                    </button>
+                </p>
+            <?php endif; ?>
         </div>
 
     <?php else: ?>
@@ -111,11 +131,11 @@ $puedeEditarObras  = array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $r
                         $estadoNombre = strtoupper((string) ($obra->estado_nombre ?? ''));
 
                         $estadoClase = match ($estadoNombre) {
-                            'EN EJECUCIÓN'             => 'obras-estado-ejecucion',
-                            'NEUTRALIZADA'             => 'obras-estado-neutralizada',
-                            'EN PLAZO DE CONSERVACIÓN' => 'obras-estado-conservacion',
-                            'FINALIZADA'               => 'obras-estado-finalizada',
-                            default                    => 'obras-estado-previo',
+                            'EN EJECUCIÓN'             => 'estado-ejecucion',
+                            'NEUTRALIZADA'             => 'estado-neutralizada',
+                            'EN PLAZO DE CONSERVACIÓN' => 'estado-conservacion',
+                            'FINALIZADA'               => 'estado-finalizada',
+                            default                    => 'estado-previo',
                         };
                         ?>
                         <tr>
@@ -150,13 +170,20 @@ $puedeEditarObras  = array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $r
                                 <?php endif; ?>
                             </td>
                             <td>
-                                <span class="obras-estado <?= $estadoClase ?>">
+                                <span class="estado-badge <?= $estadoClase ?>">
                                     <?= esc($estadoNombre) ?>
                                 </span>
                             </td>
                             <td class="obras-acciones-cell">
-                                <?php if ($puedeEditarObras): ?>
-                                    <div class="obras-acciones">
+                                <div class="obras-acciones">
+                                    <a class="obras-btn-accion"
+                                       href="<?= site_url('/obras/ver/' . (int) $obra->id) ?>"
+                                       title="Ver obra">
+                                        <i class="bi bi-eye" aria-hidden="true"></i>
+                                        Ver obra
+                                    </a>
+
+                                    <?php if ($puedeEditarObras): ?>
                                         <button type="button"
                                                 class="obras-btn-accion"
                                                 data-accion="editar"
@@ -175,8 +202,8 @@ $puedeEditarObras  = array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $r
                                             <i class="bi bi-pencil" aria-hidden="true"></i>
                                             Editar
                                         </button>
-                                    </div>
-                                <?php endif; ?>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -266,6 +293,7 @@ $codigoEdicion = (string) (session()->getFlashdata('obra_edicion_codigo') ?? '')
               method="post"
               action="<?= site_url('/obras/crear') ?>"
               novalidate>
+            <?= csrf_field() ?>
 
             <input type="hidden" name="obra_id" id="obra_id" value="<?= esc(old('obra_id', '')) ?>">
 

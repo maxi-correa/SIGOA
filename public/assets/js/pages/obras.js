@@ -11,7 +11,7 @@
     var overlay = document.getElementById('modalObra');
     var formObra  = document.getElementById('formObra');
 
-    var btnAbrirAlta = document.getElementById('btnAgregarObra');
+    var botonesAgregar = document.querySelectorAll('.obras-btn-agregar');
     var btnCancelar  = document.getElementById('btnCancelarObra');
 
     var inputObraId     = document.getElementById('obra_id');
@@ -138,9 +138,11 @@
         };
     }
 
-    /* Abrir en modo alta */
-    if (btnAbrirAlta) {
-        btnAbrirAlta.addEventListener('click', abrirModalAlta);
+    /* Abrir en modo alta desde cualquier botón (+ Agregar obra) */
+    if (botonesAgregar) {
+        botonesAgregar.forEach(function (btn) {
+            btn.addEventListener('click', abrirModalAlta);
+        });
     }
 
     /* Abrir en modo edición desde cualquier botón Editar de la tabla */

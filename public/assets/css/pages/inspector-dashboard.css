@@ -1,0 +1,192 @@
+/* ===================================================================
+   SIGOA — Página: Dashboard del inspector (Mis obras)
+   =================================================================== */
+
+.inspector-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+}
+
+/* --- Encabezado --- */
+.inspector-header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    margin: 0;
+    letter-spacing: 0.02em;
+    line-height: 1.3;
+}
+
+.inspector-subtitulo {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    font-weight: 600;
+    margin-top: var(--space-xs);
+    letter-spacing: 0.04em;
+}
+
+/* --- Lista de cards --- */
+.inspector-lista {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+    gap: var(--space-md);
+}
+
+.inspector-item {
+    margin: 0;
+}
+
+/* --- Card: toda la tarjeta es el área táctil --- */
+.inspector-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    height: 100%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    color: var(--color-text);
+    text-decoration: none;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s;
+}
+
+.inspector-card:hover {
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-md);
+    color: var(--color-text);
+    text-decoration: none;
+}
+
+.inspector-card:active {
+    box-shadow: var(--shadow-sm);
+}
+
+.inspector-card:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.inspector-card-superior {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-md);
+    min-width: 0;
+}
+
+.inspector-card-nombre {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1.3;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.inspector-card-apertura {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-secondary);
+    font-size: 1.1rem;
+}
+
+/* --- Datos de la card --- */
+.inspector-card-datos {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-sm) var(--space-lg);
+    margin: 0;
+    padding-right: 1.5rem;
+}
+
+.inspector-card-dato {
+    min-width: 0;
+}
+
+.inspector-card-dato dt {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: var(--space-xs);
+}
+
+.inspector-card-dato dd {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--color-text);
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.inspector-sd {
+    color: var(--color-text-secondary);
+    font-style: italic;
+    font-size: var(--font-size-xs);
+}
+
+/* --- Estado vacío --- */
+.inspector-vacio {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl) var(--space-lg);
+    text-align: center;
+}
+
+.inspector-vacio-icono {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 50%;
+    background-color: var(--color-background);
+    color: var(--color-text-secondary);
+    font-size: 1.6rem;
+    margin-bottom: var(--space-md);
+}
+
+.inspector-vacio-titulo {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: var(--space-sm);
+}
+
+.inspector-vacio-texto {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    max-width: 32rem;
+    margin: 0 auto var(--space-sm);
+}
+
+.inspector-vacio-texto:last-child {
+    margin-bottom: 0;
+}
+
+/* --- Responsive --- */
+@media (max-width: 560px) {
+    .inspector-card-datos {
+        grid-template-columns: 1fr;
+        gap: var(--space-sm);
+    }
+
+    .inspector-card {
+        padding: var(--space-md);
+    }
+
+    .inspector-card-nombre {
+        font-size: 1.05rem;
+    }
+}

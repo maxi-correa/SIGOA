@@ -1,0 +1,140 @@
+/* ===================================================================
+   SIGOA — Página: Obra del inspector (vista preparada)
+   =================================================================== */
+
+.io-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+}
+
+/* --- Barra de acciones superior --- */
+.io-barra-acciones {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.io-barra-acciones .btn {
+    width: auto;
+}
+
+/* --- Encabezado de identificación --- */
+.io-identidad {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+}
+
+.io-identidad-principal {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-lg);
+}
+
+.io-nombre {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1.25;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.io-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: var(--space-md) var(--space-lg);
+    margin: 0;
+}
+
+.io-dato {
+    min-width: 0;
+}
+
+.io-dato dt {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: var(--space-xs);
+}
+
+.io-dato dd {
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.io-sd {
+    color: var(--color-text-secondary);
+    font-style: italic;
+    font-size: var(--font-size-xs);
+}
+
+/* --- Aviso informativo --- */
+.io-aviso {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-md);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-accent);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+}
+
+.io-aviso-icono {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: 0 0 auto;
+    border-radius: var(--radius-sm);
+    background-color: var(--color-background);
+    color: var(--color-accent);
+    font-size: 1.3rem;
+}
+
+.io-aviso-titulo {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--color-text);
+    margin: 0 0 var(--space-xs);
+}
+
+.io-aviso p {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* --- Responsive --- */
+@media (max-width: 580px) {
+    .io-identidad,
+    .io-aviso {
+        padding: var(--space-md);
+    }
+
+    .io-nombre {
+        font-size: 1.1rem;
+    }
+
+    .io-barra-acciones {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .io-barra-acciones .btn {
+        width: 100%;
+    }
+}

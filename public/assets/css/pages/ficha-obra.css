@@ -1,0 +1,248 @@
+/* ===================================================================
+   SIGOA — Página: Ficha de obra
+   =================================================================== */
+
+.ficha-obra-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+}
+
+/* --- Barra de acciones superior --- */
+.ficha-barra-acciones {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.ficha-barra-acciones .btn {
+    width: auto;
+}
+
+/* --- Encabezado de identificación --- */
+.ficha-identidad {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    margin-bottom: var(--space-lg);
+}
+
+.ficha-identidad-principal {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-lg);
+}
+
+.ficha-titular {
+    display: flex;
+    flex-direction: column;
+    gap: 0rem;
+    min-width: 12rem;
+    flex: 1 1 16rem;
+}
+
+.ficha-codigo {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-accent);
+    letter-spacing: 0.05em;
+}
+
+.ficha-nombre {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1.25;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.ficha-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: var(--space-md) var(--space-lg);
+    margin: 0;
+}
+
+.ficha-dato {
+    min-width: 0;
+}
+
+.ficha-dato dt {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: var(--space-xs);
+}
+
+.ficha-dato dd {
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.ficha-dato dd .form-control {
+    padding: 0.5rem 0.7rem;
+}
+
+/* --- Datos operativos --- */
+.ficha-datos {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+}
+
+.ficha-seccion-titulo {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--color-primary);
+    margin: 0 0 var(--space-md);
+}
+
+.ficha-campos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: var(--space-md) var(--space-lg);
+}
+
+.ficha-campo {
+    margin-bottom: 0;
+}
+
+.ficha-valor {
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    margin: 0;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.ficha-valor-calculado {
+    font-weight: 600;
+}
+
+.ficha-campo-calculado .ficha-valor {
+    background-color: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.7rem;
+}
+
+.ficha-plazo {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.ficha-plazo .form-control:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ficha-plazo .form-control:last-child {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 9rem;
+}
+
+.ficha-form-acciones {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+    margin-top: var(--space-lg);
+}
+
+.ficha-form-acciones .btn {
+    width: auto;
+}
+
+/* --- Inspector y representante técnico en paralelo --- */
+.ficha-personal {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+    gap: var(--space-lg);
+}
+
+/* --- Inspector y representante técnico --- */
+.ficha-inspector,
+.ficha-representante {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    min-width: 0;
+}
+
+.ficha-inspector-vigente {
+    margin-bottom: var(--space-md);
+}
+
+.ficha-inspector-etiqueta {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: var(--space-xs);
+}
+
+.ficha-inspector-sin {
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+.ficha-inspector-desde {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin-top: var(--space-xs);
+    overflow-wrap: anywhere;
+}
+
+.ficha-btn-cambio-inspector {
+    width: auto;
+    max-width: 100%;
+    white-space: normal;
+}
+
+/* --- Responsive --- */
+@media (max-width: 580px) {
+    .ficha-identidad,
+    .ficha-datos,
+    .ficha-inspector,
+    .ficha-representante {
+        padding: var(--space-md);
+    }
+
+    .ficha-nombre {
+        font-size: 1.1rem;
+    }
+
+    .ficha-barra-acciones {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .ficha-barra-acciones .btn,
+    .ficha-form-acciones .btn,
+    .ficha-btn-cambio-inspector {
+        width: 100%;
+    }
+
+    .ficha-plazo {
+        flex-direction: column;
+    }
+
+    .ficha-plazo .form-control:last-child {
+        width: 100%;
+        min-width: 0;
+    }
+}

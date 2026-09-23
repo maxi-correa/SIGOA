@@ -65,6 +65,28 @@ class ObraModel extends Model
     }
 
     /**
+     * Detalle de una obra con los nombres de catálogos resueltos.
+     *
+     * Se utiliza en la ficha de obra, donde se muestran los datos
+     * identificatorios junto con los valores de catálogo.
+     */
+    public function findDetalle(int $id): ?object
+    {
+        return $this
+            ->select('obras.*')
+            ->select('barrios.nombre AS barrio_nombre')
+            ->select('empresas.razon_social AS empresa_razon_social')
+            ->select('tipos_licitacion.tipo_licitacion AS tipo_licitacion_nombre')
+            ->select('estados_obra.estado AS estado_nombre')
+            ->join('barrios', 'barrios.id = obras.barrio_id', 'left')
+            ->join('empresas', 'empresas.id = obras.empresa_id', 'left')
+            ->join('tipos_licitacion', 'tipos_licitacion.id = obras.tipo_licitacion_id', 'left')
+            ->join('estados_obra', 'estados_obra.id = obras.estado_obra_id', 'inner')
+            ->where('obras.id', $id)
+            ->first();
+    }
+
+    /**
      * Verifica si ya existe una obra con el expediente municipal indicado.
      *
      * El expediente se compara en mayúsculas, igual que como se almacena.
@@ -153,5 +175,34 @@ class ObraModel extends Model
         ];
 
         return $this->update($id, $registro);
+    }
+
+    /**
+     * Actualiza los datos de la ficha: expediente contable, fecha de
+     * inicio y plazo original.
+     *
+     * `updated_at` se refresca y `created_at` se conserva.
+     */
+    public function actualizarFicha(int $id, array $datos): bool
+    {
+        return $this->update($id, [
+            'expediente_contable'   => $datos['expediente_contable'],
+            'fecha_inicio'          => $datos['fecha_inicio'],
+            'plazo_original_valor'  => $datos['plazo_original_valor'],
+            'plazo_original_unidad' => $datos['plazo_original_unidad'],
+            'plazo_original_dias'   => $datos['plazo_original_dias'],
+            'updated_at'            => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
+     * Refresca únicamente `updated_at` de una obra.
+     *
+     * Se usa cuando una operación relacionada (por ejemplo un cambio de
+     * inspector) representa una modificación real de la obra.
+     */
+    public function touch(int $id): bool
+    {
+        return $this->update($id, ['updated_at' => date('Y-m-d H:i:s')]);
     }
 }

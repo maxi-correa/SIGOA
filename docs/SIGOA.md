@@ -507,6 +507,8 @@ Cada inspección representa una actuación realizada en una fecha determinada.
 
 Las inspecciones constituyen el contexto para las fotografías y otros registros generados durante una visita.
 
+Una obra puede tener **múltiples inspecciones en la misma fecha**: la fecha sirve para agrupar documentalmente las inspecciones y cada inspección se identifica mediante su `uuid` (decisión consolidada en §52.3). La restricción `UNIQUE (obra_id, fecha_inspeccion)` existente se eliminará mediante una migración futura, sin modificar la migración histórica que la creó.
+
 ---
 
 # 19. FOTOGRAFÍAS
@@ -548,9 +550,9 @@ Como mínimo, el diseño deberá contemplar:
 
 ## PENDIENTE
 
-La estrategia técnica definitiva de almacenamiento local y sincronización todavía debe implementarse y validarse.
+La estrategia técnica definitiva de almacenamiento local y sincronización fue definida en §52 y todavía debe implementarse y validarse.
 
-No asumir una tecnología concreta si todavía no fue definida.
+No asumir una tecnología concreta distinta a la definida en §52.
 
 ---
 
@@ -579,7 +581,7 @@ forma parte de la estructura prevista para este mecanismo.
 
 ## PENDIENTE
 
-La lógica completa de sincronización todavía no está implementada.
+La lógica completa de sincronización todavía no está implementada. El diseño técnico definido está documentado en §52.
 
 ---
 
@@ -780,7 +782,7 @@ La seguridad debe considerarse desde el desarrollo inicial y no como una etapa p
 
 ### Pendiente (seguridad)
 
-* CSRF;
+* CSRF (activación global especificada en §52.7);
 * recuperación de contraseña;
 * 2FA;
 * bloqueo por intentos;
@@ -904,6 +906,9 @@ Para evitar interpretaciones incorrectas durante el desarrollo:
 * utilización móvil por inspectores;
 * funcionamiento offline;
 * sincronización;
+* HTTPS obligatorio para las funcionalidades PWA/offline (§52.2);
+* una obra puede tener múltiples inspecciones en la misma fecha (§52.3);
+* la fotografía original de cámara no se conserva; se almacena la versión optimizada del dispositivo (§52.9);
 * historial de inspectores;
 * conservación de información contractual original;
 * separación entre datos maestros y operativos;
@@ -936,7 +941,8 @@ Para evitar interpretaciones incorrectas durante el desarrollo:
 * inventar columnas o tablas;
 * sobrescribir información contractual histórica;
 * utilizar seeders para generar datos operativos reales;
-* eliminar información histórica solamente para simplificar una implementación.
+* eliminar información histórica solamente para simplificar una implementación;
+* almacenar contraseñas, cookies o credenciales en IndexedDB (§52.6).
 
 ---
 
@@ -1101,7 +1107,7 @@ Esto es consistente con el patrón existente del proyecto, donde `created_at` y 
 
 Protección CSRF está **desactivada** globalmente en el proyecto actual (`Config\Filters::$globals['before']` tiene CSRF comentado). Todos los formularios existentes (login, etc.) operan sin token CSRF. El módulo Mis Datos mantiene esta coherencia.
 
-La protección CSRF está documentada como pendiente en SIGOA.md §32. Habilitarla es una decisión global que debe implementarse de forma transversal y afecta todos los formularios del sistema.
+La protección CSRF está documentada como pendiente en SIGOA.md §32. Habilitarla es una decisión global que debe implementarse de forma transversal y afecta todos los formularios del sistema. La activación global y el manejo con la sincronización offline están especificados en §52.7.
 
 ## 45.9 Regla de verificación previa a cambio de contraseña
 
@@ -1458,3 +1464,603 @@ El sistema de reapertura del modal tras error de validación distingue los modos
 * validaciones reutilizadas de Fase 8, con la diferencia de exclusión por ID.
 
 **Fuera de alcance:** eliminación de obras, baja lógica, cambio automático de estado, restricciones de transición, historial de estados, actas, inspecciones, fotografías, certificados, documentación, ficha completa, auditoría, nuevas acciones adicionales.
+
+---
+
+# 49. DECISIONES — FICHA DE OBRA
+
+## 49.1 Acción "Ver obra"
+
+Cada fila del listado de obras incorpora la acción **[ ojo ] Ver obra**, que abre la ficha de la obra en modo lectura/edición según el rol.
+
+* Disponible para SUPERADMINISTRADOR, ADMINISTRADOR y CONSULTA.
+* La acción "Editar" (modal de datos básicos) permanece visible solo para SUPERADMINISTRADOR/ADMINISTRADOR.
+* El botón "Agregar obra" se muestra solo si el rol puede editar obras.
+
+## 49.2 Alcance del dashboard de CONSULTA
+
+El rol CONSULTA accede al listado de obras (`obras/index`) en modo lectura.
+
+* Reutiliza la misma vista que ADMINISTRADOR/SUPERADMINISTRADOR.
+* No muestra "Agregar obra" ni "Editar".
+* Puede ingresar a la ficha de obra mediante "Ver obra".
+
+## 49.3 Estructura de la ficha
+
+La ficha se compone de:
+
+1. barra superior con **Volver a obras** y **[ documento ] Ver Certificados** (deshabilitado, sin funcionalidad);
+2. encabezado de identificación: código, nombre, estado, N° de Expte. municipal, barrio, empresa, tipo y N° de licitación y **Expte. contable**;
+3. datos operativos: fecha de inicio y plazo de obra (valor + unidad), con **plazo en días corridos** y **fecha de finalización** calculados;
+4. inspector vigente y acción de cambio de inspector;
+5. representante técnico vigente y acción de cambio de representante técnico.
+
+## 49.4 Expte. contable
+
+El Expte. contable (`obras.expediente_contable`) se muestra en el encabezado y es editable por SUPERADMINISTRADOR/ADMINISTRADOR dentro del mismo formulario de datos operativos. Para CONSULTA se muestra como texto. La columna ya existía en la estructura consolidada; no se creó migración.
+
+## 49.5 Plazo de obra
+
+Se conserva la regla de conversión **1 mes = 30 días corridos**.
+
+* La unidad se almacena como código (`DIAS`, `MES`).
+* `plazo_original_dias` se calcula en el backend y se persiste.
+* La **fecha de finalización** es un dato derivado (`fecha_inicio + plazo_original_dias`), no se almacena y se calcula server-side.
+* Las ampliaciones de plazo posteriores no forman parte de esta fase.
+
+## 49.6 Edición de datos operativos
+
+* El encabezado y los datos operativos comparten un único formulario (`POST /obras/ficha/actualizar`).
+* Fechas: entrada `dd/mm/aaaa` con máscara en JS; el backend valida estrictamente con `DateTime::createFromFormat('d/m/Y')`.
+* Si no hay cambios reales, no se actualiza `updated_at`.
+* `created_at` nunca se modifica.
+
+## 49.7 Cambio de inspector
+
+El cambio de inspector conserva el historial en `inspectores_obras`:
+
+* cierra la asignación vigente (`fecha_fin = fecha del cambio`);
+* inserta una nueva asignación (`fecha_inicio = fecha del cambio`, `fecha_fin = NULL`);
+* marca la obra como modificada (`obras.updated_at`).
+
+Ambas operaciones sobre `inspectores_obras` se ejecutan dentro de una transacción para no dejar la obra sin inspector vigente si una falla.
+
+El nuevo inspector debe ser un usuario activo con rol INSPECTOR y distinto del vigente. Las asignaciones previas no se eliminan.
+
+## 49.8 Rutas y autorización
+
+| Método | Ruta | Controlador | Roles |
+| ------ | ---- | ----------- | ----- |
+| GET  | `/obras/ver/(:num)`         | `Obras::ver`               | SUPERADMINISTRADOR, ADMINISTRADOR, CONSULTA |
+| POST | `/obras/ficha/actualizar`   | `Obras::actualizarFicha`   | SUPERADMINISTRADOR, ADMINISTRADOR |
+| POST | `/obras/inspector/actualizar` | `Obras::actualizarInspector` | SUPERADMINISTRADOR, ADMINISTRADOR |
+| POST | `/obras/representante/actualizar` | `Obras::actualizarRepresentante` | SUPERADMINISTRADOR, ADMINISTRADOR |
+
+La autorización se resuelve con los filtros `auth` y `role`, y se refuerza en la vista (campos y acciones editables solo para roles habilitados).
+
+## 49.9 Componentes nuevos
+
+* `App\Libraries\PlazoObra`: conversión de plazo y manejo de fechas.
+* `App\Models\InspectoresObrasModel`: asignaciones y vigencia de inspector.
+* `App\Models\RepresentanteTecnicoModel` y `App\Models\ObrasRepresentantesTecnicosModel`: catálogo y asignaciones de representantes técnicos.
+* `ObraModel::findDetalle`, `ObraModel::actualizarFicha`, `ObraModel::touch`.
+* `UsuarioModel::findInspectoresActivos`, `RepresentanteTecnicoModel::listarActivasConTitulo`.
+* `obras/ficha` (vista), `ficha-obra.css`, `ficha-obra.js`.
+* `tests/unit/PlazoObraTest.php`.
+
+## 49.10 Cambio de representante técnico
+
+El representante técnico vigente se muestra en la ficha y se gestiona con el mismo patrón que el inspector, conservando el historial en `obras_representantes_tecnicos`:
+
+* la asignación vigente se cierra con `fecha_inicio - 1 día` de la nueva asignación, porque los períodos son inclusivos (sin superposición ni huecos);
+* se inserta una nueva asignación (`fecha_inicio = fecha del cambio`, `fecha_fin = NULL`);
+* la obra se marca como modificada (`obras.updated_at`).
+
+La fecha del cambio debe ser válida, no posterior a la fecha actual y estrictamente posterior al inicio de la asignación vigente. El nuevo representante debe existir en `representantes_tecnicos`, estar activo y ser distinto del vigente.
+
+La asignación de representantes técnicos a obras se apoya en las tablas consolidadas `representantes_tecnicos` y `obras_representantes_tecnicos`. El alta y la edición del catálogo de representantes técnicos no forman parte de esta fase.
+
+**Fuera de alcance:** certificados (botón deshabilitado), inspecciones, fotografías, ampliaciones de plazo, historial visible de inspectores o representantes, auditoría, eliminación de obras.
+
+---
+
+# 50. Gestión de representantes técnicos (padrón)
+
+Módulo de administración del catálogo de representantes técnicos. Complementa la asignación de representantes a obras de la ficha de obra (sección 49), que no se modifica.
+
+## 50.1 Alcance
+
+* Listado, alta, edición y activación/desactivación de representantes técnicos.
+* La asignación a obras sigue siendo responsabilidad de la ficha de obra (`ObrasRepresentantesTecnicosModel`).
+
+## 50.2 Acceso y autorización
+
+* Solo SUPERADMINISTRADOR y ADMINISTRADOR. CONSULTA e INSPECTOR quedan bloqueados.
+* La autorización se aplica en el backend con los filtros `auth` y `role:SUPERADMINISTRADOR,ADMINISTRADOR`; la opción del sidebar se oculta a los demás roles.
+
+## 50.3 Listado
+
+* Ordenado por apellido y nombre (`RepresentanteTecnicoModel::listarTodasConTitulo()`).
+* Columnas: apellido y nombre, título profesional, matrícula y estado.
+* La matrícula es opcional; si es NULL se muestra como “Sin matrícula”.
+* El estado se muestra como Activo/Inactivo con el mismo patrón visual que usuarios/empresas.
+* Acciones: Editar y Desactivar (si está activo) o Reactivar (si está inactivo). Botón “Agregar representante técnico”.
+
+## 50.4 Alta y edición
+
+* Campos: nombre (obligatorio), apellido (obligatorio), título profesional (obligatorio, del catálogo `tipos_titulo_profesional`) y matrícula (opcional).
+* Los nombres administrativos se almacenan en mayúsculas. La matrícula vacía se persiste como NULL.
+* La matrícula no nula es única: un duplicado produce un mensaje claro. En edición se excluye al propio representante.
+* La edición refresca `updated_at` y conserva `created_at`. No modifica el estado.
+* El alta crea siempre el representante como activo.
+
+## 50.5 Estado Activo/Inactivo
+
+* El padrón no se elimina físicamente: se activa o desactiva mediante el estado `representantes_tecnicos.activo` (TINYINT NOT NULL, por defecto 1), agregado en la migración `2026-09-18-120000_AddActivoToRepresentantesTecnicos`.
+* Un representante inactivo conserva sus datos y todo su historial de asignaciones en `obras_representantes_tecnicos`. Las asignaciones vigentes e históricas de las obras siguen siendo consultables.
+* No se permite desactivar un representante con asignación vigente (`fecha_fin` NULL) en `obras_representantes_tecnicos`: primero debe reemplazarse en esas obras. Las asignaciones históricas no impiden desactivarlo.
+* El cambio de estado se solicita con confirmación previa desde el frontend y no afecta la lógica ni los datos de las asignaciones.
+* La restricción `ON DELETE RESTRICT` de `obras_representantes_tecnicos` se mantiene como salvaguarda de integridad.
+
+## 50.6 Nuevas asignaciones en la ficha de obra
+
+* La ficha de obra ofrece para nuevas asignaciones únicamente representantes activos (`RepresentanteTecnicoModel::listarActivasConTitulo()`).
+* La validación del cambio de representante exige que el representante exista y esté activo (`listarActivas()`).
+* El representante vigente o histórico de una obra se sigue mostrando aunque luego quede inactivo, porque las consultas de asignaciones no filtran por `activo`.
+
+## 50.7 Rutas
+
+| Método | Ruta | Controlador |
+| ------ | ---- | ----------- |
+| GET  | `/representantes`              | `RepresentantesTecnicos::index` |
+| GET  | `/representantes/nuevo`        | `RepresentantesTecnicos::nuevo` |
+| POST | `/representantes/crear`        | `RepresentantesTecnicos::crear` |
+| GET  | `/representantes/editar/(:num)`| `RepresentantesTecnicos::editar` |
+| POST | `/representantes/actualizar/(:num)` | `RepresentantesTecnicos::actualizar` |
+| POST | `/representantes/estado`       | `RepresentantesTecnicos::cambiarEstado` |
+
+No existe ruta de eliminación física.
+
+## 50.8 Componentes nuevos
+
+* `App\Controllers\RepresentantesTecnicos`.
+* `RepresentanteTecnicoModel::crear`, `actualizar`, `existeMatricula`, `listarActivas`, `listarActivasConTitulo`, `cambiarActivo`.
+* `ObrasRepresentantesTecnicosModel::tieneAsignacionVigente`.
+* Migración `2026-09-18-120000_AddActivoToRepresentantesTecnicos` (`representantes_tecnicos.activo`).
+* `representantes/index`, `representantes/formulario` (vistas), `representantes.css`, `representantes.js`.
+
+---
+
+# 51. DECISIONES — DASHBOARD DEL INSPECTOR (MIS OBRAS)
+
+Primera vista para el rol INSPECTOR. Sustituye la pantalla de bienvenida previa por un dashboard mobile-first con las obras asignadas al inspector autenticado.
+
+## 51.1 Alcance
+
+* Dashboard "Mis obras" (encabezado DGEOA) con las obras cuya asignación vigente corresponde al usuario autenticado.
+* Navegación propia para INSPECTOR en el sidebar: "Mis obras" y "Otras obras" (deshabilitado, sin funcionalidad).
+* Ruta destino por obra (`/inspector/obras/ver/(:num)`) con validación de pertenencia; la vista operativa completa queda preparada para una etapa posterior.
+
+**Fuera de alcance:** vista operativa de inspección, inspecciones, fotografías, sincronización, búsqueda global de obras.
+
+## 51.2 Obtención de las obras
+
+Las obras se obtienen a partir de la asignación vigente del inspector en `inspectores_obras` (`usuario_id` del usuario autenticado y `fecha_fin` NULL). Es una consulta de **solo lectura**: no se agregan columnas a `obras` ni se modifican datos para mostrar el dashboard.
+
+* `InspectoresObrasModel::listarVigentesConObra(int $usuarioId)` resuelve los nombres de catálogo (tipo de licitación y estado) y ordena por nombre de obra.
+* `InspectoresObrasModel::esVigente(int $obraId, int $usuarioId)` verifica que el usuario sea la asignación vigente de la obra antes de permitirle el acceso a la ruta destino.
+
+## 51.3 Contenido de cada card
+
+Cada obra se muestra como una tarjeta cuyo vínculo completo es el área táctil:
+
+* nombre de la obra (jerarquía principal);
+* N° de expediente municipal;
+* tipo de licitación (S/D si no se informó);
+* N° de licitación (S/D si no se informó);
+* estado de la obra como badge (informativo, incluye todos los estados).
+
+No se muestra el código interno `OBR-XXXXXX`. Estado vacío: mensaje orientativo indicando que no hay obras asignadas y que se contacte a un administrador.
+
+## 51.4 Ruta destino y pertenencia
+
+| Método | Ruta | Controlador | Roles |
+| ------ | ---- | ----------- | ----- |
+| GET | `/inspector/dashboard`     | `Inspector\Dashboard::index` | INSPECTOR |
+| GET | `/inspector/obras/ver/(:num)` | `Inspector\Obras::ver`     | INSPECTOR |
+
+`Obras::ver` valida que la obra exista (`ObraModel::findDetalle`) y que el usuario sea la asignación vigente (`esVigente`). Si no corresponde, redirige a `/inspector/dashboard` con una advertencia. El acceso directo por URL a obras no asignadas queda bloqueado.
+
+La pantalla `/inspector/obras/ver/:id` se prepara como página de destino (encabezado de identificación + aviso "Vista operativa en preparación") para la futura vista de trabajo del inspector.
+
+## 51.5 Navegación del sidebar
+
+* Para el rol INSPECTOR, el ítem "Inicio" se reemplaza por "Mis obras" (activo cuando el segmento de URL es `inspector`).
+* "Otras obras" se muestra como ítem deshabilitado (`.sidebar-link.is-disabled`, sin `href`, sin acción) hasta que exista búsqueda global.
+* Los ítems administrativos ("Gestión de usuarios", "Empresas", "Representantes") se mantienen para usuarios con rol administrativo adicional; "Mis datos" y "Cerrar sesión" no cambian.
+
+## 51.6 Badges de estado como componente
+
+El bloque `.obras-estado*` de `pages/obras.css` se promovió a un componente compartido `components/estados.css` por reutilización real entre listado, ficha y dashboard del inspector:
+
+* clases neutrales: `.estado-badge` con variantes `.estado-previo`, `.estado-ejecucion`, `.estado-neutralizada`, `.estado-conservacion`, `.estado-finalizada`;
+* usan las variables `--color-state-*` existentes; no se agregan colores nuevos;
+* se cargan en el layout autenticado `layouts/auth.php` junto a `badges.css`;
+* `obras/index` y `obras/ficha` se actualizaron a las nuevas clases; se eliminó el bloque de `pages/obras.css` (se conservan `.obras-estado-preview` y `.obras-estado-nota`, que son de la selección de estado en el alta).
+
+## 51.7 Modelo
+
+`InspectoresObrasModel` incorpora los métodos de consulta del dashboard e integridad de acceso:
+
+* `listarVigentesConObra(int $usuarioId): array` — obras asignadas de forma vigente con nombres de catálogo resueltos y ordenadas por nombre;
+* `esVigente(int $obraId, int $usuarioId): bool` — validación de pertenencia para la ruta destino.
+
+## 51.8 Componentes nuevos
+
+* `App\Controllers\Inspector\Obras` con `ver(int $id)`.
+* `InspectoresObrasModel::listarVigentesConObra`, `InspectoresObrasModel::esVigente`.
+* `inspector/dashboard` y `inspector/obra` (vistas), `inspector-dashboard.css`, `inspector-obra.css`, `components/estados.css`.
+* `tests/database/InspectoresObrasModelTest.php`.
+
+---
+
+# 52. DECISIONES — FUNCIONAMIENTO OFFLINE Y SINCRONIZACIÓN (FASE A)
+
+Esta sección registra la **especificación técnica** del funcionamiento offline y la sincronización de SIGOA (Fase A: análisis, decisiones y documentación).
+
+Es exclusivamente una especificación: **ninguna parte de lo documentado aquí está implementada todavía**. Las fases siguientes implementarán estos puntos de forma incremental.
+
+Decisiones cerradas en esta fase: HTTPS, UUID, CSRF, sesión, múltiples inspecciones por día, autorización histórica del inspector, estados que permiten inspeccionar, fotografías, dispositivos/navegadores y reintentos/sincronización.
+
+## 52.1 Alcance y principios generales
+
+* El inspector utiliza la aplicación desde el teléfono (PWA instalable). El servidor es la **fuente de verdad**; el dispositivo mantiene una **caché de trabajo persistente** con las operaciones capturadas sin conexión.
+* El funcionamiento offline de V1 cubre: consultar el snapshot de las obras asignadas, crear inspecciones y capturar fotografías.
+* Fuera del alcance de V1: edición de obras desde el dispositivo, sincronización bidireccional, trabajo offline para otros roles.
+* Principios: **integridad de los datos → trazabilidad → seguridad → simplicidad → funcionalidad** (§43).
+* No se pierde información local: los datos locales se eliminan únicamente después de una confirmación exitosa del servidor.
+* La sincronización debe evitar duplicación, pérdida de inspecciones/fotografías e inconsistencias dispositivo-servidor (§21).
+
+## 52.2 HTTPS (F.1)
+
+* **HTTPS es obligatorio** para el funcionamiento PWA/offline en dispositivos móviles (Service Worker, IndexedDB persistente, `crypto.randomUUID`, cámara y geolocalización exigen contexto seguro o `localhost`).
+* La configuración concreta del certificado, CA, nombre interno y Apache se resolverá posteriormente, **antes de activar el Service Worker en producción**.
+* Esto no bloquea las fases de servidor que puedan desarrollarse previamente.
+* El diseño no debe asumir que HTTP serviría para las funcionalidades PWA.
+
+## 52.3 UUID, idempotencia y múltiples inspecciones por día (F.2, F.5)
+
+* El **UUID v4 es generado por el cliente** (en contexto seguro: `crypto.randomUUID()`; con fallback basado en `crypto.getRandomValues`). El servidor lo valida como clave de idempotencia.
+* Se agregarán en migraciones futuras:
+  * `inspecciones.uuid CHAR(36) NOT NULL UNIQUE`;
+  * `fotografias.uuid CHAR(36) NOT NULL UNIQUE`.
+* Se conservan los IDs autoincrementales existentes y `obras.id` como clave de relación.
+* Usos del UUID:
+  * identificación única de la operación offline;
+  * idempotencia de sincronización;
+  * relación entre datos locales y remotos;
+  * identificación de la inspección;
+  * identificación/nombre de archivos cuando corresponda.
+* No se agrega `hash_sha256` en V1.
+* **Una obra puede tener múltiples inspecciones en la misma fecha** (no existe la regla de "una inspección por obra y día"). La restricción `UNIQUE (obra_id, fecha_inspeccion)` (`KEY obra_id_fecha_inspeccion`) se eliminará mediante una migración nueva; no se modifica la migración histórica que la creó. La fecha de la inspección agrupa documentalmente; cada inspección se identifica por su `uuid`.
+
+## 52.4 Autorización histórica del inspector (F.6)
+
+* La autorización de una inspección offline se determina por la vigencia del inspector para la obra **en la fecha de la inspección**: se valida `inspector + obra + fecha_inspeccion`, no la fecha de captura de una fotografía.
+* Se agregará a `InspectoresObrasModel` un método de consulta (p. ej. `fueVigente(int $obraId, int $usuarioId, string $fecha): bool`) que verifique la existencia de una fila con:
+  * `obra_id` = obra;
+  * `usuario_id` = inspector;
+  * `fecha_inicio <= fecha` **y** (`fecha_fin IS NULL` **o** `fecha_fin >= fecha`);
+* Los períodos de asignación son **inclusivos** (la fecha de fin es el último día efectivo).
+* Ejemplo (inspector A vigente hasta 22/09; el 23/09 pasa a B; A recupera conexión el 23/09): las inspecciones de A del 22/09 **sincronizan**; una inspección nueva de A con fecha 23/09 **no sincroniza**.
+* Colaboración fuera del mecanismo: quien ya no es vigente entrega el material por fuera y el inspector vigente lo incorpora.
+* Las operaciones rechazadas por autorización **no se eliminan silenciosamente**: quedan localmente como `ERROR` con un mensaje comprensible.
+
+## 52.5 Estados de obra que permiten nuevas inspecciones (F.7)
+
+| Estado | Nuevas inspecciones |
+| --- | --- |
+| EN EJECUCIÓN (id 2) | PERMITIDO |
+| NEUTRALIZADA (id 3) | PERMITIDO |
+| EN PLAZO DE CONSERVACIÓN (id 4) | PERMITIDO |
+| PREVIO INICIO (id 1) | NO |
+| FINALIZADA (id 5) | NO |
+
+* La restricción aplica a la **creación** de inspecciones (precondición evaluada en el dispositivo con el estado del snapshot; también en el alta en línea).
+* Una inspección creada legítimamente offline durante un estado permitido **mantiene su validez histórica** aunque la obra cambie de estado antes de sincronizar.
+* En sincronización, el servidor **no rechaza por el estado actual** si la autorización histórica de §52.4 es válida; el estado no permitido es condicionante de la creación, no de la sincronización.
+
+## 52.6 Sesión y autenticación (F.4)
+
+* Se conserva la sesión actual (Config\Session `expiration = 7200` s, `regenerateDestroy = false`). **No se extiende la duración solo para resolver offline.**
+* Los datos creados offline persisten en IndexedDB y **sobreviven la expiración de sesión**.
+* Si al sincronizar la sesión expiró:
+  1. el servidor responde **401 JSON**;
+  2. SIGOA solicita nuevamente autenticación;
+  3. el usuario se autentica;
+  4. la cola de sincronización continúa.
+* Nunca se eliminan ni se marcan como sincronizados datos locales motivado por un 401.
+* **No se almacenan contraseñas, cookies ni credenciales en IndexedDB.** Solo se almacena un perfil mínimo (nombre, apellido, nombre de usuario) para la interfaz.
+* Los endpoints de sincronización responden con `401` explícito (JSON) cuando la sesión expiró — patrón de `MisDatos::verifyPassword()` — y no con la redirección HTML de `AuthFilter`. Implementado en la Fase B: `AuthFilter`/`RoleFilter` responden `401`/`403` JSON ante peticiones AJAX/API (§52.22).
+
+## 52.7 CSRF (F.3)
+
+* El filtro CSRF está **activado globalmente desde la Fase B** (§52.22), antes de exponer las APIs de sincronización. Se apoya en la configuración de `Config\Security` (protección `cookie`, `tokenName = csrf_test_name`, `headerName = X-CSRF-TOKEN`). La activación es transversal y afecta todos los formularios del sistema (ver §32 y §45.8).
+* El manejo debe ser transparente para el usuario.
+* **No se almacenan tokens CSRF en la cola offline.**
+* Con la rotación activa (`Security::$regenerate = true`, mantenido salvo incompatibilidad demostrada), al **comenzar cada sincronización se obtiene automáticamente un token vigente**: petición previa (GET) que renueva la cookie CSRF, lectura de la cookie `csrf_cookie_name` (legible por JS) y envío como header `X-CSRF-TOKEN` en cada `fetch()`.
+* `tokenRandomize = false`: el token coincide con el hash de la cookie.
+* Los endpoints de sincronización combinan: autenticación, rol/autorización, validación de vigencia histórica (§52.4) y CSRF.
+* Las APIs devuelven `401` explícito ante sesión expirada (§52.6).
+
+## 52.8 Arquitectura de almacenamiento físico (F.5)
+
+Estructura prevista:
+
+```text
+SIGOA/
+└── OBR-000001/
+    └── 2026-09-22/
+        ├── UUID-inspeccion-1/
+        │   ├── IMAGENES/
+        │   └── THUMBNAILS/
+        │
+        └── UUID-inspeccion-2/
+            ├── IMAGENES/
+            └── THUMBNAILS/
+```
+
+Conceptualmente:
+
+```text
+Obra → Fecha → Inspección → archivos
+```
+
+* El nombre de la carpeta de obra continúa siendo su código interno `OBR-XXXXXX` (de `obras.codigo`), validado con `ObraAlmacenamiento::normalizarCodigo()` (formato `^OBR-\d{6}$`, anti-traversal).
+* `ObraAlmacenamiento` (hoy crea `OBR/IMAGENES` y `OBR/THUMBNAILS`, usado en `Inspector\Obras::ver()`) deberá **ajustarse incrementalmente a la estructura anidada sin romper el código ya implementado**: nuevos métodos por obra+fecha+uuid, compatibilidad con el comportamiento actual y actualización de llamadores.
+* En la base de datos se guardan **referencias relativas** a la raíz (`SIGOA_STORAGE_PATH`, Config\SigoaStorage), nunca rutas absolutas — misma convención que `empresas.ruta_logo`.
+* El código de la obra no se expone innecesariamente en la interfaz del inspector (§51.3, ya no se muestra).
+
+## 52.9 Fotografías (F.8)
+
+* Formatos aceptados: **JPG, JPEG, PNG, WEBP**. HEIC/HEIF fuera de V1.
+* Límite máximo: **8 MB por fotografía** (también validado en el servidor como defensa).
+* Procesamiento en el teléfono **antes** de almacenar/sincronizar:
+  * máximo **2560 px en el lado mayor**;
+  * JPEG con calidad aproximada **80–85 %**; PNG redimensionado conservando formato;
+  * thumbnail independiente: máximo **400 px en el lado mayor**.
+* La **fotografía original de cámara no se conserva** en SIGOA: se trabaja con la versión procesada/optimizada.
+* Orientación: considerar EXIF `Orientation` (especialmente iOS) al procesar con canvas.
+* Mientras esté pendiente de sincronización, IndexedDB conserva por fotografía: Blob de la fotografía, Blob del thumbnail, metadata, UUID, relación con la inspección y estado de sincronización.
+* Los blobs locales **solo se eliminan después de una confirmación exitosa del servidor**.
+
+## 52.10 Almacenamiento local — IndexedDB
+
+Persistencia en el teléfono mediante IndexedDB (base de datos SIGOA, versionada). Almacenes previstos:
+
+| Almacén | Clave | Contenido |
+| --- | --- | --- |
+| `obras` | `obra_id` | snapshot de cada obra (§52.11) + `snapshot_at` (fecha de descarga local) |
+| `inspecciones` | `uuid` | uuid, obra_id, fecha_inspeccion, hora_inspeccion, observacion, `servidor_id` (tras confirmación), estado de sync |
+| `fotografias` | `uuid` | uuid, inspeccion_uuid, extension, mime_type, tamano_bytes, ancho, alto, fecha_hora_captura, latitud, longitud, dispositivo, blob (Blob), thumbnail (Blob), ruta_relativa/ruta_thumbnail (asignadas por el servidor), estado de sync |
+| `cola` | uuid | operación (`inspeccion`/`fotografia`), entidad relacionada, dependencia (uuid de inspección), estado (PENDIENTE/ERROR), intentos, ultimo_intento, error |
+| `metadatos` | clave | perfil mínimo del usuario, última sincronización, config |
+
+* Se solicita `navigator.storage.persist()` en el primer uso y se monitorea con `storage.estimate()` para avisar sobre cuota.
+* Estados locales de sincronización alineados a los indicadores de RNF §44: `pendiente`, `sincronizando`, `sincronizado`, `error` (texto + iconografía + color, sin depender solo del color).
+* Los indicadores de conectividad (conectado/desconectado) forman parte de la interfaz global según RNF §44.
+
+## 52.11 Snapshot de obras offline
+
+* Endpoint futuro `GET /inspector/offline/obras`: devuelve **solo las obras con asignación vigente** al usuario autenticado. Una **única consulta con joins** (extender `InspectoresObrasModel::listarVigentesConObra()` agregando `obras.codigo` y `obras.updated_at`, o método específico). **Sin N+1.**
+* Campos mínimos del snapshot:
+
+| Campo | Origen |
+| --- | --- |
+| `obra_id` | `obras.id` |
+| `codigo` | `obras.codigo` (para almacenamiento físico, no se muestra) |
+| `nombre` | `obras.nombre` |
+| `expediente_municipal` | `obras.expediente_municipal` |
+| `tipo_licitacion` | `tipo_licitacion_id` + `tipo_licitacion_nombre` |
+| `numero_licitacion` | `obras.numero_licitacion` |
+| `estado_obra` | `estado_obra_id` + `estado_nombre` |
+| `updated_at` | `obras.updated_at` |
+| `snapshot_at` | fecha de descarga, agregada por el dispositivo |
+
+* No se incluyen en V1: barrio, empresa, representante técnico, montos, plazos, fecha de inicio, contables.
+* Se guardan en el almacén `obras` (upsert por `obra_id`).
+* Refresco: al abrir el dashboard con conexión; opcionalmente antes de cada sincronización.
+
+## 52.12 Entidades y relaciones locales
+
+```text
+obras (obra_id)
+   │ 1..*
+   ▼
+inspecciones (uuid, obra_id, fecha_inspeccion, ...)
+   │ 1..*
+   ▼
+fotografias (uuid, inspeccion_uuid, blobs, metadata, ...)
+
+cola (uuid, tipo, dependencia inspeccion_uuid, estado)
+```
+
+* Las relaciones locales se resuelven por UUID (inspección → fotografías). La relación a obras se mantiene con `obra_id` (id estable de servidor).
+* El servidor deriva los IDs numéricos (`inspeccion_id`, etc.) al confirmar; el dispositivo los conserva como `servidor_id` para trazabilidad.
+
+## 52.13 Cola de sincronización y reintentos (F.9, F.10)
+
+* Estados de operación: **PENDIENTE** (errores temporales) y **ERROR** (errores permanentes). Espejo en el servidor: `operaciones_sincronizacion` con `PENDIENTE`/`PROCESADA`/`ERROR`.
+* Errores temporales (pérdida de conexión, servidor inaccesible, timeout, red inestable) permanecen como **PENDIENTE** con reintentos automáticos y backoff progresivo (esquema orientativo: 5 s, 15 s, 30 s, 60 s, 5 min; a formalizar en la implementación).
+* Agotados los reintentos automáticos, la operación queda **pendiente esperando una acción explícita** ("Sincronizar ahora"). **No se eliminan datos** por agotamiento de reintentos.
+* Los errores permanentes pasan a **ERROR** e informan el motivo (p. ej. autorización histórica rechazada).
+* **Dependencias**:
+
+```text
+Inspección
+    ↓ confirmación del servidor
+Fotografías de esa inspección
+```
+
+  Una fotografía no se sincroniza antes de que su inspección esté confirmada.
+* La sincronización puede iniciarse:
+  * al recuperar conexión;
+  * al abrir SIGOA con conexión;
+  * mediante acción manual "Sincronizar ahora";
+  * después de resolver una sesión expirada.
+* No se depende exclusivamente de ejecución automática en segundo plano (no usar Background Sync de Chrome como mecanismo único; la app ejecuta la sincronización cuando el usuario vuelve a usarla con conexión, compatible con Android/Chrome e iOS/Safari).
+
+## 52.14 Flujo offline
+
+```text
+Con conexión:
+  abrir dashboard → descargar snapshot (GET /inspector/offline/obras)
+                   → persistir en IndexedDB (obras)
+
+Sin conexión:
+  abrir obra (snapshot local) → crear inspección (fecha/hora/observación)
+                              → capturar fotos → procesar (2560 px) → thumbnail (400 px)
+                              → guardar blobs + metadata en IndexedDB → encolar
+
+Recupera conexión:
+  detectar red → sincronizar (automático y/o "Sincronizar ahora"):
+     1) inspecciones pendientes → confirmación del servidor
+     2) fotografías de inspecciones confirmadas → confirmación del servidor
+     3) liberar blobs confirmados
+```
+
+* El dispositivo guarda localmente la fecha/hora de captura del dispositivo; `fecha_inspeccion` (DATE) es el dato funcional de la inspección y se valida contra la autorización histórica (§52.4).
+
+## 52.15 Sincronización — endpoints y manejo de respuestas
+
+Endpoints futuros (grupo `inspector`, filtros `auth` + `role:INSPECTOR` + CSRF):
+
+| Método | Ruta | Acción |
+| --- | --- | --- |
+| POST | `/inspector/sincronizar/inspecciones` | Alta confirmada de inspecciones por uuid (idempotente) |
+| POST | `/inspector/sincronizar/fotografias` | Alta de fotografías (multipart): archivo + thumbnail + metadata |
+| GET | `/inspector/offline/obras` | Snapshot de obras vigentes (§52.11) |
+| GET | `/inspector/fotografias/ver/{uuid}` | Servir fotografía optimizada |
+| GET | `/inspector/fotografias/mini/{uuid}` | Servir thumbnail |
+
+* **Idempotencia:** si el `uuid` ya existe, el servidor devuelve el registro existente (200) sin duplicar.
+* **401:** sesión expirada → JSON 401 → proceso de reautenticación (§52.6).
+* **Errores temporales:** respuesta 5xx/timeouts → reintento (backoff) → PENDIENTE.
+* **Errores permanentes:** validación fallida (autorización histórica, datos inválidos, formato de archivo) → ERROR con motivo.
+* **Confirmación:** cada respuesta exitosa incluye los `servidor_id` (id de inspección/fotografía) para actualizar los registros locales y liberar blobs.
+
+## 52.16 Revisión de `operaciones_sincronizacion`
+
+La tabla existente es suficiente para la arquitectura definida en V1:
+
+* `tipo_operacion`: alta/confirmación; `entidad`: `inspecciones` o `fotografias`.
+* `registro_id` (VARCHAR 100): contendrá el **UUID** del registro (`registro_id = uuid`), ya compatible con `CHAR(36)`.
+* `estado`: `PENDIENTE` / `PROCESADA` / `ERROR`; `intentos`, `ultimo_intento`, `error` para reintentos/trazabilidad.
+* Relación: la cola local (IndexedDB) es el estado operativo del dispositivo; `operaciones_sincronizacion` es el **registro en el servidor** de las altas de sincronización (trazabilidad).
+* Cambios futuros documentados (no necesarios para V1 pero recomendados luego): índices compuestos para monitoreo, p. ej. `(entidad, registro_id)` y `(estado, intentos)`.
+
+## 52.17 Fotografías — encaje de uuid y rutas nuevas
+
+La tabla `fotografias` no requiere eliminar columnas. El encaje con UUID y rutas:
+
+* `uuid`: columna nueva `CHAR(36) NOT NULL UNIQUE`.
+* `nombre_archivo`: `{uuid}.{extension}` (asignado por el servidor al sincronizar).
+* `ruta_relativa`: `OBR-XXXXXX/YYYY-MM-DD/{uuid_inspeccion}/IMAGENES/{uuid}.{ext}` — relativa a la raíz de almacenamiento.
+* `ruta_thumbnail`: igual con `THUMBNAILS`.
+* `extension`/`mime_type`: validados con `finfo` (solo jpg/jpeg/png/webp).
+* `tamano_bytes`, `ancho`, `alto`: metadata de la **versión procesada**.
+* `fecha_hora_captura`: dispositivo; `fecha_hora_carga`: servidor.
+* `latitud`, `longitud`, `dispositivo`: opcionales desde el dispositivo.
+* `anulada`: se conserva (anulación lógica sin borrado físico).
+
+## 52.18 Migraciones futuras (base de datos) — SIN EJECUTAR
+
+Migración por migración, pendientes de crear en fases posteriores:
+
+1. **`inspecciones.uuid`**: `ALTER TABLE inspecciones ADD uuid CHAR(36) NOT NULL` + índice/clave `UNIQUE`. Las tablas de interés se encuentran hoy **vacías**, por lo que no requiere backfill de datos.
+2. **`fotografias.uuid`**: `ALTER TABLE fotografias ADD uuid CHAR(36) NOT NULL` + `UNIQUE`.
+3. **Eliminar `UNIQUE (obra_id, fecha_inspeccion)`** de `inspecciones` (KEY `obra_id_fecha_inspeccion`) para permitir múltiples inspecciones por día. Se conserva el índice simple `obra_id` existente y las FKs.
+4. **Opcional/recomendado más adelante**: índices en `operaciones_sincronizacion` `(entidad, registro_id)` y `(estado, intentos)`.
+
+Reglas: crear migraciones nuevas numeradas posteriormente; **no modificar** migraciones históricas ni `RepairDatabaseStructure`; no usar `migrate:fresh`/`migrate:refresh`/rollback sin autorización (§5.1, §37).
+
+## 52.19 Componentes: reutilizar / crear
+
+**Reutilizar:**
+* `AuthFilter`, `RoleFilter`, `BaseController::getRolPrincipal()` / `getDashboardPath()`.
+* `InspectoresObrasModel` (vigentes, esVigente; agregar `fueVigente` §52.4), `ObraModel`, `EstadoObraModel`.
+* `ObraAlmacenamiento` (`normalizarCodigo`, raíz desde `Config\SigoaStorage`) — adaptado a §52.8.
+* Patrón `Empresas::subirLogo` / `verLogo` / `resolverRutaLogo` (validación `finfo`, límites, anti-traversal, servir con Content-Type) para fotografías.
+* Patrón de respuesta JSON + 401 de `MisDatos::verifyPassword()` (incluye `X-Requested-With` en `mis-datos.js`).
+* Layout `layouts/auth.php`, componentes CSS existentes (alerts, badges, botones, estados, modal, formularios, tablas, navbar, sidebar), `sidebar.js`, recursos locales (§42 RNF).
+
+**Crear (fases siguientes):**
+* Filtros: API/filtro que responda 401 JSON para peticiones AJAX (o extensión de `AuthFilter`).
+* Modelos: `InspeccionModel`, `FotografiaModel`, `OperacionSincronizacionModel`.
+* Controladores: `Inspector\Sincronizar`, `Inspector\Offline`, `Inspector\Fotos`.
+* Servicio: lógica de sincronización en el servidor; refactor de `ObraAlmacenamiento` para la estructura por fecha/uuid.
+* JS: `components/connectivity.js`, `components/indexeddb.js`, `components/sincronizacion.js`, `components/camera-resize.js` (procesamiento + thumbnail) y JS de páginas del inspector. `app.js` cuando exista responsabilidad global concreta (p. ej. indicador de conectividad).
+* PWA: `manifest.json`, `sw.js` (app shell cache-first de recursos estáticos; **no** cachear páginas autenticadas ni respuestas JSON); `layouts/auth.php` con `theme-color`/manifest cuando corresponda.
+* CSS: indicadores de conectividad/sincronización según RNF §44 y paleta; páginas de inspector.
+
+## 52.20 Compatibilidad Android/iOS (F.9)
+
+* Contemplar desde V1: **Android + Chrome** (entorno principal de desarrollo/pruebas) e **iPhone + Safari** (inspectores existentes usan ambos).
+* Usar APIs web estándar y no depender deliberadamente de APIs exclusivas de Chrome.
+* Atención especial y pruebas en ambos: IndexedDB, Service Worker, almacenamiento persistente, cámara (`input capture` respalde `getUserMedia`), procesamiento de imágenes (canvas, EXIF orientation), sincronización (al volver a usar la app, no solo Background Sync de iOS/Safari).
+* Requerimientos: iOS Safari moderno (SW ≥ 16.4 instalable), contexto HTTPS (§52.2).
+
+## 52.21 Riesgos y decisiones pendientes
+
+Riesgos identificados:
+
+* HTTPS no resuelto antes de activar SW/PWA en producción (bloqueante temporal para PWA, no para fases de servidor).
+* Sesión de 2 h: re-login en el flujo de sincronización (§52.6); validar GC de sesión (FileHandler) en el servidor.
+* CSRF: activación global afecta todos los formularios; token vigente por batch de sincronización (§52.7).
+* Cuota/almacenamiento local: `persist()`, `estimate()` y avisos.
+* Pérdida de blobs con confirmación no recibida: regla de no liberar sin 200/servidor_id.
+* Dependencia de la hora del dispositivo para `fecha_inspeccion`: el servidor valida autorización histórica con esa fecha.
+* Tamaños de archivo y límites PHP/`upload_max_filesize`/`post_max_size` al reseber fotografías.
+* Navegadores móviles viejos (SW/IDB/canvas): definir matriz y fallbacks.
+
+Decisiones pendientes (solo las realmente abiertas):
+
+1. Configuración concreta de HTTPS (certificado, CA, nombre interno, Apache), a cerrar antes de activar SW en producción (F.1).
+2. Contrato definitivo del request/response de sincronización (batch vs. por fotografía; cómo refleja la confirmación de blobs; formato multipart) — formalizar en la fase de API.
+3. Confianza del reloj del dispositivo para `fecha_inspeccion` (acotación de fechas futuras/imposibles antes de sincronizar).
+4. Límites de PHP para upload (revisar `upload_max_filesize`/`post_max_size`) con el límite de 8 MB por fotografía.
+5. Formalización del esquema exacto de backoff y de la política de limpieza de `operaciones_sincronizacion` (§52.13/§52.16).
+6. Momento y criteros exactos del refresco del snapshot (dashboard con conexión / antes de sincronizar) sin agregar columnas nuevas a `obras`.
+
+## 52.22 Fase B implementada — CSRF y seguridad base de APIs
+
+### CSRF (implementado)
+
+* `Config\Filters`: el alias `csrf` está activo en `$globals['before']`.
+* `Config\Security` se mantiene sin cambios: protección `cookie`, `tokenRandomize = false`, `tokenName = csrf_test_name`, `headerName = X-CSRF-TOKEN`, `cookieName = csrf_cookie_name`, `expires = 7200`, `regenerate = true`, `redirect` solo en producción (`ENVIRONMENT === 'production'`).
+* `Config\Cookie::$httponly = false`: la cookie CSRF es legible por JavaScript (esquema double-submit). La cookie de sesión `ci_session` **sigue siendo HttpOnly** porque el framework PHP la fuerza en `Session` independientemente de `Config\Cookie`.
+* Formularios HTML tipo POST (12 formularios): incluyen `<?= csrf_field() ?>` (helper global de CI4): login, mis-datos (email y contraseña), empresas (alta/edición, subir logo, eliminar logo), representantes (alta/edición, cambio de estado), obras (alta, ficha, cambio de inspector vigente, cambio de representante vigente).
+* JavaScript (único `fetch()` del sistema, `mis-datos.js`): lee la cookie `csrf_cookie_name` en cada envío y la envía como header `X-CSRF-TOKEN` (además de `X-Requested-With: XMLHttpRequest`). Como `regenerate = true` rota el token en cada petición, leer la cookie en cada `fetch()` garantiza tokens vigentes incluso ante reintentos.
+* Comportamiento ante rechazo CSRF (framework): en producción y petición no-AJAX → redirección hacia atrás con mensaje de error; en desarrollo/pruebas y en peticiones AJAX → `SecurityException` (respuesta de error del servidor). Las futuras APIs de sincronización deben enviar siempre un token vigente; un token inválido rechaza la petición.
+
+### Seguridad base para APIs (implementado)
+
+* `AuthFilter`:
+  * contexto web (HTML) → redirección a `/login` (comportamiento previo intacto);
+  * contexto API (AJAX `X-Requested-With` o `Accept: application/json`) y sin sesión válida o usuario inactivo → `401` `{"ok": false, "error": "AUTH_REQUIRED"}`.
+* `RoleFilter`:
+  * contexto web → redirección a `/dashboard` con advertencia (intacto);
+  * contexto API y sin el rol requerido → `403` `{"ok": false, "error": "FORBIDDEN"}`.
+* Cada filtro tiene su propia detección de contexto API (`esPeticionApi()`). Autenticación ≠ rol ≠ autorización sobre obra ≠ autorización histórica ≠ CSRF siguen siendo responsabilidades separadas; esta base es la que reutilizarán las APIs de sincronización de las Fases A/C (§52.15).
+
+### Pruebas (verdes)
+
+* `tests/unit/CsrfProteccionTest.php`: POST sin token rechazado; token inválido por campo y por cabecera rechazado; token válido por campo y por cabecera aceptado; regeneración del token tras petición exitosa; token antiguo rechazado tras regeneración; GET no bloqueado.
+* `tests/unit/ApiSeguridadBaseTest.php`: `401` JSON sin sesión; redirección a `/login` en web; `401` JSON con usuario inactivo; `403` JSON sin rol; redirección a `/dashboard` en web; rol correcto atraviesa el filtro; `/dashboard` resuelve destino según rol.
+* Suite completa en verde (57 tests / 124 assertions).
+
+### Sin implementar (queda para Fase C)
+
+* IndexedDB, Service Worker, PWA, cámara, fotografías, endpoints de sincronización, cola, reintentos, UUID, snapshots offline y cambios HTTPS. Ver §52.1–§52.21.
+
+---
