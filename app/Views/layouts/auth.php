@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= esc($titulo) ?> — SIGOA</title>
 
+    <!-- PWA (Fase D.1) -->
+    <link rel="manifest" href="<?= base_url('manifest.json') ?>">
+    <meta name="theme-color" content="#24344C">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="SIGOA">
+
     <!-- Tipografía Inter (local) -->
     <link rel="stylesheet" href="<?= base_url('assets/fonts/inter/fonts.css') ?>">
 
@@ -18,6 +26,7 @@
     <link rel="stylesheet" href="<?= base_url('assets/css/components/alerts.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/badges.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/estados.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('assets/css/components/connectivity.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/navbar.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/sidebar.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/tables.css') ?>">
@@ -39,6 +48,12 @@
             <span class="brand">SIGOA</span>
         </div>
         <div class="topbar-user">
+            <span class="connectivity-indicator"
+                  id="sigaConnectividad"
+                  role="status">
+                <i class="bi bi-wifi connectivity-icon" aria-hidden="true"></i>
+                <span class="connectivity-text">En línea</span>
+            </span>
             <span class="user-info">
                 Sesión: <strong><?= esc($user_name) ?></strong> (<?= esc($username) ?>)
             </span>
@@ -67,6 +82,10 @@
     <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
 
     <script src="<?= base_url('assets/js/components/sidebar.js') ?>"></script>
+    <script src="<?= base_url('assets/js/components/uuid.js') ?>"></script>
+    <script src="<?= base_url('assets/js/components/indexeddb.js') ?>"></script>
+    <script src="<?= base_url('assets/js/components/connectivity.js') ?>"></script>
+    <script src="<?= base_url('assets/js/app.js') ?>"></script>
     <?= $this->renderSection('scripts') ?>
 </body>
 </html>

@@ -1,0 +1,13 @@
+{
+  "name": "SIGOA — Sistema para Inspección de Obras de Arquitectura",
+  "short_name": "SIGOA",
+  "description": "Sistema para la gestión, seguimiento e inspección de obras de arquitectura.",
+  "lang": "es",
+  "start_url": "/login",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5F3F0",
+  "theme_color": "#24344C",
+  "icons": []
+}

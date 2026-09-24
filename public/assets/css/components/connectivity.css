@@ -1,0 +1,58 @@
+/* ===================================================================
+   SIGOA — Componente: Indicador de conectividad (topbar)
+   Fase D.1 — estado online/offline (RNF §44: texto + iconografía + color)
+   =================================================================== */
+
+.connectivity-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-right: var(--space-md);
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-lg);
+    border: 1px solid transparent;
+    background: var(--color-surface);
+    font-size: var(--font-size-xs);
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.connectivity-indicator .connectivity-icon {
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+.connectivity-indicator .connectivity-text {
+    color: var(--color-text-secondary);
+}
+
+/* --- Estado en línea --- */
+.connectivity-indicator.is-online {
+    background: var(--color-success-bg);
+    border-color: var(--color-success-border);
+    color: var(--color-success);
+}
+
+.connectivity-indicator.is-online .connectivity-text {
+    color: var(--color-success);
+}
+
+/* --- Estado sin conexión --- */
+.connectivity-indicator.is-offline {
+    background: var(--color-warning-bg);
+    border-color: var(--color-warning-border);
+    color: var(--color-warning);
+}
+
+.connectivity-indicator.is-offline .connectivity-text {
+    color: var(--color-warning);
+    font-weight: 600;
+}
+
+/* --- Responsive --- */
+@media (max-width: 640px) {
+    .connectivity-indicator {
+        margin-right: var(--space-sm);
+        padding: 0.15rem 0.5rem;
+    }
+}

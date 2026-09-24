@@ -114,6 +114,7 @@ Adicionalmente, se encuentra implementada la infraestructura de autenticación y
 * refactor de `getDashboardPath()` y `getRolPrincipal()` a `BaseController`;
 * **dashboard administrativo** (SUPERADMINISTRADOR y ADMINISTRADOR) con la sección **Obras** como eje principal — listado, paginación y alta inicial de obras — ver §47;
 * **edición de datos básicos de obras** — modal reutilizable de alta/edición, estado libre en esta etapa, unicidad de expediente con exclusión — ver §48;
+* **Fase D.1** — fundación PWA/offline: manifest, Service Worker de app shell, registro de SW, capa propia de IndexedDB (base `SIGOA`, stores `inspecciones`/`fotografias`/`operaciones`), UUID v4 en el cliente y estado online/offline en la topbar — ver §53;
 
 ---
 
@@ -2099,5 +2100,160 @@ Nuevas migraciones reales, numeradas posteriormente a las históricas; **no se m
 ### Sin implementar (queda para Fase D)
 
 * IndexedDB, Service Worker/PWA, cámara, fotografías (captura/sincronización), endpoints de sincronización, cola, reintentos, snapshots offline, autorización histórica de sincronización, cambios HTTPS y refactor de almacenamiento OBRA/FECHA/UUID. Ver §52.1–§52.21.
+
+---
+
+# 53. FASE D.1 IMPLEMENTADA — FUNDACIÓN PWA / MODO OFFLINE / INDEXEDDB
+
+## 53.1 Alcance de D.1
+
+D.1 implementa la **base para que SIGOA funcione como aplicación instalable/offline** y la **capa local persistente** para las futuras inspecciones y fotografías:
+
+* manifest PWA;
+* Service Worker de app shell (recursos estáticos);
+* registro del Service Worker compatible con la arquitectura actual;
+* capa propia de acceso a IndexedDB (base `SIGOA`, versionada);
+* UUID v4 en el cliente como identidad local;
+* estado online/offline con indicador discreto en la topbar.
+
+**NO** se implementó sincronización, endpoints de API, cola de operaciones contra el servidor, cámara, fotografías, snapshots de obras, ni cambios HTTPS/certificados (queda para D.2+; §53.9).
+
+## 53.2 Manifest PWA
+
+Archivo: `public/manifest.json` (servido por Apache como recurso real; no pasa por el front controller).
+
+| Campo | Valor |
+| --- | --- |
+| `name` | SIGOA — Sistema para Inspección de Obras de Arquitectura |
+| `short_name` | SIGOA |
+| `start_url` | `/login` |
+| `scope` | `/` |
+| `display` | `standalone` |
+| `orientation` | `portrait` |
+| `lang` | `es` |
+| `background_color` | `#F5F3F0` (blanco cálido) |
+| `theme_color` | `#24344C` (azul institucional) |
+| `icons` | `[]` — **pendiente**: no existen todavía iconos institucionales reales; no se fabricaron imágenes arbitrarias |
+
+El layout autenticado (`app/Views/layouts/auth.php`) referencia el manifest, declara `theme-color` y las metas Apple/iOS mínimas para el modo standalone.
+
+**Pendiente (fuera de D.1):** diseñar los iconos institucionales (192 px y 512 px, con sus variantes) antes de considerar la PWA instalable en producción. Chrome exige iconos para habilitar la instalación; el manifest es válido pero no instalable sin ellos.
+
+## 53.3 Service Worker y estrategia de cache
+
+Archivo: `public/sw.js`. Implementación deliberadamente pequeña y mantenible.
+
+* **Precache de app shell** al instalar: CSS global y de componentes, tipografía Inter, Bootstrap Icons, `manifest.json`, `robots.txt`, `favicon.ico` y los JS del frontend offline.
+* **Cache-first para recursos estáticos** (`/assets/…`, manifest, robots, favicon), con fallback a red; las respuestas nuevas se incorporan al cache solo si son `ok`, del mismo origen (`type === 'basic'`) y **no llevan cabecera `Set-Cookie`**.
+* **No se intercepta ni se cachea** ninguna página HTML, `/login`, `/dashboard`, APIs ni futuras rutas de sincronización: esas respuestas son privadas/dinámicas y pueden contener sesión, CSRF o datos personales.
+* **No hay Background Sync**, ni cola, ni lógica de sincronización (Fase D.x).
+* **Versionado**: constante `CACHE_VERSION = 'sigoa-shell-v1'`. Al modificar cualquier asset del app shell hay que incrementar la versión, o los clientes quedarán con assets viejos. En `activate` se borran los caches `sigoa-shell-*` de versiones anteriores.
+
+Alcance del SW: servido desde la raíz (`/sw.js`), su control cubre toda la aplicación.
+
+### Limitación documentada de D.1
+
+Sin red, **los assets del app shell se recuperan del cache**, pero **las páginas HTML todavía requieren servidor**: no hay snapshot de obras ni vistas cacheadas (eso pertenece a fases siguientes, §52.11). "Abrir la interfaz sin red" en D.1 significa que la interfaz básica sigue cargada mientras el navegador conserva la página abierta y que el app shell queda precacheado para la próxima visita.
+
+## 53.4 Registro del Service Worker
+
+Se realiza en `public/assets/js/app.js` (responsabilidad global concreta, RNF §41b), cargado desde el layout autenticado.
+
+* Se registra **solo** si `navigator.serviceWorker` existe y el contexto es **HTTPS o localhost** (`localhost` / `127.0.0.1` / `[::1]`).
+* Fuera de contexto seguro, no se registra y **no rompe la aplicación**: se informa por consola. La prueba en desarrollo mediante IP HTTP (`app.baseURL = 'http://10.11.20.161/'`) no registra SW, lo cual es esperado y no representa el entorno productivo (§53.8).
+* Errores de registro capturados y registrados en consola, sin afectar la navegación.
+
+## 53.5 Capa local — IndexedDB
+
+Capa propia **vanilla JavaScript** (sin librerías externas): `public/assets/js/components/indexeddb.js`, que expone `SIGOA.almacenamiento`.
+
+Base: **`SIGOA`**, versión **1**.
+
+| Store | PK | Campos locales | Índices |
+| --- | --- | --- | --- |
+| `inspecciones` | `uuid` | `uuid`, `obra_id`, `inspector_id`, `fecha_inspeccion`, `hora_inspeccion`, `observacion`, `estado_local`, `created_at_local`, `updated_at_local` | — |
+| `fotografias` | `uuid` | `uuid`, `inspeccion_uuid`, `nombre_archivo`, `extension`, `mime_type`, `tamano_bytes`, `ancho`, `alto`, `fecha_hora_captura`, `latitud`, `longitud`, `dispositivo`, `estado_local` (+ Blob optimizado y thumbnail **previstos**, se usarán en D.2) | `por_inspeccion` (`inspeccion_uuid`) |
+| `operaciones` | `id` (auto) | `id`, `tipo_operacion`, `entidad`, `entidad_uuid`, `estado`, `intentos`, `ultimo_intento`, `error`, `created_at` | `por_entidad` (`entidad_uuid`), `por_estado` (`estado`) |
+
+API expuesta (`SIGOA.almacenamiento`): `soportado()`, `iniciar()`, `abrir()`, `obtener()` / `obtenerTodos()`, `guardar()` (`put`), `agregar()` (`add`, falla si la clave existe), `eliminar()`, `limpiar()`, `contar()` y `autotest()`.
+
+* `iniciar()` abre/crea la base y los stores en cada página autenticada y solicita `navigator.storage.persist()` cuando el navegador lo soporta (mejor esfuerzo). **No escribe datos.**
+* El store `operaciones` es la **cola local futura**: en D.1 solo existe su estructura; **no realiza ninguna request al servidor**.
+* **No se almacenan** contraseñas, cookies de sesión (`ci_session`), tokens CSRF ni credenciales en IndexedDB (decisiones Fase B, §52.6/§52.7).
+* **Nada se borra automáticamente**: los datos locales solo se eliminan mediante operaciones explícitas (`eliminar`, `limpiar`, `autotest`).
+* `SIGOA.almacenamiento.ALMACENES` expone los nombres de stores y `STORES` su definición, para que las fases siguientes no dupliquen la estructura.
+
+## 53.6 UUID como identidad local
+
+Archivo: `public/assets/js/components/uuid.js` → `SIGOA.uuid`.
+
+* `v4()` usa **`crypto.randomUUID()`** cuando está disponible (Chrome ≥ 92, Safari ≥ 15.4, contexto seguro/HTTPS) y devuelve la forma canónica en minúsculas, igual que `App\Libraries\Uuid::v4()` del servidor.
+* **Fallback explícito**: RF-4122 v4 sobre `crypto.getRandomValues` para navegadores que aún no exponen `randomUUID`. Si no hay fuente criptográfica segura, lanza un error en lugar de degradar la identidad.
+* `esValido()` replica el patrón RFC 4122 de la validación de servidor (§52.3).
+* No se usan SHA-256, timestamps ni ids autoincrementales como identidad offline: el `uuid` es la identidad estable de sincronización.
+
+## 53.7 Estado online/offline
+
+Archivo: `public/assets/js/components/connectivity.js` → `SIGOA.conectividad`, con indicador en la topbar autenticada (`components/connectivity.css`).
+
+* Estado inicial: `navigator.onLine`. Cambios: eventos `online`/`offline`.
+* El indicador combina **texto + iconografía + color** (RNF §44): `bi-wifi` "En línea" / `bi-wifi-off` "Sin conexión", con colores de la paleta (verde éxito / ocre advertencia). No depende solo del color.
+* `alCambiar(cb)` permite a las fases siguientes consumir el estado (devuelve un "unsubscribe").
+* **Advertencia documentada**: `navigator.onLine` solo informa la red del dispositivo. **No confirma que el servidor SIGOA esté disponible** ni que exista sesión válida. La sincronización futura deberá validar sesión/rol/autorización y CSRF en cada intento (§52.6/§52.7).
+
+## 53.8 HTTPS — requisito de producción
+
+* Service Worker, `crypto.randomUUID`, cámara y geolocalización exigen **contexto seguro (HTTPS)** o `localhost` (§52.2 / F.1). 
+* `localhost` cubre las excepciones de desarrollo del navegador; **no se relajó** ninguna decisión de seguridad de producción.
+* La prueba real desde el teléfono mediante **IP HTTP** (p. ej. `http://10.11.20.161/`) **no representa el entorno productivo definitivo** y no activará SW/PWA.
+* **No se configuró el certificado HTTPS de Apache** en D.1: queda pendiente formalizar certificado/CA/nombre interno/**antes de activar SW en producción** (§52.21).
+
+## 53.9 Deliberadamente fuera de D.1 (fases siguientes)
+
+D.2/D.3/D.4 (por implementar, no adelantadas):
+
+* sincronización (`/sync`), endpoints de inspecciones/fotografías, cola real con reintentos (5/15/30/60/300 s) contra el servidor;
+* autorización histórica del inspector en sincronización (§52.4);
+* snapshot de obras offline, `operaciones_sincronizacion` del servidor y su limpieza;
+* cámara, captura GPS, procesamiento/compresión de fotografías (2560 px / 80–85 % / thumbnail 400 px, §52.9), thumbnails reales y subida de imágenes;
+* refactor de `ObraAlmacenamiento` a estructura OBR/FECHA/UUID (§52.8);
+* resolución de conflictos, Background Sync y HTTPS/certificados Apache.
+
+## 53.10 Compatibilidad Android Chrome / iPhone Safari
+
+* Objetivos explícitos: **Android + Chrome** y **iPhone + Safari** (§52.20).
+* D.1 usa únicamente APIs web estándar soportadas por ambos: IndexedDB, Service Worker, `crypto.randomUUID`, eventos `online`/`offline`, `navigator.storage.persist`.
+* No depende de Background Sync (Chrome) ni de APIs propietarias. Los fallbacks están encapsulados detrás de la capa propia (p. ej. UUID).
+* Requisitos para el entorno instalable: iOS Safari moderno (SW instalable ≥ 16.4) y HTTPS (§52.20, §53.8).
+
+## 53.11 Pruebas y checklist manual
+
+### Suite PHP (verde)
+
+`tests/unit/InfraestructuraOfflineTest.php` valida estructuralmente la capa entregada:
+
+* manifest válido y con los campos PWA esperados (sin iconos fabricados);
+* Service Worker con ciclo de vida (install/activate/fetch), versionado, sin Background Sync, sin cache de páginas/login y con guardia `Set-Cookie`;
+* todos los recursos del app shell existen en disco;
+* componentes JS offline presentes y layout autenticado los integra.
+
+Suite completa en verde: **94 tests / 254 assertions** (incremento +8 tests / +72 assertions sobre el cierre de Fase C).
+
+No se introdujo infraestructura de tests JavaScript (el proyecto no la posee y D.1 no la justifica). La capa queda testeable de forma manual mediante el autotest de la capa y el namespace global `SIGOA`.
+
+### Checklist manual reproducible (navegador)
+
+Con Chrome/Edge en escritorio (localhost es contexto seguro para SW):
+
+1. Iniciar sesión en SIGOA → abrir el dashboard del inspector.
+2. Abrir DevTools → **Application → IndexedDB**: debe existir la base `SIGOA` con los stores `inspecciones`, `fotografias` y `operaciones`.
+3. En la consola ejecutar: `SIGOA.almacenamiento.autotest()` → debe responder `{ok: true, ...}` (guarda, recupera y elimina un registro de prueba en `inspecciones`; no deja datos).
+4. Cerrar y volver a abrir la aplicación → **Application → IndexedDB**: la base `SIGOA` sigue existiendo.
+5. En `Application → Service Workers`: `sw.js` está activo (registrado) y `Storage` muestra el origen cacheado (`sigoa-shell-v1`).
+6. Con DevTools abierto, activar **Offline** y recargar la página: la interfaz autenticada conserva el app shell (CSS/fuentes/iconos desde cache); el indicador de conectividad pasa a "Sin conexión". Las páginas HTML seguirán requiriendo red (limitación documentada §53.3).
+7. Desactivar Offline: el indicador vuelve a "En línea" (eventos `online`/`offline`).
+8. Verificar que `manifest.json` responde con `Content-Type: application/json` y `sw.js` con `text/javascript`.
+
+> Nota: al probar desde el teléfono por IP HTTP, los puntos 5/6/8 no aplican (requieren HTTPS/localhost, §53.8).
 
 ---
