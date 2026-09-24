@@ -2059,8 +2059,45 @@ Decisiones pendientes (solo las realmente abiertas):
 * `tests/unit/ApiSeguridadBaseTest.php`: `401` JSON sin sesión; redirección a `/login` en web; `401` JSON con usuario inactivo; `403` JSON sin rol; redirección a `/dashboard` en web; rol correcto atraviesa el filtro; `/dashboard` resuelve destino según rol.
 * Suite completa en verde (57 tests / 124 assertions).
 
-### Sin implementar (queda para Fase C)
+## 52.23 Fase C implementada — UUID de inspecciones y fotografías
 
-* IndexedDB, Service Worker, PWA, cámara, fotografías, endpoints de sincronización, cola, reintentos, UUID, snapshots offline y cambios HTTPS. Ver §52.1–§52.21.
+### Identidad de inspecciones y fotografías
+
+* `inspecciones.id` y `fotografias.id` **continúan** siendo las PK autoincrementales del servidor (no se reemplazan).
+* `inspecciones.uuid` y `fotografias.uuid` son `CHAR(36) NOT NULL UNIQUE`, agregadas por migraciones nuevas (§52.23.2).
+* El UUID es la **identidad estable** destinada a soportar el futuro flujo offline/sincronización: identifica la inspección (y sus fotografías) independientemente de la fecha y sin depender del `id` del servidor.
+* **No se implementó ninguna sincronización** en esta fase: el UUID queda establecido como identidad, listo para ser usado por las APIs de sincronización futuras (§52.1–§52.21).
+
+### Múltiples inspecciones por fecha
+
+* Se eliminó la restricción `UNIQUE (obra_id, fecha_inspeccion)` (clave `obra_id_fecha_inspeccion`) mediante una **nueva migración** (§52.23.2) — la decisión ya estaba consolidada en §52.3.
+* Una obra puede tener **múltiples inspecciones en la misma fecha**; cada inspección se diferencia por su `uid` `uuid` (`CHAR(36)` único) y por su `id`.
+* La migración histórica que creó la restricción **no se modifica**: se agregó la migración que la elimina (§52.23.2, acorde a las reglas de §3).
+
+### Migraciones (agregadas en Fase C)
+
+Nuevas migraciones reales, numeradas posteriormente a las históricas; **no se modificó** ninguna migración histórica ni `RepairDatabaseStructure`:
+
+* `2026-09-23-120000_AddUuidToInspecciones.php`: agrega `inspecciones.uuid CHAR(36) NOT NULL UNIQUE`.
+* `2026-09-23-121000_AddUuidToFotografias.php`: agrega `fotografias.uuid CHAR(36) NOT NULL UNIQUE`.
+* `2026-09-23-122000_DropUniqueObraFechaInspeccion.php`: elimina la restricción `UNIQUE (obra_id, fecha_inspeccion)` de `inspecciones`.
+
+### Pruebas (verdes)
+
+* `tests/database/InspeccionFotografiaUuidTest.php`: `uuid` `NOT NULL`/único en inspecciones y fotografías; distintos UUID en una misma obra/fecha permitidos; UUID duplicado rechazado; modelos `InspeccionModel`/`FotografiaModel` insertan y recuperan por `uuid`; FKs hacia obras/usuarios/inspecciones **continúan** aplicándose.
+* Suite completa en verde: **86 tests / 182 assertions**.
+
+### Consideración sobre la infraestructura de pruebas (esquema compartido)
+
+* El grupo `tests` de la suite database ejecuta sobre **una única BD SQLite `:memory:` compartida** por todos los archivos del grupo.
+* Al estar en memoria y crearse con `CREATE TABLE IF NOT EXISTS`, **el primer test que inicializa determinadas tablas fija el esquema compartido** para el resto de la corrida.
+* Por eso, `tests/database/InspeccionFotografiaUuidTest.php` — primero en orden alfabético del grupo — declara las tablas compartidas con un **esquema superset canónico**, compatible con los demás tests:
+  * `db_obras` conserva el esquema compatible con `InspectorObrasStorageTest` (incluye la columna `codigo`);
+  * `db_usuarios` conserva el esquema compatible con `MisDatosCsrfTest` (incluye `password_hash`/`activo`).
+* Esta es una **consideración de infraestructura de pruebas**: no implica ningún cambio al esquema de producción ni a las definiciones reales de las tablas.
+
+### Sin implementar (queda para Fase D)
+
+* IndexedDB, Service Worker/PWA, cámara, fotografías (captura/sincronización), endpoints de sincronización, cola, reintentos, snapshots offline, autorización histórica de sincronización, cambios HTTPS y refactor de almacenamiento OBRA/FECHA/UUID. Ver §52.1–§52.21.
 
 ---
