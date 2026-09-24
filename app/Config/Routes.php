@@ -146,6 +146,9 @@ $routes->group('inspector', [
 
     // VISTA OPERATIVA DE LA OBRA (preparada) — accesible solo con asignación vigente
     $routes->get('obras/ver/(:num)', 'Inspector\Obras::ver/$1');
+
+    // NUEVA INSPECCIÓN LOCAL (Fase D.2) — autoriza e inicializa; se guarda en IndexedDB
+    $routes->get('inspecciones/nueva/(:num)', 'Inspector\Inspecciones::nueva/$1');
 });
 
 // =============================================

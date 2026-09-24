@@ -115,6 +115,7 @@ Adicionalmente, se encuentra implementada la infraestructura de autenticación y
 * **dashboard administrativo** (SUPERADMINISTRADOR y ADMINISTRADOR) con la sección **Obras** como eje principal — listado, paginación y alta inicial de obras — ver §47;
 * **edición de datos básicos de obras** — modal reutilizable de alta/edición, estado libre en esta etapa, unicidad de expediente con exclusión — ver §48;
 * **Fase D.1** — fundación PWA/offline: manifest, Service Worker de app shell, registro de SW, capa propia de IndexedDB (base `SIGOA`, stores `inspecciones`/`fotografias`/`operaciones`), UUID v4 en el cliente y estado online/offline en la topbar — ver §53;
+* **Fase D.2** — nueva inspección 100 % local del inspector móvil: autorización en servidor (estado F.7 + asignación vigente), guardado en IndexedDB (v2), captura/optimización/thumbnail de fotografías en el cliente y vista de inspecciones locales — ver §54.
 
 ---
 
@@ -128,9 +129,9 @@ Quedan pendientes, entre otras:
 * gestión completa de usuarios (CRUD: creación, edición, eliminación, cambio de roles, activación/desactivación);
 * interfaces;
 * gestión de inspectores;
-* registro de inspecciones;
-* carga y visualización de fotografías;
-* funcionamiento offline;
+* registro de inspecciones en servidor (en dispositivo, local, desde D.2 — §54);
+* carga de fotografías al servidor (optimización y visualización local desde D.2 — §54);
+* funcionamiento offline completo;
 * sincronización;
 * gestión documental;
 * gestión de resoluciones;
@@ -2249,11 +2250,169 @@ Con Chrome/Edge en escritorio (localhost es contexto seguro para SW):
 2. Abrir DevTools → **Application → IndexedDB**: debe existir la base `SIGOA` con los stores `inspecciones`, `fotografias` y `operaciones`.
 3. En la consola ejecutar: `SIGOA.almacenamiento.autotest()` → debe responder `{ok: true, ...}` (guarda, recupera y elimina un registro de prueba en `inspecciones`; no deja datos).
 4. Cerrar y volver a abrir la aplicación → **Application → IndexedDB**: la base `SIGOA` sigue existiendo.
-5. En `Application → Service Workers`: `sw.js` está activo (registrado) y `Storage` muestra el origen cacheado (`sigoa-shell-v1`).
+5. En `Application → Service Workers`: `sw.js` está activo (registrado) y `Storage` muestra el origen cacheado (`sigoa-shell-v2`).
 6. Con DevTools abierto, activar **Offline** y recargar la página: la interfaz autenticada conserva el app shell (CSS/fuentes/iconos desde cache); el indicador de conectividad pasa a "Sin conexión". Las páginas HTML seguirán requiriendo red (limitación documentada §53.3).
 7. Desactivar Offline: el indicador vuelve a "En línea" (eventos `online`/`offline`).
 8. Verificar que `manifest.json` responde con `Content-Type: application/json` y `sw.js` con `text/javascript`.
 
 > Nota: al probar desde el teléfono por IP HTTP, los puntos 5/6/8 no aplican (requieren HTTPS/localhost, §53.8).
+
+---
+
+# 54. FASE D.2 IMPLEMENTADA — NUEVA INSPECCIÓN 100% LOCAL (INSPECTOR MÓVIL)
+
+## 54.1 Alcance
+
+D.2 entrega el **primer flujo operativo real** del inspector sobre su dispositivo: iniciar una
+nueva inspección, guardarla **solo en el dispositivo** (IndexedDB), capturar fotografías,
+**optimizarlas en el cliente**, generar thumbnail y dejar cada registro local **pendiente de
+sincronización**.
+
+El servidor **no persiste inspecciones ni fotografías** en esta fase: solo autoriza la operación
+para las obras que el inspector tiene asignadas de forma vigente y cuyo estado lo permite (F.7).
+La sincronización con el servidor sigue pendiente (§4.2, §52.13/§52.15).
+
+## 54.2 Precondiciones en servidor (autorización únicamente)
+
+Ruta nueva (grupo `inspector`, filtros `auth` + `role:INSPECTOR`):
+
+```
+GET /inspector/inspecciones/nueva/{obraId}
+```
+
+Controlador: `app/Controllers/Inspector/Inspecciones.php::nueva()`.
+
+Flujo de autorización (no crea datos de servidor):
+
+1. La obra debe existir (`ObraModel::findDetalle`); si no, redirige al dashboard.
+2. `InspectoresObrasModel::esVigente()`: el inspector debe tener **asignación vigente** a la obra
+   (F.6, §52.4). Si no, redirige a la vista de la obra con aviso.
+3. `EstadoObraModel::permiteInspeccionar()` (constante `PERMITEN_INSPECCIONAR`): solo
+   **EN EJECUCIÓN**, **NEUTRALIZADA** y **EN PLAZO DE CONSERVACIÓN** permiten nuevas
+   inspecciones (F.7, §52.5). **PREVIO INICIO** y **FINALIZADA** no lo permiten (redirige con aviso).
+
+La validación de la fecha local (§52.4, autorización histórica) corresponde a la sincronización
+futura, no a la creación local.
+
+## 54.3 Vista de obra — acción y sección de inspecciones locales
+
+`app/Views/inspector/obra.php` cambia el bloque "Vista operativa en preparación" por la primera
+herramienta real:
+
+* **Botón "Nueva inspección"** (`.io-btn-nueva`), visible solo si el controlador pasa
+  `puede_inspeccionar = true` (mismas precondiciones de §54.2), que enlaza a
+  `/inspector/inspecciones/nueva/{obraId}`.
+* **Sección "Inspecciones guardadas en este dispositivo"** (`#inspeccionesLocales`, `data-obra-id`):
+  lista las inspecciones locales de esa obra (por el índice `por_obra`, §54.7) con fecha/hora,
+  observación y **badge de estado local**; cada ítem permite expandir "Ver fotografías" (thumbnails
+  del store `fotografias` por índice `por_inspeccion`).
+* Estilos de página ampliados en `public/assets/css/pages/inspector-obra.css` (`.io-locales*`,
+  `.io-badge-*`, `.io-btn-nueva`, `.io-aviso-bloqueado`).
+
+## 54.4 Flujo de nueva inspección local
+
+Vista: `app/Views/inspector/inspeccion_nueva.php` (`titulo` "Nueva inspección").
+JS de página: `public/assets/js/pages/inspeccion-nueva.js`.
+
+1. La vista expone `#datosLocal` con `data-obra-id` y `data-inspector-id` (del servidor).
+2. Fecha y hora se **inicializan con el reloj del dispositivo** y son **editables** por el usuario.
+3. Al "Guardar inspección" se valida el formulario (fecha/hora obligatorias, `.field-error`) y se
+   persiste en el dispositivo:
+   * genera `uuid` v4 (SIGOA.uuid, §53.6);
+   * registra `obra_id`, `inspector_id`, `fecha_inspeccion`, `hora_inspeccion`, `observacion`;
+   * `estado_local = PENDIENTE_SYNC`, `created_at_local` / `updated_at_local` (ISO);
+   * guarda con `put` (re-guardar actualiza el mismo `uuid`, no duplica).
+4. Al guardar se habilita la **sección de fotografías** y se muestra la alerta de éxito
+   "Inspección guardada en este dispositivo."
+5. No se realiza ninguna request al servidor en todo el flujo (sin `fetch`).
+
+## 54.5 Estados locales usados
+
+La capa define `BORRADOR` y `PENDIENTE_SYNC` (§53/F.5). **D.2 usa exclusivamente
+`PENDIENTE_SYNC`**: cada inspección y cada fotografía nace lista para la sincronización futura.
+No se agregaron estados nuevos; la sincronización transicionará a los estados de cola de §52.13.
+
+## 54.6 Fotografías — optimización en cliente (decisión JPEG)
+
+Componente: `public/assets/js/components/camera-resize.js` → `SIGOA.imagenes.optimizar(blob)`.
+Captura: `<input type="file" accept="image/*" capture="environment">` (cámara nativa del
+dispositivo; móvil-first).
+
+Pipeline por fotografía (una a la vez, con indicador "Optimizando fotografía…"):
+
+1. decodifica preservando la orientación EXIF (`createImageBitmap` con
+   `imageOrientation: 'from-image'`; fallback a `Image` + canvas);
+2. reescala a un **máximo de 2560 px** en el lado mayor (manteniendo proporción);
+3. codifica a **JPEG, calidad 0.82**;
+4. genera **thumbnail de 400 px** máx (calidad 0.8);
+5. persiste en `fotografias` (store local): solo el **blob optimizado + thumbnail**, dimensiones,
+   `tamano_bytes`, `mime_type = 'image/jpeg'`, `extension = 'jpg'`, `fecha_hora_captura`,
+   `estado_local = PENDIENTE_SYNC` y vínculo `inspeccion_uuid`. El archivo original de la cámara
+   **no se almacena**.
+6. Renderiza el thumbnail y permite "Quitar" (borrado explícito del registro local).
+
+> **Divergencia documentada vs. §52.9/§53.5**: la redacción de F.8/D.1 preveía conservar el
+> formato original. **Decisión D.2: la salida optimizada es SIEMPRE JPEG** (aunque la fuente sea
+> PNG), para minimizar tamaño, homogeneizar el preview y simplificar el modelo de datos de la
+> futura sincronización. Los campos `blob` y `thumbnail` de `fotografias`, previstos en D.1, se
+> **llenan efectivamente** a partir de D.2.
+
+## 54.7 IndexedDB — migración a v2
+
+`public/assets/js/components/indexeddb.js` (base `SIGOA`) migra de **v1 → v2** (sin pérdida de
+datos: la migración solo agrega índices a stores ya existentes, usando la transacción del evento
+`upgradeneeded`).
+
+* `inspecciones` gana el índice **`por_obra`** (`keyPath: 'obra_id'`).
+* Nueva API pública: **`buscarPorIndice(nombreStore, nombreIndice, valor)`** (`index().getAll`),
+  usada por la vista de obra (§54.3).
+* `fotografias` conserva su índice `por_inspeccion` (v1).
+* Interfaces expuestas: `SIGOA.almacenamiento.ALMACENES`, `.STORES`, `.buscarPorIndice`, además de
+  las operaciones del §53.5.
+
+## 54.8 Service Worker y assets nuevos
+
+`public/sw.js`:
+
+* precache agrega: `components/camera-resize.js`, `pages/inspeccion-nueva.js`,
+  `pages/obra-inspecciones.js`, `pages/inspeccion-nueva.css`, `pages/inspector-obra.css`;
+* **CACHE_VERSION → `sigoa-shell-v2`** (invalida la shell anterior al desplegar).
+
+Estilos nuevos/ampliados:
+* nuevo `public/assets/css/pages/inspeccion-nueva.css` (`.nin-*`, `.field-error`);
+* ampliado `public/assets/css/pages/inspector-obra.css` (§54.3).
+
+## 54.9 Deliberadamente fuera de D.2
+
+* sincronización al servidor y cola `operaciones` (§52.13/§52.15);
+* inspecciones y fotografías completas en servidor (`inspecciones`/`fotografias`, §4.2);
+* módulo de fotografías con metadatos EXIF/geo completos;
+* edición/borrado de inspecciones locales existentes (D.2 permite re-guardar la inspección actual
+  y quitar fotografías de la sesión activa);
+* snapshot de obras offline (§52.11).
+
+## 54.10 Pruebas
+
+Suite completa en verde: **113 tests / 334 assertions** (incremento **+19 tests / +80 assertions**
+sobre el cierre de Fase D.1).
+
+Nuevos tests:
+
+* `tests/database/InspeccionNuevaAutorizacionTest.php` — autorización de la ruta: sin sesión →
+  /login; inspector vigente + estado permitido → 200 con formulario; estado PREVIO INICIO /
+  FINALIZADA → redirige a la obra; inspector no vigente → redirige; obra inexistente → dashboard.
+* `tests/unit/PermisoInspeccionarEstadoTest.php` — regla pura F.7
+  (`EstadoObraModel::permiteInspeccionar`, normalización de mayúsculas/espacios).
+* `tests/unit/InspeccionNuevaEstructuraTest.php` — controlador/ruta/vistas/JS del flujo local
+  (sin `fetch`, usa solo la capa local).
+* `tests/unit/InfraestructuraOfflineTest.php` — actualizado a `sigoa-shell-v2`, nuevos componentes
+  JS y límites del procesador de imágenes (2560/400/JPEG).
+
+Notas de scope:
+
+* El flujo de IndexedDB (migración v2, índice `por_obra`) se valida con el checklist manual
+  (navegador) y con `SIGOA.almacenamiento.autotest()`; no se introdujo infraestructura de tests JS.
+* La fecha/reloj del dispositivo y la identidad UUID se validan en la sincronización futura
+  (§52.4, §52.3).
 
 ---

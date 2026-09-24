@@ -63,7 +63,7 @@ final class InfraestructuraOfflineTest extends CIUnitTestCase
         $this->assertMatchesRegularExpression('/addEventListener\(\s*[\'"]install[\'"]/', $sw);
         $this->assertMatchesRegularExpression('/addEventListener\(\s*[\'"]activate[\'"]/', $sw);
         $this->assertMatchesRegularExpression('/addEventListener\(\s*[\'"]fetch[\'"]/', $sw);
-        $this->assertStringContainsString('sigoa-shell-v1', $sw);
+        $this->assertStringContainsString('sigoa-shell-v2', $sw);
     }
 
     public function testServiceWorkerNoUsaBackgroundSync(): void
@@ -107,11 +107,35 @@ final class InfraestructuraOfflineTest extends CIUnitTestCase
             'assets/js/components/uuid.js',
             'assets/js/components/indexeddb.js',
             'assets/js/components/connectivity.js',
+            'assets/js/components/camera-resize.js',
+            'assets/js/pages/inspeccion-nueva.js',
+            'assets/js/pages/obra-inspecciones.js',
         ];
 
         foreach ($componentes as $ruta) {
             $this->assertFileExists($this->publicPath($ruta), "Falta el componente JS: {$ruta}");
         }
+    }
+
+    public function testCapaIndexeddbD2AgregaIndicePorObraYBuscadorPorIndice(): void
+    {
+        $capa = $this->leerPublic('assets/js/components/indexeddb.js');
+
+        $this->assertStringContainsString("VERSION_BASE = 2", $capa, 'La base local debe migrar a v2 en D.2.');
+        $this->assertStringContainsString("nombre: 'por_obra'", $capa);
+        $this->assertStringContainsString("keyPath: 'obra_id'", $capa);
+        $this->assertStringContainsString('buscarPorIndice', $capa);
+    }
+
+    public function testComponenteCamaraRespetaLimitesDeProcesamiento(): void
+    {
+        $js = $this->leerPublic('assets/js/components/camera-resize.js');
+
+        $this->assertStringContainsString('SIGOA.imagenes', $js);
+        $this->assertStringContainsString('LIMITE_LADO_FOTO = 2560', $js);
+        $this->assertStringContainsString('LIMITE_LADO_THUMBNAIL = 400', $js);
+        $this->assertStringContainsString("TIPO_JPEG = 'image/jpeg'", $js);
+        $this->assertStringContainsString('optimizar', $js);
     }
 
     public function testLayoutAutenticadoIntegraManifestYAppJs(): void

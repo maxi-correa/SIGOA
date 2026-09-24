@@ -16,6 +16,8 @@ $estadoClase = match ($estadoNombre) {
     'FINALIZADA'               => 'estado-finalizada',
     default                    => 'estado-previo',
 };
+
+$puedeInspeccionar = (bool) ($puede_inspeccionar ?? false);
 ?>
 
 <div class="io-page">
@@ -25,6 +27,14 @@ $estadoClase = match ($estadoNombre) {
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
             Mis obras
         </a>
+
+        <?php if ($puedeInspeccionar): ?>
+            <a href="<?= site_url('/inspector/inspecciones/nueva/' . (int) $obra->id) ?>"
+               class="btn btn-primary io-btn-nueva">
+                <i class="bi bi-plus-circle" aria-hidden="true"></i>
+                Nueva inspección
+            </a>
+        <?php endif; ?>
     </div>
 
     <?php if (session()->getFlashdata('warning')): ?>
@@ -80,23 +90,72 @@ $estadoClase = match ($estadoNombre) {
         </dl>
     </section>
 
+    <?php if ($puedeInspeccionar): ?>
+
+        <!-- ============================================================
+             Herramienta de inspección: nueva inspección local
+             ============================================================ -->
+        <section class="io-aviso">
+            <div class="io-aviso-icono" aria-hidden="true">
+                <i class="bi bi-camera"></i>
+            </div>
+            <div class="io-aviso-texto">
+                <h2 class="io-aviso-titulo">Nueva inspección</h2>
+                <p>
+                    Puede iniciar una inspección para esta obra. La inspección y las
+                    fotografías se guardan en este dispositivo y quedan pendientes de
+                    la futura sincronización con el servidor.
+                </p>
+            </div>
+        </section>
+
+    <?php else: ?>
+
+        <!-- ============================================================
+             Aviso: estado que no permite nuevas inspecciones
+             ============================================================ -->
+        <section class="io-aviso io-aviso-bloqueado">
+            <div class="io-aviso-icono" aria-hidden="true">
+                <i class="bi bi-pause-circle"></i>
+            </div>
+            <div class="io-aviso-texto">
+                <h2 class="io-aviso-titulo">No se pueden iniciar inspecciones</h2>
+                <p>
+                    Esta obra se encuentra en estado <?= esc($estadoNombre) ?>. Solo se
+                    pueden iniciar nuevas inspecciones en obras en ejecución,
+                    neutralizadas o en plazo de conservación.
+                </p>
+            </div>
+        </section>
+
+    <?php endif; ?>
+
     <!-- ============================================================
-         Aviso informativo: vista operativa en preparación
+         Inspecciones guardadas en este dispositivo
+         El contenido se completa con JavaScript desde IndexedDB
+         (public/assets/js/pages/obra-inspecciones.js).
          ============================================================ -->
-    <section class="io-aviso">
-        <div class="io-aviso-icono" aria-hidden="true">
-            <i class="bi bi-tools"></i>
-        </div>
-        <div class="io-aviso-texto">
-            <h2 class="io-aviso-titulo">Vista operativa en preparación</h2>
-            <p>
-                Esta obra fue reconocida como una de sus asignaciones vigentes.
-                Las herramientas de trabajo sobre la inspección se habilitarán
-                próximamente.
+    <section class="io-locales"
+             id="inspeccionesLocales"
+             data-obra-id="<?= (int) $obra->id ?>"
+             hidden>
+        <div class="io-locales-encabezado">
+            <h2 class="io-locales-titulo">
+                <i class="bi bi-phone" aria-hidden="true"></i>
+                Inspecciones en este dispositivo
+            </h2>
+            <p class="io-locales-subtitulo">
+                Inspecciones guardadas localmente para esta obra, pendientes de sincronización.
             </p>
         </div>
+
+        <ul class="io-locales-lista" id="inspeccionesLocalesLista"></ul>
     </section>
 
 </div>
 
+<?= $this->endSection() ?>
+
+<?= $this->section('scripts') ?>
+    <script src="<?= base_url('assets/js/pages/obra-inspecciones.js') ?>"></script>
 <?= $this->endSection() ?>

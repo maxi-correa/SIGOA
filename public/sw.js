@@ -23,8 +23,8 @@
 
 'use strict';
 
-var CACHE_VERSION = 'sigoa-shell-v1';
-var SHELL_CACHE = 'sigoa-shell-v1';
+var CACHE_VERSION = 'sigoa-shell-v2';
+var SHELL_CACHE = 'sigoa-shell-v2';
 
 var PREFIJO_ESTATICO = '/assets/';
 
@@ -43,6 +43,9 @@ var SHELL_ASSETS = [
     '/assets/css/components/navbar.css',
     '/assets/css/components/sidebar.css',
     '/assets/css/components/tables.css',
+    '/assets/css/pages/inspector-dashboard.css',
+    '/assets/css/pages/inspector-obra.css',
+    '/assets/css/pages/inspeccion-nueva.css',
     '/assets/fonts/inter/fonts.css',
     '/assets/fonts/inter/Inter-Regular.woff2',
     '/assets/fonts/inter/Inter-Medium.woff2',
@@ -55,6 +58,9 @@ var SHELL_ASSETS = [
     '/assets/js/components/uuid.js',
     '/assets/js/components/indexeddb.js',
     '/assets/js/components/connectivity.js',
+    '/assets/js/components/camera-resize.js',
+    '/assets/js/pages/inspeccion-nueva.js',
+    '/assets/js/pages/obra-inspecciones.js',
     '/assets/js/app.js'
 ];
 

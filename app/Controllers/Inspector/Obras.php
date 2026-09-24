@@ -3,6 +3,7 @@
 namespace App\Controllers\Inspector;
 
 use App\Controllers\BaseController;
+use App\Models\EstadoObraModel;
 use App\Models\InspectoresObrasModel;
 use App\Models\ObraModel;
 use App\Services\ObraAlmacenamiento;
@@ -55,11 +56,12 @@ class Obras extends BaseController
         }
 
         return view('inspector/obra', [
-            'titulo'    => $obra->nombre,
-            'user_name' => $session->get('user_name'),
-            'username'  => $session->get('username'),
-            'roles'     => $session->get('roles') ?? [],
-            'obra'      => $obra,
+            'titulo'            => $obra->nombre,
+            'user_name'         => $session->get('user_name'),
+            'username'          => $session->get('username'),
+            'roles'             => $session->get('roles') ?? [],
+            'obra'              => $obra,
+            'puede_inspeccionar' => (new EstadoObraModel())->permiteInspeccionar((string) ($obra->estado_nombre ?? '')),
         ]);
     }
 }

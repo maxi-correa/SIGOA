@@ -1,16 +1,21 @@
 /* ===================================================================
-   SIGOA — Capa de acceso a IndexedDB (Fase D.1 / §52.10)
+   SIGOA — Capa de acceso a IndexedDB (Fase D.1 / §52.10 / D.2)
    ===================================================================
    Implementación vanilla JavaScript, sin librerías externas.
 
-   Base local versionada: `SIGOA` (v1) con stores:
+   Base local versionada: `SIGOA` (v1 → v2 en Fase D.2) con stores:
 
-   * inspecciones  — PK `uuid`     (identidad local de sincronización)
+   * inspecciones  — PK `uuid`     (identidad local de sincronización;
+                                    D.2 agrega el índice `por_obra`)
    * fotografias   — PK `uuid`     (relación por `inspeccion_uuid`;
-                                    blobs/thumbnail se dejan previstos
-                                    y se usarán desde Fase D.2)
-   * operaciones   — PK `id` auto  (cola local futura; en D.1 no
+                                    blobs/thumbnail optimizados desde
+                                    Fase D.2)
+   * operaciones   — PK `id` auto  (cola local futura; en D.1/D.2 no
                                     realiza ninguna request al servidor)
+
+   La versión v2 no borra datos: al abrir la base existente se crean los
+   índices faltantes (p. ej. `inspecciones.por_obra`) conservando los
+   registros ya almacenados.
 
    Esta capa NO almacena contraseñas, cookies de sesión ni tokens CSRF
    (decisión de seguridad Fase B / §52.7 / §52.6).
@@ -23,13 +28,15 @@
     'use strict';
 
     var NOMBRE_BASE = 'SIGOA';
-    var VERSION_BASE = 1;
+    var VERSION_BASE = 2;
 
     var STORES = {
         inspecciones: {
             keyPath: 'uuid',
             autoIncrement: false,
-            indices: []
+            indices: [
+                { nombre: 'por_obra', keyPath: 'obra_id' }
+            ]
         },
         fotografias: {
             keyPath: 'uuid',
@@ -60,19 +67,31 @@
             && window.indexedDB !== null;
     }
 
-    function crearStores(db) {
+    function crearStores(db, transaccion) {
         Object.keys(STORES).forEach(function (nombre) {
+            var config = STORES[nombre];
+            var store;
+
             if (db.objectStoreNames.contains(nombre)) {
-                return;
+                /* Store existente (base v1): conserva los registros y solo
+                   asegura los índices faltantes (migración v1 → v2). */
+                store = transaccion ? transaccion.objectStore(nombre) : null;
+
+                if (!store) {
+                    return;
+                }
+            } else {
+                store = db.createObjectStore(nombre, {
+                    keyPath: config.keyPath,
+                    autoIncrement: config.autoIncrement
+                });
             }
 
-            var config = STORES[nombre];
-            var store = db.createObjectStore(nombre, {
-                keyPath: config.keyPath,
-                autoIncrement: config.autoIncrement
-            });
-
             config.indices.forEach(function (indice) {
+                if (store.indexNames.contains(indice.nombre)) {
+                    return;
+                }
+
                 store.createIndex(indice.nombre, indice.keyPath, { unique: false });
             });
         });
@@ -88,7 +107,7 @@
             var peticion = window.indexedDB.open(NOMBRE_BASE, VERSION_BASE);
 
             peticion.onupgradeneeded = function (evento) {
-                crearStores(evento.target.result);
+                crearStores(evento.target.result, evento.target.transaction);
             };
 
             peticion.onsuccess = function (evento) {
@@ -153,6 +172,19 @@
     function obtenerTodos(nombreStore) {
         return conStore(nombreStore, 'readonly', function (store) {
             return store.getAll();
+        });
+    }
+
+    /**
+     * Registros de un store que coinciden con un valor de un índice.
+     *
+     * Se utiliza en D.2 para recuperar las fotografías de una inspección
+     * (índice `fotografias.por_inspeccion`) y las inspecciones de una obra
+     * (índice `inspecciones.por_obra`).
+     */
+    function buscarPorIndice(nombreStore, nombreIndice, valor) {
+        return conStore(nombreStore, 'readonly', function (store) {
+            return store.index(nombreIndice).getAll(valor);
         });
     }
 
@@ -283,6 +315,7 @@
         abrir: abrir,
         obtener: obtener,
         obtenerTodos: obtenerTodos,
+        buscarPorIndice: buscarPorIndice,
         guardar: guardar,
         agregar: agregar,
         eliminar: eliminar,
