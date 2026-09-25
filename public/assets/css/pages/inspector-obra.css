@@ -319,6 +319,39 @@
     border-color: var(--color-primary);
 }
 
+/* --- Reintento manual de operaciones en ERROR (Fase D.4) --- */
+.io-locales-reintentar {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 0.5rem 0.9rem;
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-primary);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.io-locales-reintentar:hover:not([disabled]) {
+    border-color: var(--color-primary);
+}
+
+.io-locales-reintentar[disabled] {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.io-locales-estados {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+}
+
 .io-locales-foto {
     margin: 0;
     display: flex;

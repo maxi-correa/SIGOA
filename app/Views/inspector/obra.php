@@ -166,6 +166,5 @@ $puedeInspeccionar = (bool) ($puede_inspeccionar ?? false);
 <?= $this->endSection() ?>
 
 <?= $this->section('scripts') ?>
-    <script src="<?= base_url('assets/js/components/sincronizacion.js') ?>"></script>
     <script src="<?= base_url('assets/js/pages/obra-inspecciones.js') ?>"></script>
 <?= $this->endSection() ?>

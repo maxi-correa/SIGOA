@@ -1,18 +1,22 @@
 /**
- * SIGOA — Nueva inspección (Fase D.2)
+ * SIGOA — Nueva inspección (Fase D.2, encolado en Fase D.4)
  *
- * Flujo 100 % local contra IndexedDB (base `SIGOA`, stores `inspecciones`
- * y `fotografias`):
+ * Flujo 100 % local contra IndexedDB (base `SIGOA`, stores `inspecciones`,
+ * `fotografias` y `operaciones`):
  *
  *   1. inicializa fecha/hora con el reloj del dispositivo;
  *   2. al guardar: genera UUID, crea la inspección con `estado_local =
- *      PENDIENTE_SYNC` y la persiste en el store `inspecciones`;
+ *      PENDIENTE_SYNC`, la persiste en el store `inspecciones` y encola una
+ *      operación de tipo `INSPECCION`;
  *   3. habilita la captura de fotografías; cada una se optimiza en el
  *      cliente (SIGOA.imagenes), se persiste junto con su thumbnail en el
- *      store `fotografias` y queda pendiente de sincronización;
+ *      store `fotografias` y se encola una operación de tipo `FOTOGRAFIA`
+ *      dependiente de su inspección;
  *   4. todo permanece disponible aunque el dispositivo quede offline.
  *
- * No se realiza ninguna request al servidor: la sincronización es futura.
+ * La página no realiza peticiones al servidor: el único origen de las
+ * solicitudes de red es SIGOA.sincronizacion, que consume la cola respetando
+ * el orden inspecciones → fotografías.
  */
 (function () {
     'use strict';
@@ -20,6 +24,7 @@
     var ALMACEN = (window.SIGOA && window.SIGOA.almacenamiento) ? window.SIGOA.almacenamiento : null;
     var UUID    = (window.SIGOA && window.SIGOA.uuid) ? window.SIGOA.uuid : null;
     var IMAGENES = (window.SIGOA && window.SIGOA.imagenes) ? window.SIGOA.imagenes : null;
+    var SINCRONIZACION = (window.SIGOA && window.SIGOA.sincronizacion) ? window.SIGOA.sincronizacion : null;
 
     var ESTADO_PENDIENTE_SYNC = 'PENDIENTE_SYNC';
 
@@ -197,11 +202,30 @@
 
         return ALMACEN.guardar(ALMACEN.ALMACENES.inspecciones, inspeccionActual)
             .then(function () {
+                return encolarOperacion(SINCRONIZACION.TIPO_INSPECCION, inspeccionActual.uuid, null);
+            })
+            .then(function () {
                 notificarGuardado();
             })
             .catch(function (error) {
                 showErrorAlmacenar(error, 'No fue posible guardar la inspección en este dispositivo.');
             });
+    }
+
+    /**
+     * Encola la operación de una entidad recién capturada.
+     *
+     * `encolar()` es idempotente: si la operación ya existe no se duplica y
+     * no se altera su historial de intentos. Si el componente de
+     * sincronización no estuviera disponible, la entidad queda guardada
+     * igual y `asegurarCola()` la recuperará en el próximo arranque.
+     */
+    function encolarOperacion(tipo, entidadUuid, dependenciaUuid) {
+        if (!SINCRONIZACION) {
+            return Promise.resolve(null);
+        }
+
+        return SINCRONIZACION.encolar(tipo, entidadUuid, dependenciaUuid);
     }
 
     /* ================================================================
@@ -244,6 +268,13 @@
                 };
 
                 return ALMACEN.guardar(ALMACEN.ALMACENES.fotografias, fotografia)
+                    .then(function () {
+                        return encolarOperacion(
+                            SINCRONIZACION.TIPO_FOTOGRAFIA,
+                            fotografia.uuid,
+                            inspeccionActual.uuid
+                        );
+                    })
                     .then(function () {
                         return fotografia;
                     });

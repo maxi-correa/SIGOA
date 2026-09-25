@@ -152,6 +152,9 @@ $routes->group('inspector', [
 
     // SINCRONIZACIÓN DE INSPECCIONES (Fase D.3) — alta confirmada por uuid, idempotente (§55)
     $routes->post('sincronizar/inspecciones', 'Inspector\Sincronizar::inspecciones');
+
+    // SINCRONIZACIÓN DE FOTOGRAFÍAS (Fase D.4) — alta multipart por uuid, idempotente (§56)
+    $routes->post('sincronizar/fotografias', 'Inspector\Sincronizar::fotografias');
 });
 
 // =============================================

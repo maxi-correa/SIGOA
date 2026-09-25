@@ -6,7 +6,12 @@
    * registrar el Service Worker cuando el navegador lo soporta y el
      contexto lo permite (HTTPS o localhost);
    * iniciar la capa de conectividad online/offline;
-   * crear/abre la base IndexedDB local (stores preparados).
+   * crear/abre la base IndexedDB local (stores preparados);
+   * iniciar la cola de sincronización (Fase D.4 / §56), que reanuda las
+     operaciones pendientes del dispositivo y registra sus disparadores.
+
+   El orden importa: `sincronizacion.iniciar()` necesita la base local y
+   la capa de conectividad ya inicializadas.
 
    Ninguna falla de esta capa debe romper la aplicación: todo queda
    encapsulado y solo se informa por consola del navegador.
@@ -57,9 +62,29 @@
             window.SIGOA.conectividad.iniciar();
         }
 
-        if (window.SIGOA && window.SIGOA.almacenamiento) {
-            window.SIGOA.almacenamiento.iniciar();
-        }
+        /* La cola espera a que la base local esté abierta: cada operación
+           del store abre su propia conexión, y encadenar la inicialización
+           evita dos aperturas simultáneas al arrancar. */
+        var baseLista = window.SIGOA && window.SIGOA.almacenamiento
+            ? window.SIGOA.almacenamiento.iniciar()
+            : Promise.resolve(false);
+
+        Promise.resolve(baseLista)
+            .catch(function () {
+                return false;
+            })
+            .then(function () {
+                if (!window.SIGOA || !window.SIGOA.sincronizacion) {
+                    return;
+                }
+
+                return window.SIGOA.sincronizacion.iniciar();
+            })
+            .catch(function (error) {
+                if (window.console && console.error) {
+                    console.error('SIGOA: no se pudo iniciar la cola de sincronización.', error);
+                }
+            });
 
         registrarServiceWorker();
     }

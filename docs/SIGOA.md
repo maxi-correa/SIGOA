@@ -2547,6 +2547,9 @@ escritura de trazabilidad falla, se loguea sin abortar la confirmación.
 * `public/assets/js/pages/obra-inspecciones.js` — badges `SINCRONIZADA`/`ERROR` y aviso de
   red; la página **no** dispara `fetch()` (delegado al componente).
 
+> Actualizado en D.4 (§56): el botón de esta vista ejecuta ahora el ciclo completo
+> (`sincronizarTodo({ obraId })`) y el componente se carga globalmente desde el layout.
+
 ## 55.7 Service Worker y app shell
 
 `public/sw.js` pasa a `sigoa-shell-v3` y precachea
@@ -2559,6 +2562,9 @@ La sincronización en D.3 es **manual** (botón en la vista de obra), ejecutable
 momento: al abrir la obra o tras recuperar conectividad. Quedan para D.4 la cola local
 `operaciones`, el disparo automático (eventos `online`/visibilidad), reintentos con backoff,
 Background Sync y la sincronización de fotografías.
+
+> D.4 (§56) implementó la cola local, el disparo automático y la sincronización de
+> fotografías. El botón de la vista de obra se conserva como disparador manual explícito.
 
 ## 55.9 Deliberadamente fuera de D.3
 
@@ -2597,5 +2603,215 @@ Notas de scope:
 * La suite se corre con conexión `tests` (SQLite en memoria compartida): el esquema de
   `operaciones_sincronizacion` para tests se declara con `CREATE TABLE IF NOT EXISTS`,
   coherente con la migración de producción.
+
+---
+
+## 56. Fase D.4 implementada — cola de sincronización y fotografías
+
+## 56.1 Alcance de D.4
+
+Se implementa la **sincronización completa** de la captura offline: inspecciones y fotografías,
+con cola local persistente, reintentos con backoff y almacenamiento físico definitivo en el
+servidor.
+
+* endpoint `POST /inspector/sincronizar/fotografias` (grupo `inspector`, filtros `auth` +
+  `role:INSPECTOR` + CSRF global), un archivo por petición;
+* cola local `operaciones` con estados, dependencia padre/hijo y reintentos (§52.13);
+* orden obligatorio inspecciones → fotografías, con liberación de blobs tras la confirmación;
+* escritura física en disco de imagen y thumbnail, con rutas relativas en la base de datos
+  (§52.8);
+* idempotencia por `uuid` de fotografía y **reparación** de archivos perdidos;
+* reintento manual desde la vista de obra.
+
+No se requirieron migraciones: `fotografias.uuid`, `ruta_thumbnail`, `tamano_bytes`,
+`ancho`/`alto` y `fecha_hora_captura` ya existen (Fase C y `CreateFotografias`).
+
+## 56.2 Contrato del endpoint de fotografías
+
+`POST /inspector/sincronizar/fotografias`
+
+`multipart/form-data` (CSRF por cabecera `X-CSRF-TOKEN` y detección AJAX/`Accept:
+application/json`):
+
+| Campo | Obligatorio | Contenido |
+| --- | --- | --- |
+| `uuid` | sí | UUID v4/v5 RFC 4122 de la fotografía local |
+| `inspeccion_uuid` | sí | UUID de la inspección **ya sincronizada** en el servidor |
+| `archivo` | sí | JPEG, PNG o WebP, máximo `8388608` bytes |
+| `fecha_hora_captura` | no | `YYYY-MM-DD HH:MM:SS` o ISO 8601 |
+| `latitud` / `longitud` | no | decimal, `-90..90` / `-180..180` |
+| `dispositivo` | no | etiqueta de equipo, hasta 120 caracteres |
+
+* El tamaño es el de `$_FILES['archivo']['size']`; el MIME se valida con `finfo` **y** se
+  decodifica la imagen para obtener dimensiones reales.
+* El nombre de campo lo define el servidor (`archivo`); el nombre de archivo que envía el
+  cliente es una etiqueta y no influye en la ruta ni en el nombre físico.
+
+## 56.3 Respuestas
+
+**200 OK** — alta o reenvío idempotente:
+
+```json
+{
+  "ok": true,
+  "results": [{
+    "uuid": "…",
+    "estado": "SYNCED",
+    "id": 99,
+    "inspeccion_id": 42,
+    "nombre_archivo": "INS-00042-20260315-103000-a1b2c3.jpg",
+    "ruta_relativa": "OBR-000001/2026-03-15/{uuid}/IMAGENES/INS-00042-20260315-103000-a1b2c3.jpg",
+    "ruta_thumbnail": "OBR-000001/2026-03-15/{uuid}/THUMBNAILS/THB-00042-20260315-103000-d4e5f6.jpg",
+    "reparado": false
+  }],
+  "resumen": {
+    "procesadas": 1,
+    "sincronizadas": 1,
+    "ya_sincronizadas": 0,
+    "rechazadas": 0,
+    "errores": 0
+  }
+}
+```
+
+* `estado: "ALREADY_SYNCED"` con `reparado: true` cuando la fila existía y los archivos se
+  reescribieron desde el contenido reenviado.
+* **401** sesión expirada / **403** inspección de otro inspector: no se toca ninguna
+  fotografía.
+* **422** con `error` estable: `VALIDATION_ERROR`, `UUID_EN_CONFLICTO`,
+  `HISTORICAL_AUTHORIZATION_FAILED`, `ARCHIVO_INVALIDO`, `ARCHIVO_CORRUPTO`,
+  `ARCHIVO_DEMASIADO_GRANDE`, `MIME_NO_PERMITIDO`, `OBRA_NOT_FOUND`.
+
+## 56.4 Reglas de negocio implementadas
+
+* **Identidad de sesión:** la pertenencia se valida contra
+  `inspeccion.inspector_id === session('user_id')`, y **antes** de consultar la idempotencia,
+  para no revelar la existencia de fotografías de otra inspección.
+* **Autorización histórica:** se reutiliza `fueVigente($obraId, $usuarioId, fecha_inspeccion)`
+  sin cambios (§52.4, §55.4).
+* **Idempotencia:** `FotografiaModel::findByUuid()`; si el `uuid` pertenece a otra inspección
+  se responde `UUID_EN_CONFLICTO` y no se reescribe nada.
+* **Reparación:** si la fila existe pero falta el archivo o el thumbnail, se reescriben
+  únicamente los archivos de esa misma fila a partir del reenvío, en lugar de responder
+  `ALREADY_SYNCED` y ocultar la inconsistencia.
+* **Orden de escritura:** validar → carpetas → imagen → thumbnail → base de datos. Si la
+  base de datos falla, se borran **solo** los archivos creados por esa misma operación.
+* **Trazabilidad:** cada alta o reenvío reparado registra `PROCESADA` en
+  `operaciones_sincronizacion` con `entidad: 'fotografias'` y `registro_id` = uuid; los
+  rechazos permanentes y fallos de autorización registran `ERROR` con su mensaje.
+
+## 56.5 Almacenamiento físico
+
+`app/Services/FotografiaArchivo.php` + `app/Config/SigoaStorage.php` (`SIGOA_STORAGE_PATH`):
+
+```
+OBR-XXXXXX/YYYY-MM-DD/{uuid-inspeccion}/IMAGENES/INS-XXXXX-{Ymd-His}-{random6}.{ext}
+OBR-XXXXXX/YYYY-MM-DD/{uuid-inspeccion}/THUMBNAILS/THB-XXXXX-{Ymd-His}-{random6}.jpg
+```
+
+* El thumbnail se genera en servidor con GD, JPEG y lado mayor acotado a `400 px`.
+* `random6` es hexadecimal en minúsculas; el nombre físico se decide **en el servidor**.
+* La base de datos guarda solo rutas relativas; la resolución a ruta absoluta se valida
+  contra la raíz de almacenamiento (`ObraAlmacenamiento::raiz()`).
+* La raíz efectiva se define con `SIGOA_STORAGE_PATH` (`app/Config/SigoaStorage.php`); si no
+  está definida, las operaciones de archivos no pueden ejecutarse.
+
+## 56.6 Cola local y backoff
+
+`public/assets/js/components/sincronizacion.js` (cargado globalmente en
+`app/Views/layouts/auth.php` antes de `app.js`):
+
+* **Estados de entidad:** `PENDIENTE_SYNC` → `SINCRONIZADA` (con `servidor_id`) o `ERROR`
+  (con `error_local`); los datos de la entidad nunca se borran.
+* **Estados de operación:** `PENDIENTE`, `SINCRONIZANDO` (transitorio), `SINCRONIZADA`,
+  `ERROR`.
+* **Backoff persistente** en `intentos` + `ultimo_intento`:
+  `[0, 5 s, 15 s, 30 s, 60 s, 5 min]`, con un máximo de **6 intentos**; al agotarse la
+  operación pasa a `ERROR` y conserva la entidad con sus blobs.
+* **Dependencia:** una fotografía solo se habilita si su inspección padre está `SINCRONIZADA`
+  y tiene `servidor_id`; si no, queda **bloqueada** sin consumir intentos ni pasar a `ERROR`.
+* **Liberación de blobs:** `blob` y `thumbnail` se ponen a `null` en la **misma** escritura
+  que marca la fotografía `SINCRONIZADA`, y solo después de la confirmación del servidor.
+* **401/403:** las operaciones vuelven a `PENDIENTE` sin tocar ninguna entidad, respetando el
+  backoff ya consumido.
+* **Reintento manual:** `reintentar(tipo, uuid)` reinicia `intentos`/`ultimo_intento`/`error`
+  y devuelve la entidad a `PENDIENTE_SYNC`, sin reconstruirla ni borrarla.
+* **Disparadores:** apertura de la aplicación autenticada, evento `online`, retorno al primer
+  plano (`visibilitychange`) y `setTimeout` diferido al expirar el backoff más próximo. El
+  temporizador es una comodidad: la decisión siempre se recalcula desde los datos persistidos.
+* **Sin Background Sync:** no existe en iOS/Safari y no es necesario para el comportamiento
+  requerido (§52.20).
+
+### API pública
+
+`SIGOA.sincronizacion`: `iniciar()`, `sincronizarTodo({obraId?})`,
+`sincronizarInspecciones(obraId?)`, `sincronizarFotografias(obraId?)`, `encolar(tipo, uuid,
+dependenciaUuid?)`, `obtenerOperaciones()`, `buscarOperacion(operaciones, tipo, uuid)`,
+`resumir(operaciones)`, `reintentar(tipo, uuid)`, `TIPO_INSPECCION`, `TIPO_FOTOGRAFIA`.
+
+## 56.7 Captura y vista de obra
+
+* `public/assets/js/pages/inspeccion-nueva.js` — al guardar, encola la inspección y cada
+  fotografía (`SIGOA.sincronizacion.encolar(...)`); la página **no** dispara `fetch()`.
+* `public/assets/js/pages/obra-inspecciones.js` — el botón "Sincronizar" ejecuta el ciclo
+  completo de la obra (`sincronizarTodo({ obraId })`): primero inspecciones y después
+  fotografías. Muestra estado por ítem, miniatura local, error y botón de reintento, que
+  reencola e intenta el envío de inmediato.
+* `public/assets/css/pages/inspector-obra.css` — `.io-locales-estados` y
+  `.io-locales-reintentar`.
+* El componente de sincronización es el **único** origen de `fetch()`: ni la vista de obra ni
+  la de nueva inspección realizan peticiones directas.
+
+## 56.8 Service Worker y app shell
+
+`public/sw.js` permanece en `sigao-shell-v3`: ya precacheaba
+`/assets/js/components/sincronizacion.js`, así que no se requirió bump de versión. No se
+cachean páginas autenticadas ni respuestas con cookie de sesión (§53.3).
+
+`app.js` encadena la inicialización: conectividad → base local → cola, para no abrir la base
+dos veces al arrancar.
+
+## 56.9 Deliberadamente fuera de D.4
+
+* edición/borrado de inspecciones o fotografías desde el servidor (la cola solo resuelve
+  altas; el servidor no expone operaciones de actualización);
+* limpieza automática de datos locales: nunca se borran registros ni blobs por decisión del
+  cliente;
+* Background Sync / Service Worker con cola de subida;
+* snapshot de obras offline (§52.11);
+* migraciones de base de datos.
+
+## 56.10 Pruebas
+
+Suite completa en verde: **185 tests / 607 assertions** (incremento **+33 tests / +146
+assertions** sobre el cierre de D.3).
+
+Nuevos/actualizados:
+
+* `tests/database/SincronizarFotografiasTest.php` — endpoint: 401 sin sesión, 403 por
+  inspección de otro inspector, CSRF; alta completa con escritura de imagen y thumbnail;
+  thumbnail acotado a 400 px; MIME no permitido, archivo corrupto, tamaño máximo y
+  ausencia de residuos en disco; metadatos y normalización de coordenadas/fecha;
+  idempotencia (`ALREADY_SYNCED`), `UUID_EN_CONFLICTO` y uuid de otra inspección; reparación
+  de archivo físico perdido; reenvío sin faltantes que no reescribe; autorización histórica
+  fallida y su registro en `operaciones_sincronizacion`.
+* `tests/js/sincronizacion.test.js` + `tests/unit/SincronizacionLogicaTest.php` — **ejecutan**
+  el componente en Node con un banco de pruebas simulado: tabla de backoff, elegibilidad y
+  espera restante, encolado idempotente, recuperación de la cola, orden inspecciones →
+  fotografías, fotografías bloqueadas, liberación de blobs, conservación de blobs ante fallo,
+  401 sin tocar entidades, rechazo permanente, agotamiento de intentos, reintento manual,
+  ausencia de conexión, filtro por obra, códigos no reintentables y rechazo de un resultado
+  ajeno. La prueba se salta si Node no está disponible en el entorno.
+* `tests/unit/SincronizacionEstructuraTest.php` — endpoint y ruta de fotografías, servicio de
+  archivos, carga global del componente, botón de la vista de obra ejecutando el ciclo
+  completo y `sincronizacion.js` como único origen de `fetch()`.
+
+Notas de scope:
+
+* La persistencia real de blobs en el navegador y la descarga de la miniatura se validan con
+  el checklist manual; el banco de pruebas cubre la lógica de cola con blobs simulados.
+* La suite se corre con conexión `tests` (SQLite en memoria compartida): el esquema de
+  `fotografias` y `operaciones_sincronizacion` para tests se declara con
+  `CREATE TABLE IF NOT EXISTS`, coherente con las migraciones de producción.
 
 ---

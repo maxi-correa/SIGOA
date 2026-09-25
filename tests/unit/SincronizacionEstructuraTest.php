@@ -3,12 +3,13 @@
 use CodeIgniter\Test\CIUnitTestCase;
 
 /**
- * Estructura de Fase D.3 — sincronización servidor de inspecciones.
+ * Estructura de Fases D.3 y D.4 — sincronización con el servidor.
  *
- * Pruebas estructurales (sin navegador): controlador y ruta del endpoint,
- * método de autorización histórica, botón de sincronización en la vista de
- * obra, componente JS y precache del Service Worker. Verifica coherencia con
- * la arquitectura de SIGOA definida en docs.
+ * Pruebas estructurales (sin navegador): controlador, rutas de ambos
+ * endpoints, método de autorización histórica, servicios de almacenamiento,
+ * botón de sincronización en la vista de obra, carga global del componente
+ * JS y precache del Service Worker. Verifica coherencia con la arquitectura
+ * de SIGOA definida en docs.
  *
  * @internal
  */
@@ -73,14 +74,38 @@ final class SincronizacionEstructuraTest extends CIUnitTestCase
         $this->assertMatchesRegularExpression('/function\s+registrar\s*\(/', $modelo);
     }
 
-    public function testVistaObraIncluyeBotonYAlimentacionDeSincronizacion(): void
+    public function testVistaObraIncluyeBotonYEstadoDeSincronizacion(): void
     {
         $vista = $this->leerApp('Views/inspector/obra.php');
 
         $this->assertStringContainsString('btnSincronizar', $vista);
         $this->assertStringContainsString('bi-arrow-repeat', $vista);
         $this->assertStringContainsString('sincronizacionEstado', $vista);
-        $this->assertStringContainsString('assets/js/components/sincronizacion.js', $vista);
+        $this->assertStringContainsString('assets/js/pages/obra-inspecciones.js', $vista);
+    }
+
+    /**
+     * Desde D.4 el componente es global: la cola debe poder reanudarse al
+     * abrir cualquier vista autenticada, no solo la de una obra.
+     */
+    public function testComponenteSincronizacionSeCargaEnElLayoutAutenticado(): void
+    {
+        $layout = $this->leerApp('Views/layouts/auth.php');
+
+        $this->assertStringContainsString('assets/js/components/sincronizacion.js', $layout);
+
+        $posComponente = strpos($layout, "base_url('assets/js/components/sincronizacion.js')");
+        $posApp        = strpos($layout, "base_url('assets/js/app.js')");
+
+        $this->assertNotFalse($posComponente);
+        $this->assertNotFalse($posApp);
+        $this->assertLessThan($posApp, $posComponente, 'El componente debe cargarse antes de app.js para que iniciar() lo encuentre.');
+
+        $posConectividad = strpos($layout, "base_url('assets/js/components/connectivity.js')");
+        $this->assertLessThan($posComponente, $posConectividad, 'La conectividad debe inicializarse antes que la sincronización.');
+
+        $obra = $this->leerApp('Views/inspector/obra.php');
+        $this->assertStringNotContainsString('assets/js/components/sincronizacion.js', $obra);
     }
 
     public function testComponenteSincronizacionUnicoOrigenDelFetch(): void
@@ -97,10 +122,131 @@ final class SincronizacionEstructuraTest extends CIUnitTestCase
 
         $pagina = $this->leerPublic('assets/js/pages/obra-inspecciones.js');
         $this->assertStringContainsString('window.SIGOA.sincronizacion', $pagina);
-        $this->assertStringContainsString('sincronizarInspecciones(obraId)', $pagina);
+        $this->assertStringContainsString('sincronizarTodo({ obraId: obraId })', $pagina);
 
         // La estrategia "offline primero" se conserva: la página no dispara fetch().
         $this->assertStringNotContainsString('fetch(', $pagina);
+
+        $nueva = $this->leerPublic('assets/js/pages/inspeccion-nueva.js');
+        $this->assertStringNotContainsString('fetch(', $nueva);
+    }
+
+    /* ==================================================================
+       Fase D.4 — fotografías
+       ================================================================== */
+
+    public function testEndpointFotografiasRegistradoEnGrupoInspector(): void
+    {
+        $rutas = $this->leerApp('Config/Routes.php');
+
+        $this->assertStringContainsString("sincronizar/fotografias", $rutas);
+        $this->assertStringContainsString('Inspector\Sincronizar::fotografias', $rutas);
+        $this->assertMatchesRegularExpression("/->post\(.*sincronizar\/fotografias/", $rutas);
+    }
+
+    public function testControladorExponeAltaDeFotografias(): void
+    {
+        $contenido = $this->leerApp('Controllers/Inspector/Sincronizar.php');
+
+        $this->assertMatchesRegularExpression('/function\s+fotografias\s*\(\)/', $contenido);
+
+        /* La identidad del inspector sigue viniendo de la sesión. */
+        $this->assertStringContainsString("session()->get('user_id')", $contenido);
+
+        /* Autorización heredada de la inspección, no del payload. */
+        $this->assertStringContainsString('fueVigente(', $contenido);
+        $this->assertStringContainsString('findByUuid(', $contenido);
+
+        /* Idempotencia por uuid de fotografía. */
+        $this->assertStringContainsString('ALREADY_SYNCED', $contenido);
+    }
+
+    public function testServicioDeArchivosDeFotografiaExiste(): void
+    {
+        $ruta = APPPATH . 'Services/FotografiaArchivo.php';
+
+        $this->assertFileExists($ruta);
+
+        $servicio = file_get_contents($ruta);
+        $this->assertNotFalse($servicio);
+
+        $this->assertStringContainsString('final class FotografiaArchivo', $servicio);
+        $this->assertMatchesRegularExpression('/function\s+inspeccionar\s*\(/', $servicio);
+        $this->assertMatchesRegularExpression('/function\s+escribirImagen\s*\(/', $servicio);
+        $this->assertMatchesRegularExpression('/function\s+escribirThumbnail\s*\(/', $servicio);
+        $this->assertMatchesRegularExpression('/function\s+eliminarRelativo\s*\(/', $servicio);
+        $this->assertMatchesRegularExpression('/function\s+repararArchivo\s*\(/', $servicio);
+
+        /* El MIME se detecta por contenido, no por lo declarado. */
+        $this->assertStringContainsString('finfo', $servicio);
+    }
+
+    public function testAlmacenamientoDefineEstructuraAnidadaDeInspeccion(): void
+    {
+        $contenido = $this->leerApp('Services/ObraAlmacenamiento.php');
+
+        $this->assertMatchesRegularExpression('/function\s+asegurarEstructuraInspeccion\s*\(/', $contenido);
+        $this->assertMatchesRegularExpression('/function\s+rutaRelativaInspeccion\s*\(/', $contenido);
+        $this->assertMatchesRegularExpression('/function\s+nombreFotografia\s*\(/', $contenido);
+        $this->assertMatchesRegularExpression('/function\s+nombreThumbnailFotografia\s*\(/', $contenido);
+        $this->assertMatchesRegularExpression('/function\s+absolutoDesdeRelativa\s*\(/', $contenido);
+
+        /* Se conserva la estructura base usada por Inspector\Obras::ver(). */
+        $this->assertMatchesRegularExpression('/function\s+asegurarEstructuraObra\s*\(/', $contenido);
+    }
+
+    public function testComponenteSincronizacionExponeColaYBackoff(): void
+    {
+        $componente = $this->leerPublic('assets/js/components/sincronizacion.js');
+
+        /* Endpoint de fotografías y envío multipart. */
+        $this->assertStringContainsString('sincronizar/fotografias', $componente);
+        $this->assertStringContainsString('FormData', $componente);
+
+        /* Estados de operación de la cola. */
+        $this->assertStringContainsString("'PENDIENTE'", $componente);
+        $this->assertStringContainsString("'SINCRONIZANDO'", $componente);
+        $this->assertStringContainsString("'ERROR'", $componente);
+
+        /* Backoff progresivo. */
+        $this->assertStringContainsString('RETRASOS_MS', $componente);
+        $this->assertStringContainsString('5000', $componente);
+        $this->assertStringContainsString('15000', $componente);
+        $this->assertStringContainsString('30000', $componente);
+        $this->assertStringContainsString('60000', $componente);
+        $this->assertStringContainsString('300000', $componente);
+
+        /* Reintento manual. */
+        $this->assertStringContainsString('reintentar', $componente);
+
+        /* Orden inspecciones → fotografías. */
+        $this->assertStringContainsString('TIPO_INSPECCION', $componente);
+        $this->assertStringContainsString('TIPO_FOTOGRAFIA', $componente);
+    }
+
+    public function testColaSeEncolaAlGuardarInspeccionYFotografia(): void
+    {
+        $js = $this->leerPublic('assets/js/pages/inspeccion-nueva.js');
+
+        $this->assertStringContainsString('encolarOperacion(', $js);
+        $this->assertStringContainsString('SINCRONIZACION.encolar(', $js);
+        $this->assertStringContainsString('SINCRONIZACION.TIPO_INSPECCION', $js);
+        $this->assertStringContainsString('SINCRONIZACION.TIPO_FOTOGRAFIA', $js);
+
+        /* La cola es responsabilidad exclusiva del componente de
+           sincronización; la página no escribe en el store directamente. */
+        $this->assertStringNotContainsString('ALMACEN.ALMACENES.operaciones', $js);
+
+        $componente = $this->leerPublic('assets/js/components/sincronizacion.js');
+        $this->assertStringContainsString('ALMACEN.ALMACENES.operaciones', $componente);
+    }
+
+    public function testAppIniciaLaSincronizacionAlAbrir(): void
+    {
+        $app = $this->leerPublic('assets/js/app.js');
+
+        $this->assertStringContainsString('window.SIGOA.sincronizacion', $app);
+        $this->assertStringContainsString('sincronizacion.iniciar()', $app);
     }
 
     public function testServiceWorkerPrecacheaComponenteD3(): void
@@ -109,17 +255,5 @@ final class SincronizacionEstructuraTest extends CIUnitTestCase
 
         $this->assertStringContainsString("'sigoa-shell-v3'", $sw);
         $this->assertStringContainsString("'/assets/js/components/sincronizacion.js'", $sw);
-    }
-
-    public function testVistaObraPrecargaComponenteAntesQueLaPagina(): void
-    {
-        $vista = $this->leerApp('Views/inspector/obra.php');
-
-        $posComponente = strpos($vista, "base_url('assets/js/components/sincronizacion.js')");
-        $posPagina     = strpos($vista, "base_url('assets/js/pages/obra-inspecciones.js')");
-
-        $this->assertNotFalse($posComponente);
-        $this->assertNotFalse($posPagina);
-        $this->assertLessThan($posPagina, $posComponente);
     }
 }
