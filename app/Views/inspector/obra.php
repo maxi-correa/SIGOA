@@ -149,6 +149,15 @@ $puedeInspeccionar = (bool) ($puede_inspeccionar ?? false);
             </p>
         </div>
 
+        <div class="io-locales-barra">
+            <button type="button" class="btn btn-secondary io-btn-sincronizar" id="btnSincronizar">
+                <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                Sincronizar
+            </button>
+        </div>
+
+        <div id="sincronizacionEstado" class="io-locales-alerta" hidden></div>
+
         <ul class="io-locales-lista" id="inspeccionesLocalesLista"></ul>
     </section>
 
@@ -157,5 +166,6 @@ $puedeInspeccionar = (bool) ($puede_inspeccionar ?? false);
 <?= $this->endSection() ?>
 
 <?= $this->section('scripts') ?>
+    <script src="<?= base_url('assets/js/components/sincronizacion.js') ?>"></script>
     <script src="<?= base_url('assets/js/pages/obra-inspecciones.js') ?>"></script>
 <?= $this->endSection() ?>

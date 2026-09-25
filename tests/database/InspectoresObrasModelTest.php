@@ -190,4 +190,67 @@ final class InspectoresObrasModelTest extends CIUnitTestCase
 
         $this->assertFalse((new InspectoresObrasModel())->esVigente(1, 20));
     }
+
+    /* =================================================================
+       Autorización histórica (§52.4) — fueVigente()
+       ================================================================= */
+
+    public function testFueVigenteReconoceAsignacionAbiertaEnLaFecha(): void
+    {
+        $this->crearObra(1, 'CENTRO DE SALUD', 1);
+        $this->crearAsignacion(1, 10, '2026-03-01', null);
+
+        $this->assertTrue((new InspectoresObrasModel())->fueVigente(1, 10, '2026-05-15'));
+    }
+
+    public function testFueVigenteIncluyeLaFechaDeInicio(): void
+    {
+        $this->crearObra(1, 'CENTRO DE SALUD', 1);
+        $this->crearAsignacion(1, 10, '2026-03-01', '2026-06-30');
+
+        $this->assertTrue((new InspectoresObrasModel())->fueVigente(1, 10, '2026-03-01'));
+    }
+
+    public function testFueVigenteIncluyeLaFechaDeFin(): void
+    {
+        $this->crearObra(1, 'CENTRO DE SALUD', 1);
+        $this->crearAsignacion(1, 10, '2026-03-01', '2026-06-30');
+
+        $this->assertTrue((new InspectoresObrasModel())->fueVigente(1, 10, '2026-06-30'));
+    }
+
+    public function testFueVigenteNiegaFechaAnteriorAlInicio(): void
+    {
+        $this->crearObra(1, 'CENTRO DE SALUD', 1);
+        $this->crearAsignacion(1, 10, '2026-03-01', '2026-06-30');
+
+        $this->assertFalse((new InspectoresObrasModel())->fueVigente(1, 10, '2026-02-28'));
+    }
+
+    public function testFueVigenteNiegaFechaPosteriorAlFin(): void
+    {
+        $this->crearObra(1, 'CENTRO DE SALUD', 1);
+        $this->crearAsignacion(1, 10, '2026-03-01', '2026-06-30');
+
+        $this->assertFalse((new InspectoresObrasModel())->fueVigente(1, 10, '2026-07-01'));
+    }
+
+    public function testFueVigenteNiegaOtroInspector(): void
+    {
+        $this->crearObra(1, 'CENTRO DE SALUD', 1);
+        $this->crearAsignacion(1, 10, '2026-03-01', null);
+
+        $this->assertFalse((new InspectoresObrasModel())->fueVigente(1, 20, '2026-05-15'));
+    }
+
+    public function testFueVigenteReconocePeriodoReasignadoConCierre(): void
+    {
+        $this->crearObra(1, 'CENTRO DE SALUD', 1);
+        $this->crearAsignacion(1, 10, '2026-01-01', '2026-03-31');
+        $this->crearAsignacion(1, 20, '2026-04-01', null);
+
+        $this->assertTrue((new InspectoresObrasModel())->fueVigente(1, 10, '2026-03-15'));
+        $this->assertFalse((new InspectoresObrasModel())->fueVigente(1, 10, '2026-04-15'));
+        $this->assertTrue((new InspectoresObrasModel())->fueVigente(1, 20, '2026-04-15'));
+    }
 }

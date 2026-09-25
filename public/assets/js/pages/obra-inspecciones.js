@@ -1,21 +1,28 @@
 /**
- * SIGOA — Inspecciones locales de una obra (Fase D.2)
+ * SIGOA — Inspecciones locales de una obra (Fase D.2 / D.3)
  *
  * Recupera de IndexedDB (base `SIGOA`, store `inspecciones` por índice
  * `por_obra`) las inspecciones creadas en este dispositivo para la obra
  * actual, y permite ver sus fotografías (store `fotografias` por índice
  * `por_inspeccion`).
  *
- * Es una lectura puramente local: no consulta ni notifica al servidor.
- * Si el navegador no soporta IndexedDB, la sección permanece oculta.
+ * Desde Fase D.3 también coordina la **sincronización manual** de las
+ * inspecciones pendientes con el servidor (botón "Sincronizar",
+ * SIGOA.sincronizacion, docs/SIGOA.md §55): informa el resultado, refresca
+ * los estados de cada inspección (SINCRONIZADA / ERROR) y ante 401 avisa
+ * que hay que volver a iniciar sesión. Los datos locales nunca se eliminan.
  */
 (function () {
     'use strict';
 
     var ALMACEN = (window.SIGOA && window.SIGOA.almacenamiento) ? window.SIGOA.almacenamiento : null;
+    var SINCRONIZACION = (window.SIGOA && window.SIGOA.sincronizacion) ? window.SIGOA.sincronizacion : null;
 
     var seccion = document.getElementById('inspeccionesLocales');
     var lista   = document.getElementById('inspeccionesLocalesLista');
+    var btnSincronizar = document.getElementById('btnSincronizar');
+    var alertaEstado   = document.getElementById('sincronizacionEstado');
+    var obraId         = seccion ? parseInt(seccion.dataset.obraId, 10) : NaN;
 
     function formatoFecha(iso) {
         if (!iso) {
@@ -42,7 +49,9 @@
     function estadoEtiqueta(estado) {
         return {
             'PENDIENTE_SYNC': { texto: 'Pendiente de sincronización', clase: 'io-badge-pendiente' },
-            'BORRADOR':       { texto: 'Borrador',                   clase: 'io-badge-borrador' }
+            'SINCRONIZADA':   { texto: 'Sincronizada',                clase: 'io-badge-sincronizada' },
+            'ERROR':          { texto: 'Error de sincronización',     clase: 'io-badge-error' },
+            'BORRADOR':       { texto: 'Borrador',                    clase: 'io-badge-borrador' }
         }[estado] || { texto: estado || 'Local', clase: 'io-badge-local' };
     }
 
@@ -129,15 +138,34 @@
         observacion.className = 'io-locales-item-obs';
         observacion.textContent = inspeccion.observacion ? inspeccion.observacion : 'Sin observación.';
 
-        var fotosContenedor = document.createElement('div');
-        fotosContenedor.className = 'io-locales-fotos';
-        fotosContenedor.setAttribute('hidden', '');
+        item.appendChild(encabezado);
+        item.appendChild(observacion);
+
+        if (inspeccion.estado_local === 'ERROR' && inspeccion.error_local) {
+            var motivo = document.createElement('p');
+            motivo.className = 'io-locales-item-obs io-locales-item-error';
+            motivo.textContent = inspeccion.error_local;
+
+            item.appendChild(motivo);
+        }
+
+        if (inspeccion.estado_local === 'SINCRONIZADA' && inspeccion.servidor_id) {
+            var meta = document.createElement('p');
+            meta.className = 'io-locales-item-obs io-locales-item-servidor';
+            meta.textContent = 'ID en servidor: ' + inspeccion.servidor_id;
+
+            item.appendChild(meta);
+        }
 
         var boton = document.createElement('button');
         boton.type = 'button';
         boton.className = 'io-locales-fotos-toggle';
         boton.setAttribute('aria-expanded', 'false');
         boton.innerHTML = '<i class="bi bi-images" aria-hidden="true"></i> Ver fotografías';
+
+        var fotosContenedor = document.createElement('div');
+        fotosContenedor.className = 'io-locales-fotos';
+        fotosContenedor.setAttribute('hidden', '');
 
         boton.addEventListener('click', function () {
             var oculto = fotosContenedor.hasAttribute('hidden');
@@ -150,29 +178,21 @@
             }
         });
 
-        item.appendChild(encabezado);
-        item.appendChild(observacion);
         item.appendChild(boton);
         item.appendChild(fotosContenedor);
 
         lista.appendChild(item);
     }
 
-    function inicializar() {
-        if (!seccion || !lista || !ALMACEN || !ALMACEN.soportado()) {
-            return;
+    function renderInspecciones() {
+        if (!seccion || !lista) {
+            return Promise.resolve();
         }
 
-        var obraId = parseInt(seccion.dataset.obraId, 10);
+        lista.textContent = '';
 
-        if (!Number.isFinite(obraId)) {
-            return;
-        }
-
-        ALMACEN.buscarPorIndice(ALMACEN.ALMACENES.inspecciones, 'por_obra', obraId)
+        return ALMACEN.buscarPorIndice(ALMACEN.ALMACENES.inspecciones, 'por_obra', obraId)
             .then(function (inspecciones) {
-                seccion.removeAttribute('hidden');
-
                 if (!inspecciones || inspecciones.length === 0) {
                     renderVacio();
                     return;
@@ -191,12 +211,125 @@
                         return fa < fb ? 1 : -1;
                     })
                     .forEach(renderInspeccion);
+            });
+    }
+
+    /* ================================================================
+       Sincronización manual (Fase D.3)
+       ================================================================ */
+
+    function mostrarAlerta(tipo, icono, mensaje) {
+        if (!alertaEstado) {
+            return;
+        }
+
+        alertaEstado.textContent = '';
+
+        var alerta = document.createElement('div');
+        alerta.className = 'alert ' + tipo;
+        alerta.setAttribute('role', 'alert');
+
+        var iconoEl = document.createElement('span');
+        iconoEl.className = 'alert-icon';
+        iconoEl.innerHTML = icono;
+
+        var texto = document.createElement('span');
+        texto.textContent = mensaje;
+
+        alerta.appendChild(iconoEl);
+        alerta.appendChild(texto);
+
+        alertaEstado.appendChild(alerta);
+        alertaEstado.removeAttribute('hidden');
+    }
+
+    function textoResumen(resumen) {
+        if (resumen.vacio) {
+            return 'No hay inspecciones pendientes de sincronización.';
+        }
+
+        if (resumen.error === 'AUTH_REQUIRED') {
+            return 'Tu sesión expiró. Volvé a iniciar sesión y volvé a sincronizar. Las inspecciones del dispositivo se conservan.';
+        }
+
+        if (resumen.error === 'RED') {
+            return 'No fue posible conectarse con el servidor. Verificá tu conexión e intentá nuevamente.';
+        }
+
+        if (resumen.error === 'FORBIDDEN') {
+            return 'No tenés permisos para sincronizar en esta sesión. Recargá la página e intentá nuevamente.';
+        }
+
+        if (resumen.error) {
+            return 'El servidor no pudo procesar la sincronización. Recargá la página e intentá nuevamente.';
+        }
+
+        var partes = [];
+
+        if (resumen.sincronizadas > 0) {
+            partes.push(resumen.sincronizadas + ' sincronizada' + (resumen.sincronizadas === 1 ? '' : 's'));
+        }
+
+        if (resumen.yaSincronizadas > 0) {
+            partes.push(resumen.yaSincronizadas + ' ya sincronizada' + (resumen.yaSincronizadas === 1 ? '' : 's'));
+        }
+
+        if (resumen.rechazadas > 0) {
+            partes.push(resumen.rechazadas + ' rechazada' + (resumen.rechazadas === 1 ? '' : 's') + ' (ver motivo en cada inspección)');
+        }
+
+        return 'Sincronización finalizada: ' + (partes.join(', ') || 'sin cambios') + '.';
+    }
+
+    function sincronizar() {
+        if (!btnSincronizar || !SINCRONIZACION) {
+            return;
+        }
+
+        btnSincronizar.setAttribute('disabled', 'disabled');
+
+        SINCRONIZACION.sincronizarInspecciones(obraId)
+            .then(function (resumen) {
+                if (resumen.vacio) {
+                    mostrarAlerta('alert-info', '<i class="bi bi-info-circle" aria-hidden="true"></i>', textoResumen(resumen));
+                } else if ((resumen.error === 'AUTH_REQUIRED') || resumen.error === 'RED' || resumen.error === 'FORBIDDEN' || resumen.error) {
+                    mostrarAlerta('alert-danger', '<i class="bi bi-exclamation-circle" aria-hidden="true"></i>', textoResumen(resumen));
+                } else if (resumen.rechazadas > 0 || resumen.errores > 0) {
+                    mostrarAlerta('alert-warning', '<i class="bi bi-exclamation-triangle" aria-hidden="true"></i>', textoResumen(resumen));
+                } else {
+                    mostrarAlerta('alert-success', '<i class="bi bi-check-circle" aria-hidden="true"></i>', textoResumen(resumen));
+                }
+
+                return renderInspecciones();
             })
             .catch(function (error) {
                 if (window.console && console.error) {
-                    console.error('SIGOA: no se pudieron recuperar las inspecciones locales.', error);
+                    console.error('SIGOA: falló la sincronización.', error);
                 }
+
+                mostrarAlerta('alert-danger', '<i class="bi bi-exclamation-circle" aria-hidden="true"></i>', 'No fue posible sincronizar. Verificá tu conexión e intentá nuevamente.');
+            })
+            .finally(function () {
+                btnSincronizar.removeAttribute('disabled');
             });
+    }
+
+    function inicializar() {
+        if (!seccion || !lista || !ALMACEN || !ALMACEN.soportado()) {
+            return;
+        }
+
+        if (!Number.isFinite(obraId)) {
+            return;
+        }
+
+        seccion.removeAttribute('hidden');
+
+        if (btnSincronizar && SINCRONIZACION) {
+            btnSincronizar.addEventListener('click', sincronizar);
+        }
+
+        renderInspecciones();
     }
 
     if (document.readyState === 'loading') {

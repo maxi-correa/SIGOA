@@ -149,6 +149,9 @@ $routes->group('inspector', [
 
     // NUEVA INSPECCIÓN LOCAL (Fase D.2) — autoriza e inicializa; se guarda en IndexedDB
     $routes->get('inspecciones/nueva/(:num)', 'Inspector\Inspecciones::nueva/$1');
+
+    // SINCRONIZACIÓN DE INSPECCIONES (Fase D.3) — alta confirmada por uuid, idempotente (§55)
+    $routes->post('sincronizar/inspecciones', 'Inspector\Sincronizar::inspecciones');
 });
 
 // =============================================

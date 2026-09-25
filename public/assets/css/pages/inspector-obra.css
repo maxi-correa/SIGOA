@@ -1,5 +1,5 @@
 /* ===================================================================
-   SIGOA — Página: Obra del inspector (vista preparada)
+   SIGOA — Página: Obra del inspector (vista preparada, Fase D.2/D.3)
    =================================================================== */
 
 .io-page {
@@ -228,6 +228,18 @@
     border: 1px solid var(--color-warning-border);
 }
 
+.io-badge-sincronizada {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid var(--color-success-border);
+}
+
+.io-badge-error {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger-border);
+}
+
 .io-badge-borrador {
     background-color: var(--color-background);
     color: var(--color-text-secondary);
@@ -238,6 +250,45 @@
     background-color: var(--color-info-bg);
     color: var(--color-info);
     border: 1px solid var(--color-info-border);
+}
+
+/* --- Sincronización manual (Fase D.3) --- */
+.io-locales-barra {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.io-locales-barra .btn {
+    width: auto;
+}
+
+.io-locales-alerta {
+    margin-top: var(--space-xs);
+}
+
+.io-locales-alerta .alert {
+    margin-bottom: 0;
+}
+
+.io-locales-item-error {
+    color: var(--color-danger);
+}
+
+.io-locales-item-servidor {
+    color: var(--color-success);
+}
+
+@media (max-width: 580px) {
+    .io-locales-barra {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .io-locales-barra .btn {
+        width: 100%;
+    }
 }
 
 .io-locales-fotos {

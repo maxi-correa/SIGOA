@@ -63,7 +63,7 @@ final class InfraestructuraOfflineTest extends CIUnitTestCase
         $this->assertMatchesRegularExpression('/addEventListener\(\s*[\'"]install[\'"]/', $sw);
         $this->assertMatchesRegularExpression('/addEventListener\(\s*[\'"]activate[\'"]/', $sw);
         $this->assertMatchesRegularExpression('/addEventListener\(\s*[\'"]fetch[\'"]/', $sw);
-        $this->assertStringContainsString('sigoa-shell-v2', $sw);
+        $this->assertStringContainsString('sigoa-shell-v3', $sw);
     }
 
     public function testServiceWorkerNoUsaBackgroundSync(): void
@@ -108,6 +108,7 @@ final class InfraestructuraOfflineTest extends CIUnitTestCase
             'assets/js/components/indexeddb.js',
             'assets/js/components/connectivity.js',
             'assets/js/components/camera-resize.js',
+            'assets/js/components/sincronizacion.js',
             'assets/js/pages/inspeccion-nueva.js',
             'assets/js/pages/obra-inspecciones.js',
         ];
@@ -115,6 +116,21 @@ final class InfraestructuraOfflineTest extends CIUnitTestCase
         foreach ($componentes as $ruta) {
             $this->assertFileExists($this->publicPath($ruta), "Falta el componente JS: {$ruta}");
         }
+    }
+
+    public function testComponenteSincronizacionD3ExponeApiYEstados(): void
+    {
+        $js = $this->leerPublic('assets/js/components/sincronizacion.js');
+
+        $this->assertStringContainsString('SIGOA.sincronizacion', $js);
+        $this->assertStringContainsString('sincronizarInspecciones', $js);
+        $this->assertStringContainsString('ESTADO_PENDIENTE_SYNC', $js);
+        $this->assertStringContainsString("'PENDIENTE_SYNC'", $js);
+        $this->assertStringContainsString('ESTADO_SINCRONIZADA', $js);
+        $this->assertStringContainsString("'SINCRONIZADA'", $js);
+        $this->assertStringContainsString('ESTADO_ERROR', $js);
+        $this->assertStringContainsString("'ERROR'", $js);
+        $this->assertStringContainsString('X-CSRF-TOKEN', $js);
     }
 
     public function testCapaIndexeddbD2AgregaIndicePorObraYBuscadorPorIndice(): void

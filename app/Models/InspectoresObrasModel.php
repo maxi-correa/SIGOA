@@ -107,6 +107,33 @@ class InspectoresObrasModel extends Model
     }
 
     /**
+     * Autorización histórica del inspector para una obra en una fecha (§52.4 / F.6).
+     *
+     * Verifica la existencia de una fila con:
+     *
+     *   * `obra_id` = obra;
+     *   * `usuario_id` = inspector;
+     *   * `fecha_inicio <= fecha`  y  (`fecha_fin IS NULL` o `fecha_fin >= fecha`).
+     *
+     * Los períodos de asignación son **inclusivos**: `fecha_fin` es el último
+     * día efectivo de la asignación. Se utiliza en la sincronización para
+     * validar la fecha de la inspección, no el estado actual de la obra
+     * (la restricción de estado aplica a la creación, F.7 / §52.5).
+     */
+    public function fueVigente(int $obraId, int $usuarioId, string $fecha): bool
+    {
+        return $this
+            ->where('obra_id', $obraId)
+            ->where('usuario_id', $usuarioId)
+            ->where('fecha_inicio <=', $fecha)
+            ->groupStart()
+                ->where('fecha_fin', null)
+                ->orWhere('fecha_fin >=', $fecha)
+            ->groupEnd()
+            ->countAllResults() > 0;
+    }
+
+    /**
      * Cierra una asignación estableciendo su fecha de fin.
      */
     public function cerrarVigente(int $id, string $fechaFin): bool

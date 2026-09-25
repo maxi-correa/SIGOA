@@ -115,7 +115,8 @@ Adicionalmente, se encuentra implementada la infraestructura de autenticación y
 * **dashboard administrativo** (SUPERADMINISTRADOR y ADMINISTRADOR) con la sección **Obras** como eje principal — listado, paginación y alta inicial de obras — ver §47;
 * **edición de datos básicos de obras** — modal reutilizable de alta/edición, estado libre en esta etapa, unicidad de expediente con exclusión — ver §48;
 * **Fase D.1** — fundación PWA/offline: manifest, Service Worker de app shell, registro de SW, capa propia de IndexedDB (base `SIGOA`, stores `inspecciones`/`fotografias`/`operaciones`), UUID v4 en el cliente y estado online/offline en la topbar — ver §53;
-* **Fase D.2** — nueva inspección 100 % local del inspector móvil: autorización en servidor (estado F.7 + asignación vigente), guardado en IndexedDB (v2), captura/optimización/thumbnail de fotografías en el cliente y vista de inspecciones locales — ver §54.
+* **Fase D.2** — nueva inspección 100 % local del inspector móvil: autorización en servidor (estado F.7 + asignación vigente), guardado en IndexedDB (v2), captura/optimización/thumbnail de fotografías en el cliente y vista de inspecciones locales — ver §54;
+* **Fase D.3** — sincronización servidor de inspecciones capturadas offline: endpoint `POST /inspector/sincronizar/inspecciones` idempotente por uuid, autorización histórica del inspector (§52.4), validación del payload, trazabilidad en `operaciones_sincronizacion`, botón "Sincronizar" en la vista de obra y estados `SINCRONIZADA`/`ERROR` en las inspecciones locales — ver §55.
 
 ---
 
@@ -1935,15 +1936,15 @@ Recupera conexión:
 
 ## 52.15 Sincronización — endpoints y manejo de respuestas
 
-Endpoints futuros (grupo `inspector`, filtros `auth` + `role:INSPECTOR` + CSRF):
+Endpoints (grupo `inspector`, filtros `auth` + `role:INSPECTOR` + CSRF):
 
-| Método | Ruta | Acción |
-| --- | --- | --- |
-| POST | `/inspector/sincronizar/inspecciones` | Alta confirmada de inspecciones por uuid (idempotente) |
-| POST | `/inspector/sincronizar/fotografias` | Alta de fotografías (multipart): archivo + thumbnail + metadata |
-| GET | `/inspector/offline/obras` | Snapshot de obras vigentes (§52.11) |
-| GET | `/inspector/fotografias/ver/{uuid}` | Servir fotografía optimizada |
-| GET | `/inspector/fotografias/mini/{uuid}` | Servir thumbnail |
+| Método | Ruta | Acción | Estado |
+| --- | --- | --- | --- |
+| POST | `/inspector/sincronizar/inspecciones` | Alta confirmada de inspecciones por uuid (idempotente) | **implementado — ver §55** |
+| POST | `/inspector/sincronizar/fotografias` | Alta de fotografías (multipart): archivo + thumbnail + metadata | pendiente |
+| GET | `/inspector/offline/obras` | Snapshot de obras vigentes (§52.11) | pendiente |
+| GET | `/inspector/fotografias/ver/{uuid}` | Servir fotografía optimizada | pendiente |
+| GET | `/inspector/fotografias/mini/{uuid}` | Servir thumbnail | pendiente |
 
 * **Idempotencia:** si el `uuid` ya existe, el servidor devuelve el registro existente (200) sin duplicar.
 * **401:** sesión expirada → JSON 401 → proceso de reautenticación (§52.6).
@@ -2414,5 +2415,187 @@ Notas de scope:
   (navegador) y con `SIGOA.almacenamiento.autotest()`; no se introdujo infraestructura de tests JS.
 * La fecha/reloj del dispositivo y la identidad UUID se validan en la sincronización futura
   (§52.4, §52.3).
+
+---
+
+## 55. Fase D.3 implementada — sincronización servidor de inspecciones
+
+## 55.1 Alcance de D.3
+
+Se implementa la **alta confirmada** de inspecciones capturadas offline en el servidor:
+
+* endpoint `POST /inspector/sincronizar/inspecciones` (grupo `inspector`, filtros
+  `auth` + `role:INSPECTOR` + CSRF global);
+* idempotencia por `uuid` de inspección (F.2, F.5);
+* autorización **histórica** del inspector en la fecha de la inspección (§52.4);
+* validación del payload (uuid RFC 4122, obra existente, fecha/hora, observación);
+* trazabilidad de cada alta en `operaciones_sincronizacion` (§52.16);
+* botón manual "Sincronizar" en la vista de obra y estados locales actualizados
+  (`SINCRONIZADA` / `ERROR`), según §52.15.
+
+El estado actual de la obra **no** se reevalúa al sincronizar: aplica únicamente cuando se
+captura una inspección al momento (F.7 / §52.5). La sincronización revalida la asignación
+histórica vigente en la fecha de la inspección.
+
+## 55.2 Contrato del endpoint
+
+`POST /inspector/sincronizar/inspecciones`
+
+Body (JSON, CSRF por cabecera `X-CSRF-TOKEN` y detección AJAX/`Accept: application/json`):
+
+```json
+{
+  "inspecciones": [
+    {
+      "uuid": "…",
+      "obra_id": 123,
+      "fecha_inspeccion": "2026-03-15",
+      "hora_inspeccion": "10:30:00",
+      "observacion": "…"
+    }
+  ]
+}
+```
+
+* `uuid` (obligatorio): UUID v4/v5 RFC 4122 de la inspección local.
+* `obra_id` (obligatorio): id numérico de la obra.
+* `fecha_inspeccion` (obligatorio): fecha real de la inspección en `YYYY-MM-DD`.
+* `hora_inspeccion` (opcional): `HH:MM:SS` (o `null`).
+* `observacion` (opcional): texto de hasta 5000 caracteres (o `null`).
+* `inspector_id` **no se envía ni se acepta**: la identidad del inspector proviene
+  exclusivamente de la sesión.
+
+## 55.3 Respuestas
+
+**200 OK** — lote procesado ítem por ítem (un rechazo no aborta el resto):
+
+```json
+{
+  "ok": true,
+  "results": [ … ],
+  "resumen": {
+    "procesadas": 1,
+    "sincronizadas": 1,
+    "ya_sincronizadas": 0,
+    "rechazadas": 0,
+    "errores": 0
+  }
+}
+```
+
+**422** — contrato global inválido (`inspecciones` no es un array):
+
+```json
+{ "ok": false, "error": "VALIDATION_ERROR", "details": { } }
+```
+
+**401 / 403** — sesión inválida / rol insuficiente (JSON de `AuthFilter`/`RoleFilter`).
+
+### Resultados por ítem
+
+| `estado` | `error` | Significado |
+| --- | --- | --- |
+| `SYNCED` | — | Inspección confirmada; incluye `id` (servidor) |
+| `ALREADY_SYNCED` | — | El `uuid` ya existía; incluye `id` (no duplica) |
+| `REJECTED` | `INVALID_UUID` | `uuid` ausente o no es RFC 4122 |
+| `REJECTED` | `OBRA_NOT_FOUND` | La obra no existe |
+| `REJECTED` | `HISTORICAL_AUTHORIZATION_FAILED` | El inspector no estuvo asignado a la obra en la fecha indicada |
+| `REJECTED` | `VALIDATION_ERROR` | Fecha/hora inválida u observación excesiva (con `mensaje`) |
+| `ERROR` | `SERVER_ERROR` | Fallo inesperado (se registra y se loguea) |
+
+Los ítems `REJECTED`/`ERROR` se devuelven en el `results` del 200: el lote se procesa
+totalmente y el cliente decide el estado local de cada inspección.
+
+## 55.4 Reglas de negocio implementadas
+
+* **Identidad de sesión:** `inspector_id` se toma de `session('user_id')`; cualquier
+  `inspector_id` enviado en el payload se ignora.
+* **Idempotencia:** `InspeccionModel::findByUuid()`; si el `uuid` ya existe, se responde
+  `ALREADY_SYNCED` con el id existente y no se inserta ni se registra operación.
+* **Autorización histórica:** `InspectoresObrasModel::fueVigente($obraId, $usuarioId, $fecha)`
+  — asignación vigente en la fecha de la inspección con límites **inclusivos**
+  (`fecha_inicio <= fecha` y `fecha_fin IS NULL OR fecha_fin >= fecha`).
+* **Sin reevaluación del estado actual** de la obra al sincronizar (§52.5).
+* **Fecha del dispositivo:** la fecha de inspección se valida a nivel de formato (verdadero
+  `YYYY-MM-DD`), no contra el reloj del servidor; la incoherencia de horario/reloj queda
+  cubierta por los checks manuales (§54.10).
+
+## 55.5 Trazabilidad
+
+Cada `SYNCED` registra en `operaciones_sincronizacion`:
+
+* `tipo_operacion`: paquete de sincronización; `entidad`: `inspecciones`;
+* `registro_id`: el **uuid** de la inspección (§52.16);
+* `estado`: `PROCESADA`; los rechazos permanentes y excepciones registran `ERROR` (con `error`).
+
+`ALREADY_SYNCED` no genera una nueva operación. El registro es de mejor esfuerzo: si la
+escritura de trazabilidad falla, se loguea sin abortar la confirmación.
+
+## 55.6 Componente de sincronización en el cliente
+
+* `public/assets/js/components/sincronizacion.js` — `SIGOA.sincronizacion.sincronizarInspecciones(obraId?)`:
+  obtiene las inspecciones `PENDIENTE_SYNC` de la obra (o todas), envía el lote con
+  `X-CSRF-TOKEN`/`X-Requested-With`, actualiza cada registro por su `uuid`
+  (respetando `estado_local`/`servidor_id`/`error_local`) y devuelve el resumen.
+* Estados locales gestionados: `PENDIENTE_SYNC` → `SINCRONIZADA` (con `servidor_id`) o
+  `ERROR` (con `error_local`; los datos se conservan); un error de red
+  (`{ error: "RED" }`) no modifica los datos locales; un 401 devuelve `authRequerida: true`
+  sin tocar IndexedDB.
+* `app/Views/inspector/obra.php` — botón "Sincronizar" (`bi-arrow-repeat`) y área de alerta
+  en la barra de inspecciones locales; el componente se carga antes que
+  `obra-inspecciones.js`.
+* `public/assets/js/pages/obra-inspecciones.js` — badges `SINCRONIZADA`/`ERROR` y aviso de
+  red; la página **no** dispara `fetch()` (delegado al componente).
+
+## 55.7 Service Worker y app shell
+
+`public/sw.js` pasa a `sigoa-shell-v3` y precachea
+`/assets/js/components/sincronizacion.js`. No se cachean páginas autenticadas ni respuestas
+con cookie de sesión (sin cambios respecto de §53.3).
+
+## 55.8 Cliente — decisión de sincronización manual
+
+La sincronización en D.3 es **manual** (botón en la vista de obra), ejecutable en cualquier
+momento: al abrir la obra o tras recuperar conectividad. Quedan para D.4 la cola local
+`operaciones`, el disparo automático (eventos `online`/visibilidad), reintentos con backoff,
+Background Sync y la sincronización de fotografías.
+
+## 55.9 Deliberadamente fuera de D.3
+
+* fotografías (almacenamiento multipart, validación `finfo`, thumbnails) — §52.15/§52.17;
+* snapshot de obras offline (§52.11);
+* cola local y reintentos automáticos (§52.13);
+* sincronización automática al recuperar conectividad (evento `online`) y Background Sync;
+* edición/borrado de inspecciones desde el servidor;
+* migraciones de estructura de base de datos (no se requirieron cambios: `inspecciones.uuid`
+  ya existe por Fase C).
+
+## 55.10 Pruebas
+
+Suite completa en verde: **152 tests / 461 assertions** (incremento **+39 tests / +127
+assertions** sobre el cierre de Fase D.2).
+
+Nuevos/actualizados:
+
+* `tests/database/SincronizarInspeccionesTest.php` — endpoint: 401/403/CSRF; alta con
+  asignación vigente; `inspector_id` del payload ignorado; idempotencia (mismo `uuid` →
+  `ALREADY_SYNCED` con el mismo id); autorización histórica (inicio/fin, reasignación, sin
+  relación, estado actual de la obra no condiciona); obra inexistente, `uuid` inválido;
+  fecha/hora/observación inválidas; lote vacío y mixto; trazabilidad `PROCESADA`.
+* `tests/database/InspectoresObrasModelTest.php` — límites inclusivos de `fueVigente`
+  (igual al inicio, igual al fin, abierta, anterior/posterior, otro inspector, reasignación).
+* `tests/unit/SincronizacionEstructuraTest.php` — controlador, ruta POST, modelos, botón y
+  carga de componentes en la vista, `sincronizacion.js` como único origen de `fetch()`,
+  precache v3 en `sw.js`.
+* `tests/unit/InfraestructuraOfflineTest.php` — actualizado a `sigoa-shell-v3` y al
+  componente `sincronizacion.js`.
+
+Notas de scope:
+
+* El flujo de red completo (IndexedDB → JSON → alta → actualización local) se valida con el
+  checklist manual en navegador; los tests cubren el endpoint y la estructura del cliente.
+* La suite se corre con conexión `tests` (SQLite en memoria compartida): el esquema de
+  `operaciones_sincronizacion` para tests se declara con `CREATE TABLE IF NOT EXISTS`,
+  coherente con la migración de producción.
 
 ---
