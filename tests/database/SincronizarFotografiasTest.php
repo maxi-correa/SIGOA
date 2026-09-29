@@ -398,9 +398,24 @@ final class SincronizarFotografiasTest extends CIUnitTestCase
 
     public function testSinTokenCsrfEsRechazado(): void
     {
-        $this->expectException(CodeIgniter\Security\Exceptions\SecurityException::class);
+        $resultado = $this->enviar($this->parametros(), $this->crearJpeg(), $this->sesionInspector(), false);
 
-        $this->enviar($this->parametros(), $this->crearJpeg(), $this->sesionInspector(), false);
+        $resultado->assertStatus(403);
+        $resultado->assertJSONFragment(['ok' => false, 'error' => 'CSRF_INVALID']);
+    }
+
+    public function testTokenCsrfVencidoEnPeticionApiResponde403Json(): void
+    {
+        $resultado = $this->withHeaders([
+            'X-Requested-With' => 'XMLHttpRequest',
+            'Accept'           => 'application/json',
+            'X-CSRF-TOKEN'     => 'token-vencido',
+        ])
+            ->withSession($this->sesionInspector())
+            ->post('/inspector/sincronizar/fotografias', $this->parametros());
+
+        $resultado->assertStatus(403);
+        $resultado->assertJSONFragment(['ok' => false, 'error' => 'CSRF_INVALID']);
     }
 
     /* =================================================================

@@ -178,6 +178,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
+    min-width: 0;
 }
 
 .io-locales-item {
@@ -187,6 +188,7 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     padding: var(--space-md);
+    min-width: 0;
 }
 
 .io-locales-item-superior {
@@ -296,6 +298,7 @@
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 8rem), 1fr));
     gap: var(--space-sm);
     margin-top: var(--space-xs);
+    min-width: 0;
 }
 
 .io-locales-fotos-toggle {
@@ -313,6 +316,8 @@
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: background-color 0.2s, border-color 0.2s;
+    max-width: 100%;
+    text-align: left;
 }
 
 .io-locales-fotos-toggle:hover {
@@ -335,6 +340,8 @@
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: background-color 0.2s, border-color 0.2s;
+    max-width: 100%;
+    text-align: left;
 }
 
 .io-locales-reintentar:hover:not([disabled]) {
@@ -357,6 +364,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
+    min-width: 0;
 }
 
 .io-locales-foto img {
@@ -370,6 +378,7 @@
 .io-locales-foto-cap {
     font-size: var(--font-size-xs);
     color: var(--color-text-secondary);
+    overflow-wrap: anywhere;
 }
 
 .io-locales-fotos-vacio {
@@ -411,5 +420,13 @@
 
     .io-locales-foto img {
         aspect-ratio: 1 / 1;
+    }
+
+    /* En pantallas angostas ninguna etiqueta se mantiene en una sola
+       línea: si el texto es más ancho que la tarjeta obliga a un
+       desplazamiento horizontal de toda la página. */
+    .io-badge {
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
 }

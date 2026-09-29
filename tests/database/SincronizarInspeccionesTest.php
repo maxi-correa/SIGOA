@@ -235,9 +235,25 @@ final class SincronizarInspeccionesTest extends CIUnitTestCase
 
     public function testSinTokenCsrfEsRechazado(): void
     {
-        $this->expectException(CodeIgniter\Security\Exceptions\SecurityException::class);
+        $resultado = $this->postLote([$this->item(Uuid::v4())], $this->sesionInspector(), false);
 
-        $this->postLote([$this->item(Uuid::v4())], $this->sesionInspector(), false);
+        $resultado->assertStatus(403);
+        $resultado->assertJSONFragment(['ok' => false, 'error' => 'CSRF_INVALID']);
+    }
+
+    public function testTokenCsrfVencidoEnPeticionApiResponde403Json(): void
+    {
+        $resultado = $this->withHeaders([
+            'X-Requested-With' => 'XMLHttpRequest',
+            'Accept'           => 'application/json',
+            'X-CSRF-TOKEN'     => 'token-vencido',
+        ])
+            ->withBodyFormat('json')
+            ->withSession($this->sesionInspector())
+            ->post('/inspector/sincronizar/inspecciones', ['inspecciones' => [$this->item(Uuid::v4())]]);
+
+        $resultado->assertStatus(403);
+        $resultado->assertJSONFragment(['ok' => false, 'error' => 'CSRF_INVALID']);
     }
 
     /* =================================================================

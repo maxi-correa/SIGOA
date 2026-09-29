@@ -202,6 +202,17 @@ function crearEntorno(opciones) {
         addEventListener: function () {},
         getElementById: function () {
             return null;
+        },
+        querySelector: function (selector) {
+            if (selector === 'meta[name="X-CSRF-TOKEN"]' && config.csrfMeta) {
+                return {
+                    getAttribute: function (name) {
+                        return name === 'content' ? config.csrfMeta : null;
+                    }
+                };
+            }
+
+            return null;
         }
     };
 
@@ -596,7 +607,109 @@ function probarSesionExpirada() {
             })[0];
 
             igual('PENDIENTE', inspeccion.estado, 'La operación vuelve a PENDIENTE');
-            igual(1, inspeccion.intentos, 'El intento consumido queda registrado para el backoff');
+            igual(0, inspeccion.intentos, 'El 401 no consume intento: la cola no se agota sin sesión');
+            igual(null, inspeccion.ultimo_intento, 'Sin intentos registrados tampoco queda fecha de último intento');
+        });
+}
+
+function probarColaNoSeCongelaSinSesion() {
+    titulo('La cola no se congela tras varios 401');
+
+    const entorno = crearEntorno({ fetch: respuestaServidor('401') });
+    const s = entorno.sync;
+
+    return sembrar(entorno, crearInspeccion(), [])
+        .then(function () {
+            return s.sincronizarTodo();
+        })
+        .then(function () {
+            return s.sincronizarTodo();
+        })
+        .then(function () {
+            return s.sincronizarTodo();
+        })
+        .then(function () {
+            return s.sincronizarTodo();
+        })
+        .then(function () {
+            return s.sincronizarTodo();
+        })
+        .then(function () {
+            return s.sincronizarTodo();
+        })
+        .then(function () {
+            return s.sincronizarTodo();
+        })
+        .then(function () {
+            return entorno.almacen.obtenerTodos('operaciones');
+        })
+        .then(function (operaciones) {
+            igual(1, operaciones.length, 'La operación sigue en la cola');
+            igual('PENDIENTE', operaciones[0].estado, 'Nunca pasa a ERROR por falta de sesión');
+            igual(0, operaciones[0].intentos, 'Ninguno de los ciclos consumió un intento');
+
+            return s.obtenerOperaciones();
+        })
+        .then(function (operaciones) {
+            ok(s.puedeReintentar(operaciones[0]), 'La cola queda disponible para reanudarse al iniciar sesión');
+        });
+}
+
+function probarTokenCsrfInvalido() {
+    titulo('403 por token de seguridad inválido');
+
+    const entorno = crearEntorno({
+        fetch: function () {
+            return this.respuesta(403, { ok: false, error: 'CSRF_INVALID' });
+        }
+    });
+    const s = entorno.sync;
+
+    return sembrar(entorno, crearInspeccion(), [crearFotografia()])
+        .then(function () {
+            return s.sincronizarTodo();
+        })
+        .then(function (resumen) {
+            ok(resumen.csrfInvalido === true, 'Se informa que el token de seguridad venció');
+            igual(1, entorno.llamadas.length, 'No se intentan las fotografías tras el 403 de CSRF');
+
+            return Promise.all([
+                entorno.almacen.obtener('inspecciones', UUID_INSP),
+                entorno.almacen.obtenerTodos('operaciones')
+            ]);
+        })
+        .then(function (resultados) {
+            igual('PENDIENTE_SYNC', resultados[0].estado_local, 'La inspección conserva su estado local');
+
+            const inspeccion = resultados[1].filter(function (o) {
+                return o.tipo === 'INSPECCION';
+            })[0];
+
+            igual('PENDIENTE', inspeccion.estado, 'La operación vuelve a PENDIENTE');
+            igual(0, inspeccion.intentos, 'El token vencido no consume intentos');
+        });
+}
+
+function probarTokenCsrfDesdeMeta() {
+    titulo('El token CSRF se toma del meta de la página');
+
+    const entorno = crearEntorno({
+        csrfMeta: 'token-del-meta',
+        fetch: respuestaServidor('ok')
+    });
+    const s = entorno.sync;
+
+    return sembrar(entorno, crearInspeccion(), [])
+        .then(function () {
+            return s.sincronizarTodo();
+        })
+        .then(function () {
+            igual(1, entorno.llamadas.length, 'Se realizó una sola petición');
+            igual(
+                'token-del-meta',
+                entorno.llamadas[0].init.headers['X-CSRF-TOKEN'],
+                'La cabecera toma el token emitido por el layout, no la cookie'
+            );
         });
 }
 
@@ -823,6 +936,9 @@ const pasos = [
     probarLiberacionDeBlobs,
     probarBlobsSeConservanAnteFallo,
     probarSesionExpirada,
+    probarColaNoSeCongelaSinSesion,
+    probarTokenCsrfInvalido,
+    probarTokenCsrfDesdeMeta,
     probarRechazoPermanente,
     probarAgotamientoDeIntentos,
     probarReintentoManual,

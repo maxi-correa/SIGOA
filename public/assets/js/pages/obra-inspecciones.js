@@ -27,6 +27,15 @@
     var btnSincronizar = document.getElementById('btnSincronizar');
     var alertaEstado   = document.getElementById('sincronizacionEstado');
     var obraId         = seccion ? parseInt(seccion.dataset.obraId, 10) : NaN;
+    var urlsActivas    = [];
+
+    function revocarUrls() {
+        urlsActivas.forEach(function (url) {
+            URL.revokeObjectURL(url);
+        });
+
+        urlsActivas = [];
+    }
 
     function formatoFecha(iso) {
         if (!iso) {
@@ -137,6 +146,8 @@
 
         if (fotografia.thumbnail) {
             var url = URL.createObjectURL(fotografia.thumbnail);
+            urlsActivas.push(url);
+
             var img = document.createElement('img');
             img.src = url;
             img.alt = 'Fotografía de la inspección';
@@ -335,6 +346,7 @@
         }
 
         lista.textContent = '';
+        revocarUrls();
 
         return Promise.all([
             ALMACEN.buscarPorIndice(ALMACEN.ALMACENES.inspecciones, 'por_obra', obraId),
@@ -399,6 +411,30 @@
         return cantidad + ' ' + (cantidad === 1 ? singular : pluralForma);
     }
 
+    /**
+     * Total de operaciones que siguen en la cola del dispositivo al terminar
+     * el ciclo, o `null` si el resumen no lo informa.
+     */
+    function pendientesTotales(resumen) {
+        if (!resumen.pendientes || typeof resumen.pendientes.total !== 'number') {
+            return null;
+        }
+
+        return resumen.pendientes.total;
+    }
+
+    /**
+     * Operaciones que este ciclo efectivamente sincronizó o confirmó.
+     */
+    function elementosProcesados(resumen) {
+        var insp = resumen.inspecciones || {};
+        var fotos = resumen.fotografias || {};
+
+        return (insp.sincronizadas || 0)
+            + (insp.yaSincronizadas || 0)
+            + (fotos.sincronizadas || 0);
+    }
+
     function textoResumen(resumen) {
         if (resumen.enCurso) {
             return 'Ya hay una sincronización en curso.';
@@ -414,6 +450,10 @@
 
         if (resumen.authRequerida || resumen.error === 'AUTH_REQUIRED') {
             return 'Tu sesión expiró. Volvé a iniciar sesión y la cola continuará sola. Las inspecciones y fotografías del dispositivo se conservan.';
+        }
+
+        if (resumen.csrfInvalido || resumen.error === 'CSRF_INVALID') {
+            return 'El token de seguridad de la página venció. Recargá la página y la cola continuará sola; las inspecciones y fotografías del dispositivo se conservan.';
         }
 
         if (resumen.prohibido || resumen.error === 'FORBIDDEN') {
@@ -460,7 +500,21 @@
             partes.push(plural((insp.errores || 0) + (fotos.errores || 0), 'operación con error', 'operaciones con error'));
         }
 
-        return 'Sincronización finalizada: ' + (partes.join(', ') || 'sin cambios') + '.';
+        var detalle = partes.join(', ');
+        var procesados = elementosProcesados(resumen);
+        var pendientes = pendientesTotales(resumen);
+        var sinAvances = procesados === 0 && (pendientes === null || pendientes > 0);
+
+        if (sinAvances) {
+            return 'Sincronización sin avances: ' + (detalle || 'siguen pendientes elementos en el dispositivo') + '.';
+        }
+
+        if (pendientes !== null && pendientes > 0) {
+            return 'Sincronización parcial: ' + detalle + '. Todavía quedan '
+                + plural(pendientes, 'elemento pendiente', 'elementos pendientes') + '.';
+        }
+
+        return 'Sincronización finalizada: ' + (detalle || 'sin cambios') + '.';
     }
 
     function nivelAlerta(resumen) {
@@ -468,7 +522,7 @@
             return 'alert-info';
         }
 
-        if (resumen.authRequerida || resumen.prohibido || resumen.error) {
+        if (resumen.authRequerida || resumen.prohibido || resumen.csrfInvalido || resumen.error) {
             return 'alert-danger';
         }
 
@@ -476,6 +530,19 @@
         var fotos = resumen.fotografias || {};
 
         if ((insp.rechazadas || 0) > 0 || (insp.errores || 0) > 0 || (fotos.errores || 0) > 0) {
+            return 'alert-warning';
+        }
+
+        var procesados = elementosProcesados(resumen);
+        var pendientes = pendientesTotales(resumen);
+
+        /* Sin elementos procesados y con cola todavía vigente, el ciclo no fue
+           exitoso aunque no haya errores: queda pendiente de resolver. */
+        if (procesados === 0 && (pendientes === null || pendientes > 0)) {
+            return 'alert-warning';
+        }
+
+        if (pendientes !== null && pendientes > 0) {
             return 'alert-warning';
         }
 

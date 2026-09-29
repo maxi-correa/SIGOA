@@ -147,6 +147,16 @@
     }
 
     function obtenerTokenCsrf() {
+        var meta = null;
+
+        if (typeof document !== 'undefined' && typeof document.querySelector === 'function') {
+            meta = document.querySelector('meta[name="X-CSRF-TOKEN"]');
+        }
+
+        if (meta && meta.getAttribute('content')) {
+            return meta.getAttribute('content');
+        }
+
         var prefijo = 'csrf_cookie_name=';
         var cookies = document.cookie.split(';');
 
@@ -373,17 +383,22 @@
     }
 
     /**
-     * Devuelve una operación a `PENDIENTE` sin consumir otro intento.
+     * Devuelve una operación a `PENDIENTE` sin consumir el intento.
      *
-     * Se usa ante 401: la sesión expiró, no la operación. El reintento se
-     *rograma con el backoff ya consumido, de modo que no se castiga al
-     * dispositivo con un ciclo infinito de requests sin sesión.
+     * Se usa ante 401 y ante 403 por token de seguridad inválido: la
+     * petición no llegó a la lógica de negocio, así que el fallo es de la
+     * sesión, no de la operación. El intento ya registrado se devuelve para
+     * que un token vencido no agote la cola ni castigue al dispositivo con
+     * un ciclo infinito de peticiones rechazadas.
      */
     function marcarOperacionPausada(operacion, mensaje) {
         var copia = Object.assign({}, operacion);
+        var intentos = Number(operacion.intentos) || 0;
 
-        copia.estado = OP_PENDIENTE;
-        copia.error  = mensaje || null;
+        copia.estado          = OP_PENDIENTE;
+        copia.error           = mensaje || null;
+        copia.intentos        = intentos > 0 ? intentos - 1 : 0;
+        copia.ultimo_intento  = copia.intentos > 0 ? copia.ultimo_intento : null;
 
         return guardarOperacion(copia);
     }
@@ -697,6 +712,16 @@
         });
     }
 
+    function leerError(resp) {
+        if (!resp || typeof resp.json !== 'function') {
+            return Promise.resolve(null);
+        }
+
+        return resp.json().catch(function () {
+            return null;
+        });
+    }
+
     function mensajeDeError(data, status) {
         if (data && data.details && data.details.mensaje) {
             return data.details.mensaje;
@@ -801,9 +826,19 @@
                             }
 
                             if (resp.status === 403) {
-                                return pausarTodas(marcadas, 'Sin permisos para sincronizar.')
-                                    .then(function () {
-                                        return { prohibido: true };
+                                return leerError(resp)
+                                    .then(function (data) {
+                                        if (data && data.error === 'CSRF_INVALID') {
+                                            return pausarTodas(marcadas, 'El token de seguridad venció. Se reanudará al recargar la página.')
+                                                .then(function () {
+                                                    return { csrfInvalido: true };
+                                                });
+                                        }
+
+                                        return pausarTodas(marcadas, 'Sin permisos para sincronizar.')
+                                            .then(function () {
+                                                return { prohibido: true };
+                                            });
                                     });
                             }
 
@@ -1012,9 +1047,19 @@
                         }
 
                         if (resp.status === 403) {
-                            return pausarTodas([actual], 'Sin permisos para sincronizar.')
-                                .then(function () {
-                                    return { prohibido: true };
+                            return leerError(resp)
+                                .then(function (data) {
+                                    if (data && data.error === 'CSRF_INVALID') {
+                                        return pausarTodas([actual], 'El token de seguridad venció. Se reanudará al recargar la página.')
+                                            .then(function () {
+                                                return { csrfInvalido: true };
+                                            });
+                                    }
+
+                                    return pausarTodas([actual], 'Sin permisos para sincronizar.')
+                                        .then(function () {
+                                            return { prohibido: true };
+                                        });
                                 });
                         }
 
@@ -1108,7 +1153,8 @@
             errores: 0,
             bloqueadas: seleccion.bloqueadas.length,
             authRequerida: false,
-            prohibido: false
+            prohibido: false,
+            csrfInvalido: false
         };
         var detener = false;
 
@@ -1133,6 +1179,12 @@
 
                     if (parcial.prohibido) {
                         resumen.prohibido = true;
+                        detener = true;
+                        return;
+                    }
+
+                    if (parcial.csrfInvalido) {
+                        resumen.csrfInvalido = true;
                         detener = true;
                         return;
                     }
@@ -1221,13 +1273,18 @@
                             return resumen;
                         }
 
+                        if (resultado.csrfInvalido) {
+                            resumen.csrfInvalido = true;
+                            return resumen;
+                        }
+
                         resumen.inspecciones = resultado.resumen;
 
                         return resumen;
                     });
             })
             .then(function () {
-                if (resumen.authRequerida || resumen.prohibido || soloInspecciones) {
+                if (resumen.authRequerida || resumen.prohibido || resumen.csrfInvalido || soloInspecciones) {
                     return resumen;
                 }
 
@@ -1247,6 +1304,7 @@
                                 resumen.fotografias = parcial;
                                 resumen.authRequerida = parcial.authRequerida;
                                 resumen.prohibido = parcial.prohibido;
+                                resumen.csrfInvalido = parcial.csrfInvalido;
 
                                 if (parcial.sincronizadas > 0
                                     || parcial.errores > 0
@@ -1343,7 +1401,7 @@
             var restante = esperaRestante(operacion, momento);
 
             if (restante <= 0) {
-                restante = 0;
+                return;
             }
 
             if (espera === null || restante < espera) {

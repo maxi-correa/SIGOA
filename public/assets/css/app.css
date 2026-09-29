@@ -86,6 +86,13 @@ html {
     -moz-osx-font-smoothing: grayscale;
 }
 
+/* El atributo `hidden` es funcional: ningún componente puede dejarlo de
+   cumplirse con un `display` propio (`.alert`, `.nin-card`, `.field-error`…),
+   porque una regla de autor siempre gana a la del navegador. */
+[hidden] {
+    display: none !important;
+}
+
 body {
     font-family: var(--font-family);
     font-size: var(--font-size-base);

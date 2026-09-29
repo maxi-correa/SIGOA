@@ -23,8 +23,8 @@
 
 'use strict';
 
-var CACHE_VERSION = 'sigoa-shell-v3';
-var SHELL_CACHE = 'sigoa-shell-v3';
+var CACHE_VERSION = 'sigoa-shell-v5';
+var SHELL_CACHE = 'sigoa-shell-v5';
 
 var PREFIJO_ESTATICO = '/assets/';
 

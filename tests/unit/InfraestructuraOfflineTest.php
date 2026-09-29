@@ -63,7 +63,7 @@ final class InfraestructuraOfflineTest extends CIUnitTestCase
         $this->assertMatchesRegularExpression('/addEventListener\(\s*[\'"]install[\'"]/', $sw);
         $this->assertMatchesRegularExpression('/addEventListener\(\s*[\'"]activate[\'"]/', $sw);
         $this->assertMatchesRegularExpression('/addEventListener\(\s*[\'"]fetch[\'"]/', $sw);
-        $this->assertStringContainsString('sigoa-shell-v3', $sw);
+        $this->assertStringContainsString('sigoa-shell-v5', $sw);
     }
 
     public function testServiceWorkerNoUsaBackgroundSync(): void
@@ -163,5 +163,23 @@ final class InfraestructuraOfflineTest extends CIUnitTestCase
         $this->assertStringContainsString('theme-color', $layout);
         $this->assertStringContainsString('assets/js/app.js', $layout);
         $this->assertStringContainsString('sigaConnectividad', $layout);
+    }
+
+    public function testLayoutAutenticadoExponeTokenCsrfVigente(): void
+    {
+        $layout = file_get_contents(APPPATH . 'Views/layouts/auth.php');
+        $js     = $this->leerPublic('assets/js/components/sincronizacion.js');
+
+        $this->assertNotFalse($layout);
+        $this->assertStringContainsString(
+            'csrf_meta()',
+            $layout,
+            'El layout autenticado debe emitir el token CSRF para que la cola disponga siempre de uno vigente.'
+        );
+        $this->assertStringContainsString(
+            "meta[name=\"X-CSRF-TOKEN\"]",
+            $js,
+            'El cliente debe leer el token del meta emitted por el layout antes de recurrir a la cookie.'
+        );
     }
 }

@@ -253,7 +253,41 @@ final class SincronizacionEstructuraTest extends CIUnitTestCase
     {
         $sw = $this->leerPublic('sw.js');
 
-        $this->assertStringContainsString("'sigoa-shell-v3'", $sw);
+        $this->assertStringContainsString("'sigoa-shell-v5'", $sw);
         $this->assertStringContainsString("'/assets/js/components/sincronizacion.js'", $sw);
+    }
+
+    public function testAtributoHiddenGanaAMostrarDisplayDeLosComponentes(): void
+    {
+        $app = $this->leerPublic('assets/css/app.css');
+
+        $this->assertMatchesRegularExpression(
+            '/\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/',
+            $app,
+            'El atributo `hidden` debe imponerse: `.alert`, `.nin-card` y `.field-error` declaran `display` propio y, sin esta regla, el navegador los muestra.'
+        );
+    }
+
+    public function testPaginaObraDistingueSincronizacionSinAvancesDeLaExitosa(): void
+    {
+        $pagina = $this->leerPublic('assets/js/pages/obra-inspecciones.js');
+
+        $this->assertStringContainsString('Sincronización sin avances', $pagina);
+        $this->assertStringContainsString('Sincronización parcial', $pagina);
+        $this->assertStringContainsString('Sincronización finalizada', $pagina);
+        $this->assertStringContainsString('pendientesTotales', $pagina);
+        $this->assertStringContainsString('elementosProcesados', $pagina);
+    }
+
+    public function testEtiquetasDeEstadoNoObliganADesbordarEnMovil(): void
+    {
+        $css = $this->leerPublic('assets/css/pages/inspector-obra.css');
+
+        $this->assertMatchesRegularExpression(
+            '/@media[^{]*max-width:\s*580px[^{]*\{(?:[^{}]|\{[^{}]*\})*?\.io-badge\s*\{[^}]*white-space:\s*normal;/s',
+            $css,
+            'En pantallas angostas las etiquetas de estado deben poder partirse: en una sola línea desbordan la tarjeta y obligan a scroll horizontal.'
+        );
+        $this->assertStringContainsString('min-width: 0', $css);
     }
 }

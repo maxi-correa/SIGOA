@@ -1108,9 +1108,19 @@ Esto es consistente con el patrón existente del proyecto, donde `created_at` y 
 
 ## 45.8 CSRF
 
-Protección CSRF está **desactivada** globalmente en el proyecto actual (`Config\Filters::$globals['before']` tiene CSRF comentado). Todos los formularios existentes (login, etc.) operan sin token CSRF. El módulo Mis Datos mantiene esta coherencia.
+> **Actualizado en la Fase B (§52.22):** la protección CSRF está **activada globalmente**
+> (`Config\Filters::$globals['before']` incluye el alias `csrf`, hoy `App\Filters\CsrfApi`) y
+> `Config\Security` usa protección por cookie con `regenerate = true`. Los formularios HTML
+> incluyen `csrf_field()` y el JavaScript envía la cabecera `X-CSRF-TOKEN`. El texto original de
+> esta sección describía el estado previo a la Fase B y se conserva corregido más abajo.
 
-La protección CSRF está documentada como pendiente en SIGOA.md §32. Habilitarla es una decisión global que debe implementarse de forma transversal y afecta todos los formularios del sistema. La activación global y el manejo con la sincronización offline están especificados en §52.7.
+Protección CSRF **antes de la Fase B**: estaba desactivada globalmente en el proyecto
+(`Config\Filters::$globals['before']` tenía CSRF comentado). Todos los formularios existentes
+(login, etc.) operaban sin token CSRF. El módulo Mis Datos mantenía esa coherencia.
+
+La protección CSRF estaba documentada como pendiente en SIGOA.md §32. Habilitarla fue una
+decisión global implementada de forma transversal; afecta a todos los formularios del sistema. La
+activación global y el manejo con la sincronización offline están especificados en §52.7.
 
 ## 45.9 Regla de verificación previa a cambio de contraseña
 
@@ -1783,6 +1793,7 @@ Decisiones cerradas en esta fase: HTTPS, UUID, CSRF, sesión, múltiples inspecc
   3. el usuario se autentica;
   4. la cola de sincronización continúa.
 * Nunca se eliminan ni se marcan como sincronizados datos locales motivado por un 401.
+* Un rechazo por sesión o por token de seguridad (401 o 403 `CSRF_INVALID`/`FORBIDDEN`) **no consume intentos**: la operación vuelve a `PENDIENTE` con el contador devuelto a su valor anterior. Así la cola no se agota ni queda congelada mientras el inspector no vuelve a autenticarse o a recargar la página.
 * **No se almacenan contraseñas, cookies ni credenciales en IndexedDB.** Solo se almacena un perfil mínimo (nombre, apellido, nombre de usuario) para la interfaz.
 * Los endpoints de sincronización responden con `401` explícito (JSON) cuando la sesión expiró — patrón de `MisDatos::verifyPassword()` — y no con la redirección HTML de `AuthFilter`. Implementado en la Fase B: `AuthFilter`/`RoleFilter` responden `401`/`403` JSON ante peticiones AJAX/API (§52.22).
 
@@ -1791,7 +1802,11 @@ Decisiones cerradas en esta fase: HTTPS, UUID, CSRF, sesión, múltiples inspecc
 * El filtro CSRF está **activado globalmente desde la Fase B** (§52.22), antes de exponer las APIs de sincronización. Se apoya en la configuración de `Config\Security` (protección `cookie`, `tokenName = csrf_test_name`, `headerName = X-CSRF-TOKEN`). La activación es transversal y afecta todos los formularios del sistema (ver §32 y §45.8).
 * El manejo debe ser transparente para el usuario.
 * **No se almacenan tokens CSRF en la cola offline.**
-* Con la rotación activa (`Security::$regenerate = true`, mantenido salvo incompatibilidad demostrada), al **comenzar cada sincronización se obtiene automáticamente un token vigente**: petición previa (GET) que renueva la cookie CSRF, lectura de la cookie `csrf_cookie_name` (legible por JS) y envío como header `X-CSRF-TOKEN` en cada `fetch()`.
+* Con la rotación activa (`Security::$regenerate = true`, mantenido salvo incompatibilidad demostrada), al **comenzar cada sincronización se dispone automáticamente de un token vigente**, sin petición previa ni almacenamiento persistente:
+  1. el layout autenticado (`app/Views/layouts/auth.php`) emite el token con `<?= csrf_meta() ?>` en cada carga de página, lo que **renueva la cookie CSRF cuando esta venció** (`Config\Security::$expires = 7200`);
+  2. `public/assets/js/components/sincronizacion.js` lee ese `<meta name="X-CSRF-TOKEN">` y lo envía como cabecera `X-CSRF-TOKEN` en cada `fetch()`; la cookie `csrf_cookie_name` queda como respaldo.
+* Un token vencido o ausente en una petición de la API no produce un error 500: `App\Filters\CsrfApi` (alias global `csrf`, sustituye a `CodeIgniter\Filters\CSRF`) responde **403 JSON `{"ok": false, "error": "CSRF_INVALID"}`**. Las peticiones HTML conservan el comportamiento del filtro original (redirección con mensaje en producción).
+* El cliente trata `CSRF_INVALID` como un rechazo de sesión, no como un fallo de la operación: **no consume intentos**, vuelve la operación a `PENDIENTE` y pide recargar la página (que renueva el token). Los formularios HTML siguen lanzando `SecurityException` como hasta ahora (§52.22).
 * `tokenRandomize = false`: el token coincide con el hash de la cookie.
 * Los endpoints de sincronización combinan: autenticación, rol/autorización, validación de vigencia histórica (§52.4) y CSRF.
 * Las APIs devuelven `401` explícito ante sesión expirada (§52.6).
@@ -2044,7 +2059,8 @@ Decisiones pendientes (solo las realmente abiertas):
 * `Config\Cookie::$httponly = false`: la cookie CSRF es legible por JavaScript (esquema double-submit). La cookie de sesión `ci_session` **sigue siendo HttpOnly** porque el framework PHP la fuerza en `Session` independientemente de `Config\Cookie`.
 * Formularios HTML tipo POST (12 formularios): incluyen `<?= csrf_field() ?>` (helper global de CI4): login, mis-datos (email y contraseña), empresas (alta/edición, subir logo, eliminar logo), representantes (alta/edición, cambio de estado), obras (alta, ficha, cambio de inspector vigente, cambio de representante vigente).
 * JavaScript (único `fetch()` del sistema, `mis-datos.js`): lee la cookie `csrf_cookie_name` en cada envío y la envía como header `X-CSRF-TOKEN` (además de `X-Requested-With: XMLHttpRequest`). Como `regenerate = true` rota el token en cada petición, leer la cookie en cada `fetch()` garantiza tokens vigentes incluso ante reintentos.
-* Comportamiento ante rechazo CSRF (framework): en producción y petición no-AJAX → redirección hacia atrás con mensaje de error; en desarrollo/pruebas y en peticiones AJAX → `SecurityException` (respuesta de error del servidor). Las futuras APIs de sincronización deben enviar siempre un token vigente; un token inválido rechaza la petición.
+* Comportamiento ante rechazo CSRF: en producción y petición no-AJAX → redirección hacia atrás con mensaje de error; en peticiones AJAX/API → `SecurityException` (respuesta de error del servidor). Las APIs de sincronización deben enviar siempre un token vigente; un token inválido rechaza la petición.
+* **Ajuste Fase D.5:** el alias global `csrf` apunta a `App\Filters\CsrfApi`, que extiende el filtro del framework y solo cambia el resultado de las peticiones AJAX/API: en lugar de dejar propagating `SecurityException` (que el manejador de excepciones convertía en **500**, indistinguible de una caída del servidor y tratada por el cliente como fallo transitorio) responde **403 JSON `CSRF_INVALID`**. Las peticiones HTML mantienen exactamente el comportamiento anterior. El token vigente lo aporta el layout autenticado con `csrf_meta()` (§52.7).
 
 ### Seguridad base para APIs (implementado)
 
@@ -2491,6 +2507,10 @@ Body (JSON, CSRF por cabecera `X-CSRF-TOKEN` y detección AJAX/`Accept: applicat
 
 **401 / 403** — sesión inválida / rol insuficiente (JSON de `AuthFilter`/`RoleFilter`).
 
+**403 `CSRF_INVALID`** — token CSRF ausente o vencido en una petición API (JSON de
+`App\Filters\CsrfApi`, §52.7). El cliente lo trata como rechazo de sesión: no consume
+intentos, no toca entidades y pide recargar la página.
+
 ### Resultados por ítem
 
 | `estado` | `error` | Significado |
@@ -2640,7 +2660,7 @@ application/json`):
 | `archivo` | sí | JPEG, PNG o WebP, máximo `8388608` bytes |
 | `fecha_hora_captura` | no | `YYYY-MM-DD HH:MM:SS` o ISO 8601 |
 | `latitud` / `longitud` | no | decimal, `-90..90` / `-180..180` |
-| `dispositivo` | no | etiqueta de equipo, hasta 120 caracteres |
+| `dispositivo` | no | etiqueta de equipo, hasta 255 caracteres (`VARCHAR(255)`, se recorta con `mb_substr`) |
 
 * El tamaño es el de `$_FILES['archivo']['size']`; el MIME se valida con `finfo` **y** se
   decodifica la imagen para obtener dimensiones reales.
@@ -2732,8 +2752,13 @@ OBR-XXXXXX/YYYY-MM-DD/{uuid-inspeccion}/THUMBNAILS/THB-XXXXX-{Ymd-His}-{random6}
   y tiene `servidor_id`; si no, queda **bloqueada** sin consumir intentos ni pasar a `ERROR`.
 * **Liberación de blobs:** `blob` y `thumbnail` se ponen a `null` en la **misma** escritura
   que marca la fotografía `SINCRONIZADA`, y solo después de la confirmación del servidor.
-* **401/403:** las operaciones vuelven a `PENDIENTE` sin tocar ninguna entidad, respetando el
-  backoff ya consumido.
+* **401/403 (incluido `CSRF_INVALID`):** las operaciones vuelven a `PENDIENTE` sin tocar
+  ninguna entidad y **sin consumir el intento**: el contador se devuelve a su valor anterior
+  y `ultimo_intento` se limpia cuando queda en cero. Un rechazo por sesión no puede agotar la
+  cola ni dejarla congelada; el siguiente disparo (reautenticación, recarga, `online`,
+  `visibilitychange`) reintenta sin costo. El temporizador diferido solo se programa para
+  operaciones que realmente tienen que esperar su backoff, de modo que una operación pausada no
+  cancela la planificación de las demás.
 * **Reintento manual:** `reintentar(tipo, uuid)` reinicia `intentos`/`ultimo_intento`/`error`
   y devuelve la entidad a `PENDIENTE_SYNC`, sin reconstruirla ni borrarla.
 * **Disparadores:** apertura de la aplicación autenticada, evento `online`, retorno al primer
@@ -2764,9 +2789,9 @@ dependenciaUuid?)`, `obtenerOperaciones()`, `buscarOperacion(operaciones, tipo, 
 
 ## 56.8 Service Worker y app shell
 
-`public/sw.js` permanece en `sigao-shell-v3`: ya precacheaba
-`/assets/js/components/sincronizacion.js`, así que no se requirió bump de versión. No se
-cachean páginas autenticadas ni respuestas con cookie de sesión (§53.3).
+`public/sw.js` precachea `/assets/js/components/sincronizacion.js`. La Fase D.5 modificó ese
+componente y `obra-inspecciones.js`, por lo que el app shell pasó a `sigoa-shell-v4` (§57). No
+se cachean páginas autenticadas ni respuestas con cookie de sesión (§53.3).
 
 `app.js` encadena la inicialización: conectividad → base local → cola, para no abrir la base
 dos veces al arrancar.
@@ -2813,5 +2838,223 @@ Notas de scope:
 * La suite se corre con conexión `tests` (SQLite en memoria compartida): el esquema de
   `fotografias` y `operaciones_sincronizacion` para tests se declara con
   `CREATE TABLE IF NOT EXISTS`, coherente con las migraciones de producción.
+
+---
+
+## 57. Fase D.5 implementada — auditoría y endurecimiento del flujo offline
+
+Auditoría técnica del flujo completo **inspección → fotografía → cola → sincronización →
+almacenamiento físico**, sin agregar funcionalidades. Resultado: dos defectos **CRÍTICOS**,
+tres **MENORES** y una discrepancia de documentación, todos corregidos o documentados. Sin
+migraciones: el esquema de `app/Database/Migrations` no se modificó.
+
+## 57.1 Defectos críticos corregidos
+
+### 57.1.1 Token CSRF vencido producía 500 y congelaba la cola
+
+* **Problema:** el layout autenticado no emitía ningún token CSRF y ninguna vista de inspector
+  usaba `csrf_field()`. Con `Config\Security::$expires = 7200` y `csrfProtection = cookie`, la
+  cookie de token vencía aunque la sesión siguiera viva (la cookie de sesión se renueva en cada
+  petición, la de CSRF no). Al vencerse, el filtro CSRF global —que se ejecuta **antes** del
+  filtro `auth` de ruta— lanzaba `SecurityException`, que el manejador de excepciones convertía
+  en **HTTP 500** por no ser `HTTPExceptionInterface`. El cliente trata 500 como fallo
+  transitorio: consumía los 6 intentos y dejaba la operación en `ERROR`.
+* **Agravante:** `marcarOperacionPausada()` devolvía la operación a `PENDIENTE` **conservando**
+  el intento ya registrado. Con la sesión vencida, cada disparo (pestaña en primer plano,
+  `online`, temporizador) repetía el ciclo: tras 6 rechazos la operación quedaba en `PENDIENTE`
+  con `intentos = 6`, es decir **congelada**: `puedeReintentar()` es falso, no se programa
+  temporizador, el botón de reintento solo aparece en `ERROR` y reautenticarse no la revive.
+* **Solución:** el layout autenticado emite `<?= csrf_meta() ?>`, que renueva la cookie cuando
+  venció y expone el token en `<meta name="X-CSRF-TOKEN">`; `sincronizacion.js` lo prefiere
+  sobre la cookie. `App\Filters\CsrfApi` responde **403 JSON `CSRF_INVALID`** en peticiones
+  AJAX/API en lugar de un 500, y el cliente trata 401/403 como rechazo de sesión **sin consumir
+  intentos** (§52.6, §52.7, §56.6). El temporizador diferido pasó a programarse solo para
+  operaciones con espera real, para que una operación pausada no cancele la planificación de
+  las demás.
+
+### 57.1.2 Fuga de Object URLs en la lista de inspecciones locales
+
+* **Problema:** `obra-inspecciones.js` creaba una Object URL por miniatura en cada
+  `renderInspecciones()` y nunca la revocaba. La función se vuelve a ejecutar tras cada ciclo de
+  sincronización y cada reintento, con lo que las miniaturas se acumulaban en memoria durante
+  toda la sesión de la página.
+* **Solución:** se registran las URLs creadas y se revocan antes de cada re-renderizado.
+
+## 57.2 Hallazgos menores
+
+* `inspeccion-nueva.js` conserva la Object URL de cada miniatura durante la vida de la página
+  (la lista solo crece, no se re-renderiza). Revisar solo las fotografías ya liberadas; queda
+  acotado a la sesión de la página.
+* Editar una inspección ya `SINCRONIZADA` desde el dispositivo actualiza el registro local pero
+  **no** reencola nada: el servidor no expone operaciones de actualización (§56.9). La pérdida
+  es silenciosa y queda documentada como limitación conocida, no corregida: resolverla exigiría
+  un endpoint de actualización, es decir funcionalidad nueva.
+* `FotografiaArchivo` escribe con `fopen`/`stream_copy_to_stream` en lugar de
+  `is_uploaded_file`/`move_uploaded_file`. La validación de tamaño, MIME real y decodificación ya
+  cubre el riesgo real; no se modifica en D.5.
+
+## 57.3 Discrepancias de documentación corregidas
+
+* §52.7 describía una "petición previa (GET) que renueva la cookie CSRF" que nunca existió. La
+  solución real (token emitido por el layout) está ahora documentada.
+* §56.2 declaraba `dispositivo` con 120 caracteres; la columna es `VARCHAR(255)` y el servidor
+  recorta con `mb_substr(…, 0, 255)`.
+* §52.22 describía el rechazo CSRF en AJAX como `SecurityException`; ahora documenta el 403
+  `CSRF_INVALID` de `CsrfApi`.
+* §56.6 describía que ante 401/403 se respetaba "el backoff ya consumido"; el comportamiento
+  correcto (no consumir intentos) queda documentado.
+
+## 57.4 Pruebas
+
+Suite completa en verde: **188 tests / 621 assertions** (incremento **+3 tests / +14 assertions**
+sobre el cierre de D.4) y **89 aserciones JS** (antes 77).
+
+* `tests/database/SincronizarInspeccionesTest.php`,
+  `tests/database/SincronizarFotografiasTest.php` — el rechazo CSRF en petición API pasa a
+  verificarse como **403 JSON `CSRF_INVALID`** (antes `expectException`), y se agrega el caso de
+  **token vencido** (`X-CSRF-TOKEN: token-vencido`), que es el escenario real de producción.
+* `tests/js/sincronizacion.test.js` — 401 **no consume intentos**; la cola **no se congela** tras
+  siete ciclos consecutivos sin sesión; 403 `CSRF_INVALID` pausa sin tocar entidades; el token de
+  la cabecera `X-CSRF-TOKEN` se toma del `<meta>` y no de la cookie.
+* `tests/unit/InfraestructuraOfflineTest.php` — el layout autenticado emite `csrf_meta()` y el
+  componente lo lee; versión del app shell actualizada a `sigoa-shell-v4`.
+* `tests/unit/SincronizacionEstructuraTest.php` — versión del app shell actualizada.
+
+## 57.5 Fuera de D.5
+
+* Sin cambios de esquema ni migraciones.
+* Sin refactorización de `FotografiaArchivo`, del almacenamiento físico ni de los endpoints.
+* Sin semaphore/lock de sincronización entre pestañas: la doble pestaña es idempotente en el
+  servidor por `uuid` y se autcorrige en el reintento; queda como mejora futura.
+* Sin soporte de edición de inspecciones sincronizadas (ver 57.2).
+
+---
+
+## 58. Fase D.6.1 implementada — sincronización real y defectos de interfaz
+
+D.6 detectó que la cola del dispositivo fallaba siempre contra el servidor y que la interfaz
+informaba el resultado de forma incorrecta. D.6.1 aplica las migraciones pendientes, verifica la
+sincronización contra el motor real y corrige los tres defectos de interfaz observados. No se
+agrega funcionalidad: no hay migraciones nuevas, ni endpoints, ni estados nuevos.
+
+## 58.1 Causa raíz: las migraciones de D.3/D.4 nunca se habían aplicado
+
+* **Síntoma observado:** diez peticiones `POST /inspector/sincronizar/inspecciones` con HTTP 500
+  y `Unknown column 'uuid' in 'where clause'`. El error se producia en
+  `InspeccionModel::findByUuid()`, es decir **antes de cualquier `insert`**: ninguna inspección
+  llegó a escribirse y el endpoint de fotografías nunca fue invocado, porque el componente ordena
+  el ciclo inspecciones → fotografías y aborta en la primera fase.
+* **Motivo:** `migrate:status` mostraba exactamente tres migraciones sin aplicar —
+  `AddUuidToInspecciones`, `AddUuidToFotografias` y `DropUniqueObraFechaInspeccion`. Los tests
+  no lo detectaban porque construyen su propio esquema SQLite (§58.3).
+* **Resolución:** `php spark migrate` (batch 23). No se modificó ninguna migración existente ni
+  se ejecutó `fresh`, `refresh` o `rollback`.
+* **Esquema resultante:** `inspecciones.uuid` y `fotografias.uuid` como `CHAR(36) NOT NULL` con
+  índice único (`uq_inspecciones_uuid`, `uq_fotografias_uuid`); el índice único
+  `obra_id_fecha_inspeccion` eliminado, de modo que una obra admite varias inspecciones el mismo
+  día. Se conservaron los índices simples de `obra_id` e `inspector_id` y las claves foráneas.
+* **Confirmación en producción:** la inspección `e4cba23b-…`, que llevaba horas fallando, se
+  sincronizó 31 segundos después de aplicar la migración (16:29:23) y quedó registrada en
+  `operaciones_sincronizacion` como `PROCESADA`. El log no registra ningún error posterior a las
+  16:28:23.
+
+## 58.2 El falso verde de la suite
+
+`tests/database` construye su propio esquema SQLite en memoria, incluidas las columnas `uuid` y
+el índice único que D.3 creó por migración. La suite podía estar completa en verde mientras la
+base real no tenía nada de eso: la divergencia SQLite/real era invisible para los tests.
+
+* `tests/database/EsquemaBaseAplicacionTest.php` (nuevo): **solo lectura** sobre la base
+  configurada para la aplicación. Verifica que no quede ninguna migración de
+  `app/Database/Migrations` pendiente, que `uuid` exista, no admita nulos, sea `CHAR(36)` y esté en
+  un índice único en ambas tablas, y que el índice `obra_id_fecha_inspeccion` no exista. Con el
+  esquema en el estado de D.6, el test falla.
+* `tests/database/SincronizarMysqlRealTest.php` (nuevo): crea una base **descartable**
+  (`sigoa_d61_descartable`) en el mismo servidor MySQL de la aplicación, ejecuta las
+  **migraciones reales** sobre ella y ejercita los endpoints D.3/D.4 de punta a punta: alta de
+  inspección con `uuid` persistido y trazabilidad en `operaciones_sincronizacion`, reenvío
+  idempotente, dos inspecciones distintas de la misma obra y fecha, alta de fotografía con
+  escritura física de imagen y thumbnail en `OBR-XXXXXX/AAAA-MM-DD/UUID/{IMAGENES,THUMBNAILS}` y
+  reenvío que no duplica ni reescribe. La base real de la aplicación no se toca y la base
+  descartable se elimina al terminar.
+* Ambos tests llevan el grupo `mysql-real` y se omiten si el entorno no ofrece MySQL/MariaDB con
+  permisos para crear bases. Para una vuelta rápida: `phpunit --exclude-group mysql-real`.
+
+## 58.3 El atributo `hidden` no ocultaba nada
+
+Varios elementos marcados con `hidden` en `inspector/inspeccion_nueva.php` se veían siempre, y en
+la página de la obra la rejilla de fotografías colapsada (`display: grid`) permanecía visible.
+La causa es la cascada: la regla del navegador `[hidden] { display: none }` es de origen *user
+agent*, y cualquier `display` de autor la gana aunque tenga la misma especificidad. `.alert`
+(`display: flex`), `.field-error` (`display: block`), `.nin-card`, `.nin-procesando`, `.nin-pie` y
+`.io-locales-fotos` la anulaban.
+
+* **Solución:** una única regla global en `app.css`, en la sección de reset,
+  `[hidden] { display: none !important; }`. Es la única forma de que el atributo vuelva a ser
+  funcional frente a reglas de autor, y evita tener que repetir `[hidden]` en cada componente.
+* Verificado con un banco de medición en Chrome sin servidor: a 412 px los seis elementos
+  ocultos del caso de D.6 pasaron de `display: flex|block|grid` con altura real a `display: none`
+  y altura 0.
+
+## 58.4 La interfaz informaba un éxito inexistente
+
+`nivelAlerta()` solo resignaba el aviso a verde cuando no había rechazos ni errores, de modo que
+el caso real de D.6 —ciclo sin ningún elemento procesado y con cinco operaciones todavía en
+cola— se mostraba como "Sincronización finalizada". Es el peor caso posible: un aviso verde
+invita a dejar de intentar.
+
+* **Solución:** `obra-inspecciones.js` distingue los cuatro desenlaces usando el recuento de la
+  cola (`resumen.pendientes.total`) y los elementos procesados en el ciclo
+  (`sincronizadas` + `yaSincronizadas`):
+
+  | Desenlace | Condición | Aviso |
+  | --------- | --------- | ----- |
+  | Sin trabajo | `vacio` | `alert-info` |
+  | Completo | procesados > 0 y cola vacía | `alert-success` — "Sincronización finalizada" |
+  | Parcial | procesados > 0 y cola con pendientes | `alert-warning` — "Sincronización parcial" |
+  | Sin avances | procesados = 0 y cola con pendientes | `alert-warning` — "Sincronización sin avances" |
+
+  Rechazos y errores por ítem siguen siendo `alert-warning`; los fallos de sesión, CSRF, permiso
+  o red siguen siendo `alert-danger`.
+
+## 58.5 Desbordamiento horizontal de las etiquetas de estado
+
+Con las etiquetas en una sola línea (`white-space: nowrap`), una etiqueta ancha como "Reintento
+manual requerido" escapaba de la tarjeta: a 412 px su borde derecho llegaba a 410 px mientras la
+tarjeta terminaba en 379 px. Con un viewport de 265 px la página pasaba de 265 a 341 px de ancho
+(scroll horizontal) y la causa era exactamente la etiqueta.
+
+* **Solución (CSS, sin tocar la paleta ni la estructura):** `min-width: 0` en la lista, la
+  tarjeta de inspección, la rejilla de fotografías y cada foto; `overflow-wrap: anywhere` en el
+  pie de foto; `max-width: 100%` y `text-align: left` en los botones de fotografía y reintento; y
+  en el bloque `@media (max-width: 580px)` las etiquetas de estado pasan a `white-space: normal`.
+* Verificado a 265 px: `scrollWidth` igual al ancho del viewport, sin desbordamiento.
+
+## 58.6 Pruebas
+
+* Suite PHP completa en verde: **202 tests / 725 assertions** (antes de D.6.1: 188 / 621).
+  El incremento cubre la prueba real contra MySQL, el guardia de esquema de la base de la
+  aplicación y las aserciones estructurales nuevas.
+* Pruebas JS: **108 aserciones** (89 de `sincronizacion.test.js` + 19 del nuevo
+  `tests/js/obra-inspecciones.test.js`, que ejecuta la página en un entorno simulado y verifica
+  los cuatro desenlaces del aviso, incluida la regresión de "Sincronización sin avances").
+* Banco de medición de interfaz (fuera de la suite, en `C:\temp\sigoa-d61`): mismas hojas de
+  estilo y mismo marcado en Chrome sin servidor, comparando el estado anterior y el actual a
+  412 px, 360 px y 280 px de ancho.
+* Versión del app shell actualizada a `sigoa-shell-v5`: `app.css`, `inspector-obra.css` y
+  `obra-inspecciones.js` están en el precaché del service worker y sin el incremento de
+  `CACHE_VERSION` los dispositivos seguirían usando los recursos anteriores.
+
+## 58.7 Fuera de D.6.1
+
+* Sin migraciones nuevas ni modificación de migraciones existentes.
+* Sin endpoints, estados de cola, permisos ni mecanismos nuevos.
+* Sin reorganización de la pantalla "Nueva inspección" ni unificación de sus avisos con el de la
+  obra: se corrigió el atributo `hidden` y el aviso engañoso de la página de obra, que son los
+  defectos observados.
+* Sin Background Sync ni semáforo/lock entre pestañas (ya fuera de alcance en D.5).
+* La inspección `5bda4d36-…`, también fallida en D.6, no volvió a enviarse desde el dispositivo
+  después de la migración: su estado local no es observable desde el servidor y queda pendiente de
+  comprobación en el dispositivo.
 
 ---
