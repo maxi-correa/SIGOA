@@ -22,19 +22,19 @@ $puedeInspeccionar = (bool) ($puede_inspeccionar ?? false);
 
 <div class="io-page">
 
+    <!-- ============================================================
+         Orden de la pantalla (Fase D.6.2):
+         1. volver a "Mis obras";
+         2. detalles de la obra;
+         3. acción "Nueva inspección";
+         4. explicación asociada a esa acción;
+         5. inspecciones guardadas en este dispositivo.
+         ============================================================ -->
     <div class="io-barra-acciones">
         <a href="<?= site_url('/inspector/dashboard') ?>" class="btn btn-secondary io-btn-volver">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
             Mis obras
         </a>
-
-        <?php if ($puedeInspeccionar): ?>
-            <a href="<?= site_url('/inspector/inspecciones/nueva/' . (int) $obra->id) ?>"
-               class="btn btn-primary io-btn-nueva">
-                <i class="bi bi-plus-circle" aria-hidden="true"></i>
-                Nueva inspección
-            </a>
-        <?php endif; ?>
     </div>
 
     <?php if (session()->getFlashdata('warning')): ?>
@@ -93,21 +93,31 @@ $puedeInspeccionar = (bool) ($puede_inspeccionar ?? false);
     <?php if ($puedeInspeccionar): ?>
 
         <!-- ============================================================
-             Herramienta de inspección: nueva inspección local
+             Herramienta de inspección: la acción y su explicación
+             forman un único bloque, inmediatamente debajo de los
+             datos de la obra.
              ============================================================ -->
-        <section class="io-aviso">
-            <div class="io-aviso-icono" aria-hidden="true">
-                <i class="bi bi-camera"></i>
-            </div>
-            <div class="io-aviso-texto">
-                <h2 class="io-aviso-titulo">Nueva inspección</h2>
-                <p>
-                    Puede iniciar una inspección para esta obra. La inspección y las
-                    fotografías se guardan en este dispositivo y quedan pendientes de
-                    la futura sincronización con el servidor.
-                </p>
-            </div>
-        </section>
+        <div class="io-nueva">
+            <a href="<?= site_url('/inspector/inspecciones/nueva/' . (int) $obra->id) ?>"
+               class="btn btn-primary io-btn-nueva">
+                <i class="bi bi-plus-circle" aria-hidden="true"></i>
+                Nueva inspección
+            </a>
+
+            <section class="io-aviso">
+                <div class="io-aviso-icono" aria-hidden="true">
+                    <i class="bi bi-camera"></i>
+                </div>
+                <div class="io-aviso-texto">
+                    <h2 class="io-aviso-titulo">Nueva inspección</h2>
+                    <p>
+                        Puede iniciar una inspección para esta obra. La inspección y las
+                        fotografías se guardan en este dispositivo y quedan pendientes de
+                        la futura sincronización con el servidor.
+                    </p>
+                </div>
+            </section>
+        </div>
 
     <?php else: ?>
 

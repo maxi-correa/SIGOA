@@ -20,15 +20,23 @@
     width: auto;
 }
 
-/* --- Acción Nueva inspección --- */
-.io-btn-nueva {
-    margin-left: auto;
+/* --- Bloque "Nueva inspección": acción + su explicación (Fase D.6.2) ---
+   La acción principal se ubica inmediatamente antes de la explicación
+   que la acompaña, y ambas forman un solo bloque visual. */
+.io-nueva {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-md);
+    min-width: 0;
 }
 
-@media (max-width: 580px) {
-    .io-btn-nueva {
-        margin-left: 0;
-    }
+.io-nueva .io-aviso {
+    align-self: stretch;
+}
+
+.io-nueva .io-btn-nueva {
+    width: auto;
 }
 
 /* --- Encabezado de identificación --- */
@@ -403,6 +411,10 @@
     .io-aviso,
     .io-locales {
         padding: var(--space-md);
+    }
+
+    .io-nueva .btn {
+        width: 100%;
     }
 
     .io-nombre {

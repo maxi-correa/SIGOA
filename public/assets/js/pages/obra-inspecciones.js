@@ -98,7 +98,14 @@
     }
 
     /**
-     * Botón de reintento manual de una operación en `ERROR`.
+     * Botón de reintento manual de una operación que ningún disparador
+     * automático va a volver a intentar.
+     *
+     * Cubre los dos casos: el error permanente (`ERROR`) y el agotamiento de
+     * reintentos. Antes, una operación agotada que hubiera quedado
+     * `SINCRONIZANDO` —porque la aplicación se cerró a mitad del intento—
+     * no mostraba ninguna salida: quedaba con la etiqueta "En cola" para
+     * siempre.
      *
      * El reintento reinicia el contador de intentos y devuelve la entidad a
      * `PENDIENTE_SYNC`; no reconstruye ni borra la entidad.
@@ -204,7 +211,7 @@
             caja.appendChild(motivo);
         }
 
-        if (operacion && operacion.estado === 'ERROR') {
+        if (operacion && SINCRONIZACION.requiereReintentoManual(operacion)) {
             caja.appendChild(botonReintentar(SINCRONIZACION.TIPO_FOTOGRAFIA, fotografia.uuid));
         }
 
@@ -309,7 +316,7 @@
             item.appendChild(meta);
         }
 
-        if (operacion && operacion.estado === 'ERROR') {
+        if (operacion && SINCRONIZACION.requiereReintentoManual(operacion)) {
             item.appendChild(botonReintentar(SINCRONIZACION.TIPO_INSPECCION, inspeccion.uuid));
         }
 
@@ -476,6 +483,10 @@
         var insp = resumen.inspecciones || {};
         var fotos = resumen.fotografias || {};
 
+        if (resumen.revividas > 0) {
+            partes.push(plural(resumen.revividas, 'operación reactivada tras agotar sus reintentos', 'operaciones reactivadas tras agotar sus reintentos'));
+        }
+
         if (insp.sincronizadas > 0) {
             partes.push(plural(insp.sincronizadas, 'inspección sincronizada', 'inspecciones sincronizadas'));
         }
@@ -573,8 +584,11 @@
         btnSincronizar.setAttribute('disabled', 'disabled');
 
         /* El ciclo completo (inspecciones y después fotografías) porque la
-           página muestra ambos estados y ambos pueden estar en cola. */
-        SINCRONIZACION.sincronizarTodo({ obraId: obraId })
+           página muestra ambos estados y ambos pueden estar en cola.
+           `revivirAgotadas` es lo que hace que este botón sea también la
+           salida manual de una operación que agotó sus reintentos: sin esa
+           opción, la cola automática nunca la volvería a intentar. */
+        SINCRONIZACION.sincronizarTodo({ obraId: obraId, motivo: 'manual', revivirAgotadas: true })
             .then(function (resumen) {
                 mostrarAlerta(nivelAlerta(resumen), iconoAlerta(resumen), textoResumen(resumen));
 

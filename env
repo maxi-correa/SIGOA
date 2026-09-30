@@ -17,6 +17,44 @@
 # CI_ENVIRONMENT = production
 
 #--------------------------------------------------------------------
+# SIGOA STORAGE
+#--------------------------------------------------------------------
+
+# Raíz física donde SIGOA guarda los archivos compartidos. La base de datos
+# solo almacena referencias relativas a partir de aquí, así que cambiar la
+# raíz no obliga a migrar nada.
+#
+# En producción es el recurso compartido de red, escrito como ruta UNC. Una
+# letra de unidad (Z:\, Y:\) no sirve: es un alias que crea Windows en la
+# sesión del usuario interactivo, y Apache, que corre como la cuenta técnica
+# SIGOA_APACHE, no la ve. La ruta UNC es la misma para todos.
+#
+# Sustituye EQUIPO y RECURSO por los del despliegue. Usa comillas: un nombre
+# de recurso con espacios sin comillas hace fallar el arranque.
+#
+# La cuenta que accede al recurso ya está resuelta a nivel de sistema. No
+# agregues usuario ni contraseña SMB aquí: no pertenecen a SIGOA (ver §59.3
+# de docs/SIGOA.md).
+#
+# Con barras inversas hay que duplicarlas, porque el lector de CodeIgniter
+# las colapsa dentro de las comillas. Con barras normales no hay que duplicar
+# nada y es menos fácil de equivocarse. Las dos formas valen.
+#
+#   production = //EQUIPO/RECURSO/SIGOA
+#   production = '\\\\EQUIPO\\RECURSO\\SIGOA'
+#
+# SIGOA_STORAGE_COMPARTIDO = '//EQUIPO/RECURSO/SIGOA'
+
+# En desarrollo se puede marcar el despliegue con un booleano y dar la raíz
+# aparte. SIGOA_STORAGE_COMPARTIDO acepta las dos formas; si trae una ruta,
+# esa es la raíz y SIGOA_STORAGE_PATH se ignora.
+#
+# SIGOA_STORAGE_COMPARTIDO = 0
+# SIGOA_STORAGE_PATH       = C:\writable\sigoa
+
+# tests/unit/AlmacenamientoCompartidoTest verifica este contrato.
+
+#--------------------------------------------------------------------
 # APP
 #--------------------------------------------------------------------
 

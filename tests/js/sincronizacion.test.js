@@ -11,9 +11,14 @@
      * orden obligatorio inspecciones → fotografías;
      * fotografías bloqueadas mientras su padre no esté sincronizado;
      * liberación de blobs solo tras la confirmación del servidor;
-     * 401 no toca ninguna entidad;
-     * agotamiento de reintentos → ERROR;
-     * reintento manual.
+      * 401 no toca ninguna entidad;
+      * agotamiento de reintentos → ERROR;
+      * reintento manual;
+      * (D.6.2) una operación agotada sale de la cola automática y solo la
+      *   acción manual "Sincronizar" la revive, sin tocar los datos;
+      * (D.6.2) `ALREADY_SYNCED` como éxito lógico e idempotencia;
+      * (D.6.2) el diagnóstico de la cola es de solo lectura.
+
 
    Uso:  node tests/js/sincronizacion.test.js
    =================================================================== */
@@ -289,6 +294,15 @@ function sembrar(entorno, inspeccion, fotografias) {
     });
 
     return Promise.all(promesas);
+}
+
+/**
+ * Inserta una operación directamente en el store, con el estado exacto que
+ * se quiere reproducir. Se usa para los casos en los que la operación nunca
+ * se crearía sola (agotamiento, cierre a mitad de un intento).
+ */
+function sembrarOperacion(entorno, operacion) {
+    return entorno.almacen.guardar('operaciones', operacion);
 }
 
     function respuestaServidor(estado) {
@@ -923,6 +937,322 @@ function probarCodigosPermanentes() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Fase D.6.2 — una operación agotada se revive con "Sincronizar"       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Regresión del caso observado en la prueba manual: una operación con los
+ * `MAX_INTENTOS` consumidos queda fuera de `operacionesElegibles()`, y
+ * `programarDiferido()` no programa temporizador para ella, así que ningún
+ * disparador automático la vuelve a intentar.
+ *
+ * Se reproducen los dos estados en los que eso ocurre:
+ *   - `ERROR`: el ciclo falló y consumió el último intento;
+ *   - `SINCRONIZANDO` con los intentos agotados: la aplicación se cerró
+ *     (o la pestaña fue descartada) mientras el sexto intento estaba en
+ *     vuelo, y la etiqueta mostrada era "Sincronizando…".
+ */
+function sembrarColaAgotada(entorno) {
+    const s = entorno.sync;
+
+    return sembrar(entorno, crearInspeccion(), [crearFotografia()])
+        .then(function () {
+            return sembrarOperacion(entorno, {
+                id: 1,
+                tipo: 'INSPECCION',
+                entidad_uuid: UUID_INSP,
+                dependencia_uuid: null,
+                estado: 'SINCRONIZANDO',
+                intentos: s.MAX_INTENTOS,
+                ultimo_intento: '2026-03-15T10:00:00.000Z',
+                error: null,
+                created_at: '2026-03-15T09:00:00.000Z'
+            });
+        })
+        .then(function () {
+            return sembrarOperacion(entorno, {
+                id: 2,
+                tipo: 'FOTOGRAFIA',
+                entidad_uuid: UUID_FOTO,
+                dependencia_uuid: UUID_INSP,
+                estado: 'ERROR',
+                intentos: s.MAX_INTENTOS,
+                ultimo_intento: '2026-03-15T10:00:00.000Z',
+                error: 'No fue posible conectarse con el servidor.',
+                created_at: '2026-03-15T09:00:01.000Z'
+            });
+        });
+}
+
+function probarAgotadaNoSeReintentaSola() {
+    titulo('La cola automática no reintenta una operación agotada');
+
+    const entorno = crearEntorno({ fetch: respuestaServidor('ok') });
+    const s = entorno.sync;
+
+    return sembrarColaAgotada(entorno)
+        .then(function () {
+            /* Disparo automático: sin `revivirAgotadas`. */
+            return s.sincronizarTodo();
+        })
+        .then(function (resumen) {
+            igual(0, entorno.llamadas.length, 'Ningún disparador automático envía la operación agotada');
+
+            return entorno.almacen.obtenerTodos('operaciones');
+        })
+        .then(function (operaciones) {
+            const inspeccion = operaciones.filter(function (o) {
+                return o.tipo === 'INSPECCION';
+            })[0];
+
+            igual('SINCRONIZANDO', inspeccion.estado, 'La operación agotada conserva su estado');
+            igual(s.MAX_INTENTOS, inspeccion.intentos, 'El contador de intentos no se reinicia solo');
+            ok(!s.puedeReintentar(inspeccion), 'Una operación agotada no es elegible');
+            igual(0, s.esperaRestante(inspeccion), 'No hay espera que programar: quedaría congelada');
+        });
+}
+
+function probarSincronizarReviveAgotadas() {
+    titulo('"Sincronizar" revive la operación agotada y completa el ciclo');
+
+    const entorno = crearEntorno({ fetch: respuestaServidor('ok') });
+    const s = entorno.sync;
+
+    return sembrarColaAgotada(entorno)
+        .then(function () {
+            return s.sincronizarTodo({ obraId: 1, motivo: 'manual', revivirAgotadas: true });
+        })
+        .then(function (resumen) {
+            igual(2, resumen.revividas, 'Se reviven las dos operaciones agotadas');
+            igual(2, entorno.llamadas.length, 'La inspección se envía y después su fotografía');
+
+            return Promise.all([
+                entorno.almacen.obtener('inspecciones', UUID_INSP),
+                entorno.almacen.obtener('fotografias', UUID_FOTO),
+                entorno.almacen.obtenerTodos('operaciones')
+            ]);
+        })
+        .then(function (resultados) {
+            /* 1. La inspección se sincroniza. */
+            igual('SINCRONIZADA', resultados[0].estado_local, 'La inspección queda sincronizada');
+            igual(42, resultados[0].servidor_id, 'Se guarda el id del servidor');
+
+            /* 2. La fotografía dependiente puede continuar. */
+            igual('SINCRONIZADA', resultados[1].estado_local, 'La fotografía dependiente se sincroniza');
+            igual(99, resultados[1].servidor_id, 'La fotografía guarda su id de servidor');
+            igual(null, resultados[1].blob, 'El blob se libera tras la confirmación');
+
+            /* 3. Ambas operaciones quedan confirmadas. El contador se
+               reinició a cero al revivir y el ciclo consumió un intento:
+               de haber seguido agotado, habrían carries 6. */
+            igual(2, resultados[2].length, 'No se crean operaciones nuevas');
+
+            resultados[2].forEach(function (operacion) {
+                igual('SINCRONIZADA', operacion.estado, 'La operación queda confirmada: ' + operacion.tipo);
+                igual(1, operacion.intentos, 'El contador se reinició y el ciclo consumió un intento: ' + operacion.tipo);
+            });
+        });
+}
+
+function probarRevivirNoAfectaOtrasObras() {
+    titulo('Revivir no reinicia la cola de otra obra');
+
+    const entorno = crearEntorno({ fetch: respuestaServidor('ok') });
+    const s = entorno.sync;
+
+    const UUID_AJENA = '44444444-4444-4444-8444-444444444444';
+
+    const inspeccionAjena = crearInspeccion({
+        uuid: UUID_AJENA,
+        obra_id: 99
+    });
+
+    return sembrar(entorno, crearInspeccion(), [])
+        .then(function () {
+            return entorno.almacen.guardar('inspecciones', inspeccionAjena);
+        })
+        .then(function () {
+            return sembrarOperacion(entorno, {
+                id: 1,
+                tipo: 'INSPECCION',
+                entidad_uuid: UUID_INSP,
+                dependencia_uuid: null,
+                estado: 'ERROR',
+                intentos: s.MAX_INTENTOS,
+                ultimo_intento: '2026-03-15T10:00:00.000Z',
+                error: 'agotada',
+                created_at: '2026-03-15T09:00:00.000Z'
+            });
+        })
+        .then(function () {
+            return sembrarOperacion(entorno, {
+                id: 2,
+                tipo: 'INSPECCION',
+                entidad_uuid: UUID_AJENA,
+                dependencia_uuid: null,
+                estado: 'ERROR',
+                intentos: s.MAX_INTENTOS,
+                ultimo_intento: '2026-03-15T10:00:00.000Z',
+                error: 'agotada',
+                created_at: '2026-03-15T09:00:01.000Z'
+            });
+        })
+        .then(function () {
+            return s.sincronizarTodo({ obraId: 1, revivirAgotadas: true });
+        })
+        .then(function (resumen) {
+            igual(1, resumen.revividas, 'Solo se revive la operación de la obra abierta');
+
+            return entorno.almacen.obtenerTodos('operaciones');
+        })
+        .then(function (operaciones) {
+            const ajena = operaciones.filter(function (o) {
+                return o.entidad_uuid === UUID_AJENA;
+            })[0];
+
+            igual('ERROR', ajena.estado, 'La cola de otra obra no se toca');
+            igual(s.MAX_INTENTOS, ajena.intentos, 'Sus intentos siguen consumidos');
+        });
+}
+
+function probarIdempotenciaTrasRevivir() {
+    titulo('Una segunda sincronización no duplica');
+
+    const entorno = crearEntorno({
+        fetch: function (url) {
+            /* El servidor ya tiene ambas entidades: responde
+               ALREADY_SYNCED, que debe tratarse como éxito lógico. */
+            if (url === ENDPOINT_INSPECCIONES) {
+                return this.respuesta(200, {
+                    ok: true,
+                    results: [{ uuid: UUID_INSP, estado: 'ALREADY_SYNCED', id: 42 }]
+                });
+            }
+
+            return this.respuesta(200, {
+                ok: true,
+                results: [{
+                    uuid: UUID_FOTO,
+                    estado: 'ALREADY_SYNCED',
+                    id: 99,
+                    ruta_relativa: 'OBR-000001/2026-03-15/' + UUID_INSP + '/IMAGENES/ya.jpg',
+                    ruta_thumbnail: 'OBR-000001/2026-03-15/' + UUID_INSP + '/THUMBNAILS/ya.jpg'
+                }]
+            });
+        }
+    });
+    const s = entorno.sync;
+
+    return sembrarColaAgotada(entorno)
+        .then(function () {
+            return s.sincronizarTodo({ obraId: 1, revivirAgotadas: true });
+        })
+        .then(function (resumen) {
+            igual(1, resumen.inspecciones.yaSincronizadas, 'La inspección ya estaba sincronizada: es un éxito');
+            igual(1, resumen.fotografias.sincronizadas, 'La fotografía se confirma igualmente');
+            igual(2, entorno.llamadas.length, 'Solo se enviaron las dos peticiones del ciclo');
+
+            return s.sincronizarTodo({ obraId: 1, revivirAgotadas: true });
+        })
+        .then(function (resumen) {
+            igual(2, entorno.llamadas.length, 'La segunda pulsación no vuelve a enviar nada');
+            igual(0, resumen.revividas, 'No hay nada que revivir');
+            ok(resumen.vacio, 'La cola queda vacía');
+            igual(0, resumen.pendientes.total, 'No quedan elementos pendientes');
+
+            return entorno.almacen.obtenerTodos('operaciones');
+        })
+        .then(function (operaciones) {
+            igual(2, operaciones.length, 'No se crean operaciones nuevas en la segunda vuelta');
+        });
+}
+
+function probarReintentoManualVisible() {
+    titulo('El botón de reintento aparece también con los intentos agotados');
+
+    const s = crearEntorno({}).sync;
+
+    ok(
+        s.requiereReintentoManual({ estado: 'ERROR', intentos: 2 }),
+        'Un error permanente requiere reintento manual'
+    );
+
+    ok(
+        s.requiereReintentoManual({ estado: 'SINCRONIZANDO', intentos: s.MAX_INTENTOS }),
+        'Una operación agotada a mitad de intento también: antes no tenía salida'
+    );
+
+    ok(
+        s.requiereReintentoManual({ estado: 'PENDIENTE', intentos: s.MAX_INTENTOS }),
+        'Una operación agotada en PENDIENTE también'
+    );
+
+    ok(
+        !s.requiereReintentoManual({ estado: 'PENDIENTE', intentos: 1 }),
+        'Una operación sana no ofrece reintento: lacola automática la atiende'
+    );
+
+    ok(
+        !s.requiereReintentoManual({ estado: 'SINCRONIZADA', intentos: s.MAX_INTENTOS }),
+        'Una operación ya confirmada no ofrece reintento'
+    );
+}
+
+function probarDiagnosticoNoEscribe() {
+    titulo('El diagnóstico informa el estado sin modificarlo');
+
+    const entorno = crearEntorno({});
+    const s = entorno.sync;
+
+    function instantanea() {
+        return Promise.all([
+            entorno.almacen.obtenerTodos('inspecciones'),
+            entorno.almacen.obtenerTodos('fotografias'),
+            entorno.almacen.obtenerTodos('operaciones')
+        ]).then(function (datos) {
+            return JSON.stringify(datos);
+        });
+    }
+
+    return sembrarColaAgotada(entorno)
+        .then(instantanea)
+        .then(function (antes) {
+            return s.diagnostico().then(function (informe) {
+                return instantanea().then(function (despues) {
+                    igual(antes, despues, 'El diagnóstico no escribe en la base local');
+                    igual(2, informe.operaciones.length, 'Informa de las dos operaciones');
+                    igual(0, informe.operaciones_huerfanas, 'Ambas operaciones tienen entidad local');
+                    igual(1, informe.inspecciones.length, 'Informa de la inspección local');
+                    igual(1, informe.fotografias.length, 'Informa de la fotografía local');
+                    igual(
+                        1,
+                        informe.resumen.inspecciones.pendientes,
+                        'La operación agotada en SINCRONIZANDO se contaba como pendiente: el resumen la hacía pasar por sana'
+                    );
+                    igual(1, informe.resumen.fotografias.errores, 'La agotada en ERROR sí se contaba como error');
+                    igual(s.MAX_INTENTOS, informe.maxIntentos, 'Informa del límite de intentos');
+
+                    const agotadas = informe.operaciones.filter(function (operacion) {
+                        return operacion.agotada;
+                    });
+
+                    igual(2, agotadas.length, 'Detecta que las dos operaciones están agotadas');
+
+                    agotadas.forEach(function (operacion) {
+                        ok(!operacion.elegible, 'Una operación agotada no es elegible: ' + operacion.tipo);
+                        ok(operacion.requiere_reintento_manual, 'Requiere reintento manual: ' + operacion.tipo);
+                        igual(1, operacion.obra_id, 'Informa la obra de la operación: ' + operacion.tipo);
+                    });
+
+                    igual('PENDIENTE_SYNC', informe.inspecciones[0].estado_local, 'La inspección sigue pendiente localmente');
+                    igual(null, informe.inspecciones[0].servidor_id, 'Todavía no tiene id de servidor');
+                    igual(true, informe.fotografias[0].tiene_blob, 'La fotografía conserva su blob local');
+                });
+            });
+        });
+}
+
+/* ------------------------------------------------------------------ */
 /* Ejecución                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -946,7 +1276,13 @@ const pasos = [
     probarSinConexion,
     probarSoloInspecciones,
     probarFiltroPorObra,
-    probarCodigosPermanentes
+    probarCodigosPermanentes,
+    probarAgotadaNoSeReintentaSola,
+    probarSincronizarReviveAgotadas,
+    probarRevivirNoAfectaOtrasObras,
+    probarIdempotenciaTrasRevivir,
+    probarReintentoManualVisible,
+    probarDiagnosticoNoEscribe
 ];
 
 pasos.reduce(function (cadena, paso) {

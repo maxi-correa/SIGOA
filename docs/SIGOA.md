@@ -399,7 +399,7 @@ El logo de la empresa también es opcional.
 ### Almacenamiento del logo
 
 * Los archivos se almacenan bajo `<RAIZ_SIGOA>/EMPRESAS/`.
-* La raíz física (`SIGOA_STORAGE_PATH`) es configurable en `.env` e implementada en `Config\SigoaStorage`.
+* La raíz física es configurable en `.env` con `SIGOA_STORAGE_COMPARTIDO` (o `SIGOA_STORAGE_PATH` en desarrollo) e implementada en `Config\SigoaStorage`. En producción es un recurso UNC (§59.3.1).
 * La tabla `empresas.ruta_logo` almacena únicamente una ruta relativa, nunca una ruta absoluta.
 * El formato de referencia es `EMPRESAS/000001-logo.ext` (el `id` de la empresa a seis dígitos, cero-padded).
 * El nombre físico del archivo se genera a partir del `id` de la empresa.
@@ -1836,7 +1836,7 @@ Obra → Fecha → Inspección → archivos
 
 * El nombre de la carpeta de obra continúa siendo su código interno `OBR-XXXXXX` (de `obras.codigo`), validado con `ObraAlmacenamiento::normalizarCodigo()` (formato `^OBR-\d{6}$`, anti-traversal).
 * `ObraAlmacenamiento` (hoy crea `OBR/IMAGENES` y `OBR/THUMBNAILS`, usado en `Inspector\Obras::ver()`) deberá **ajustarse incrementalmente a la estructura anidada sin romper el código ya implementado**: nuevos métodos por obra+fecha+uuid, compatibilidad con el comportamiento actual y actualización de llamadores.
-* En la base de datos se guardan **referencias relativas** a la raíz (`SIGOA_STORAGE_PATH`, Config\SigoaStorage), nunca rutas absolutas — misma convención que `empresas.ruta_logo`.
+* En la base de datos se guardan **referencias relativas** a la raíz (`Config\SigoaStorage`), nunca rutas absolutas — misma convención que `empresas.ruta_logo`.
 * El código de la obra no se expone innecesariamente en la interfaz del inspector (§51.3, ya no se muestra).
 
 ## 52.9 Fotografías (F.8)
@@ -2722,7 +2722,7 @@ application/json`):
 
 ## 56.5 Almacenamiento físico
 
-`app/Services/FotografiaArchivo.php` + `app/Config/SigoaStorage.php` (`SIGOA_STORAGE_PATH`):
+`app/Services/FotografiaArchivo.php` + `app/Config/SigoaStorage.php` (raíz declarada en `.env`):
 
 ```
 OBR-XXXXXX/YYYY-MM-DD/{uuid-inspeccion}/IMAGENES/INS-XXXXX-{Ymd-His}-{random6}.{ext}
@@ -2733,8 +2733,9 @@ OBR-XXXXXX/YYYY-MM-DD/{uuid-inspeccion}/THUMBNAILS/THB-XXXXX-{Ymd-His}-{random6}
 * `random6` es hexadecimal en minúsculas; el nombre físico se decide **en el servidor**.
 * La base de datos guarda solo rutas relativas; la resolución a ruta absoluta se valida
   contra la raíz de almacenamiento (`ObraAlmacenamiento::raiz()`).
-* La raíz efectiva se define con `SIGOA_STORAGE_PATH` (`app/Config/SigoaStorage.php`); si no
-  está definida, las operaciones de archivos no pueden ejecutarse.
+* La raíz efectiva se declara con `SIGOA_STORAGE_COMPARTIDO`, que admite una ruta o un booleano
+  (§59.3.2). En producción es el recurso UNC `//DESKTOP-RJ9VDRF/Compartido KM5/SIGOA` (§59.3.1). Si
+  no está definida, las operaciones de archivos no pueden ejecutarse.
 
 ## 56.6 Cola local y backoff
 
@@ -2769,21 +2770,25 @@ OBR-XXXXXX/YYYY-MM-DD/{uuid-inspeccion}/THUMBNAILS/THB-XXXXX-{Ymd-His}-{random6}
 
 ### API pública
 
-`SIGOA.sincronizacion`: `iniciar()`, `sincronizarTodo({obraId?})`,
+`SIGOA.sincronizacion`: `iniciar()`, `sincronizarTodo({obraId?, revivirAgotadas?})`,
 `sincronizarInspecciones(obraId?)`, `sincronizarFotografias(obraId?)`, `encolar(tipo, uuid,
 dependenciaUuid?)`, `obtenerOperaciones()`, `buscarOperacion(operaciones, tipo, uuid)`,
-`resumir(operaciones)`, `reintentar(tipo, uuid)`, `TIPO_INSPECCION`, `TIPO_FOTOGRAFIA`.
+`resumir(operaciones)`, `reintentar(tipo, uuid)`, `requiereReintentoManual(operacion)`,
+`diagnostico()`, `MAX_INTENTOS`, `TIPO_INSPECCION`, `TIPO_FOTOGRAFIA`.
+
+`sincronizarTodo()` acepta `revivirAgotadas` desde D.6.2 (§59.3).
 
 ## 56.7 Captura y vista de obra
 
 * `public/assets/js/pages/inspeccion-nueva.js` — al guardar, encola la inspección y cada
   fotografía (`SIGOA.sincronizacion.encolar(...)`); la página **no** dispara `fetch()`.
 * `public/assets/js/pages/obra-inspecciones.js` — el botón "Sincronizar" ejecuta el ciclo
-  completo de la obra (`sincronizarTodo({ obraId })`): primero inspecciones y después
-  fotografías. Muestra estado por ítem, miniatura local, error y botón de reintento, que
-  reencola e intenta el envío de inmediato.
-* `public/assets/css/pages/inspector-obra.css` — `.io-locales-estados` y
-  `.io-locales-reintentar`.
+  completo de la obra (`sincronizarTodo({ obraId, motivo: 'manual', revivirAgotadas: true })`):
+  primero inspecciones y después fotografías. Muestra estado por ítem, miniatura local, error y
+  botón de reintento, que reencola e intenta el envío de inmediato. Desde D.6.2 la visibilidad
+  del botón de reintento la decide `requiereReintentoManual(operacion)` (§59.3).
+* `public/assets/css/pages/inspector-obra.css` — `.io-locales-estados`,
+  `.io-locales-reintentar` y `.io-nueva` (§59.1).
 * El componente de sincronización es el **único** origen de `fetch()`: ni la vista de obra ni
   la de nueva inspección realizan peticiones directas.
 
@@ -3056,5 +3061,271 @@ tarjeta terminaba en 379 px. Con un viewport de 265 px la página pasaba de 265 
 * La inspección `5bda4d36-…`, también fallida en D.6, no volvió a enviarse desde el dispositivo
   después de la migración: su estado local no es observable desde el servidor y queda pendiente de
   comprobación en el dispositivo.
+
+## 59. Fase D.6.2 — pantalla de obra, cola que se quedaba congelada y raíz de almacenamiento
+
+Fase de diagnóstico y corrección sobre tres defectos observados en la prueba manual con un
+dispositivo real: el orden de la pantalla de obra, una inspección que nunca llegaba al servidor y
+los archivos físicos acabando en `C:\Compartida\SIGOA` en lugar del recurso compartido.
+
+### 59.1 Orden de la pantalla de obra
+
+El orden pedido era volver a "Mis obras", datos de la obra, acción de nueva inspección con su
+explicación, y por último las inspecciones locales. La acción era una tarjeta más dentro de la
+sección de inspecciones locales, de modo que quedaba enterrada entre fotos y estados.
+
+* `app/Views/inspector/obra.php`: el botón "Nueva inspección" y su texto explicativo salen de
+  `.io-locales` y pasan a su propia sección `.io-nueva`, colocada entre los datos de la obra y las
+  inspecciones locales. Los avisos de estado se mantienen donde estaban, sobre los datos de la
+  obra, porque describen el resultado del ciclo de sincronización de esa pantalla.
+* `public/assets/css/pages/inspector-obra.css`: `.io-nueva` ocupa el ancho completo en móvil y se
+  ajusta al contenido en escritorio, con el botón y la explicación alineados en línea a partir del
+  punto de corte ya existente. Sin colores, iconos ni tipografías nuevos: reutiliza `.io-boton` y
+  los tokens vigentes.
+
+### 59.2 La causa de la inspección que no llegaba: la cola se agotaba en silencio
+
+El hallazgo central de la fase. La operación no estaba "pendiente de red": estaba **agotada**.
+
+* `MAX_INTENTOS` es 6 (`[0, 5 s, 15 s, 30 s, 60 s, 5 min]`, §56.6). Al consumirse, la operación
+  deja de ser elegible para la cola automática.
+* `programarDiferido()` solo programa un temporizador para operaciones con espera pendiente. Una
+  operación agotada tiene `esperaRestante() === 0` porque su `ultimo_intento` ya no avanza, así que
+  **tampoco se programa**. Los disparadores (`online`, `visibilitychange`, apertura) la recolocaban
+  en elegible y fallaban de nuevo, consumiendo el intento número 7, 8, 9… hasta que la.app
+  quedaba en un estado inconsistente.
+* El botón de reintento manual solo se mostraba con `estado === 'ERROR'`. Una operación que quedó
+  en `SINCRONIZANDO` —porque la aplicación se cerró o la pestaña fue descartada mientras el sexto
+  intento estaba en vuelo— se quedaba **sin ninguna salida manual**: la etiqueta decía
+  "Sincronizando…" y no había botón.
+* El botón "Sincronizar" tampoco ayudaba: ejecutaba el ciclo sin tocar los contadores, y una
+  operación agotada quedaba fuera de `operacionesElegibles()`.
+
+Por eso el síntoma era una inspección "pendiente" permanente que ningún botón podía desbloquear.
+
+**Corrección** (`public/assets/js/components/sincronizacion.js`):
+
+* `estaAgotada(operacion)` y `requiereReintentoManual(operacion)` concentran la decisión, en lugar
+  de repetir la condición en la vista.
+* `revivirOperacion()` / `revivirEntidad()` / `obraDeOperacion()` devuelven a `PENDIENTE` una
+  operación agotada y su entidad, conservando los datos. `reintentar()` reutiliza esos helpers.
+* `sincronizarTodo({ revivirAgotadas: true })` reactiva las agotadas **antes** de calcular la cola
+  y devuelve `resumen.revividas`. Es opt-in: la cola automática conserva su comportamiento, porque
+  reactivar sin que nadie lo pida equivaldría a ignorar el backoff.
+* El botón "Sincronizar" de la obra lo pide siempre, y el aviso informa de cuántas se reactivaron.
+* `diagnostico()` expone el estado de la cola local **en solo lectura** para poder clasificar el
+  caso desde el dispositivo sin escribir nada.
+
+**Idempotencia.** Reactivar no duplica: el servidor responde `ALREADY_SYNCED` y el ciclo lo trata
+como éxito lógico (`app/Controllers/Inspector/Sincronizar.php` incluye el `id` y las rutas en ese
+caso), de modo que la entidad queda `SINCRONIZADA` con su `servidor_id` y la fotografía dependiente
+puede continuar. Cubierto por `pruebaIdempotenciaTrasRevivir`.
+
+### 59.3 Contrato de la raíz física de almacenamiento
+
+El diagnóstico de por qué los archivos acababan en `C:\Compartida\SIGOA` no fue el código de
+carpetas, que es correcto (§56.5), sino la propia configuración: `.env` traía
+`SIGOA_STORAGE_PATH = C:\Compartida\SIGOA`, un volumen **local del servidor**, no el recurso
+compartido.
+
+* **Por qué una letra de unidad no sirve en producción.** `Z:\…` es un alias que Windows crea en
+  la sesión del usuario interactivo. El proceso que ejecuta Apache corre bajo otra cuenta —el
+  servicio `httpd` o el usuario de "Iniciar sesión como"— y ese proceso no ve las unidades
+  mapeadas por otro usuario: la ruta resuelve como inexistente. La ruta UNC
+  (`\\servidor\recurso\SIGOA`) es la misma para todos los equipos y para cualquier proceso.
+* `app/Config/SigoaStorage.php` incorpora la variable `SIGOA_STORAGE_COMPARTIDO` para **declarar la
+  intención** del despliegue: en producción la raíz debe ser UNC. El valor no se deduce de la ruta,
+  porque un volumen local también puede compartirse después por otros equipos y seguir siendo la
+  letra equivocada. Añade `esRutaDeRed()`, `esUnidadDeDisco()`, `esAbsoluta()` y
+  `problemasDeContrato()`.
+* `env` documenta las dos grafías válidas y la regla de comillas. Se verificó contra el lector real
+  de CodeIgniter: dentro de comillas **colapsa las barras inversas dobles**, así que
+  `'\\\\SERVIDOR\\Compartido KM5\\SIGOA'` es la forma correcta con barras inversas y
+  `'//SERVIDOR/Compartido KM5/SIGOA'` la correcta con barras normales. Sin comillas, un nombre de
+  recurso con espacios hace fallar el arranque con `InvalidArgumentException`.
+* `tests/unit/AlmacenamientoCompartidoTest.php` fija el contrato: `C:\…`, `Z:\…`, `Y:\…` y rutas
+  relativas son inválidas en producción; la UNC y las dos grafías del `.env` son válidas. También
+  comprueba que la plantilla versionada no fije una letra de unidad ni el nombre de un equipo.
+
+#### 59.3.1 Configuración definitiva del recurso UNC
+
+Con la infraestructura verificada, la raíz quedó declarada en el `.env` real:
+
+```
+SIGOA_STORAGE_COMPARTIDO = '//DESKTOP-RJ9VDRF/Compartido KM5/SIGOA'
+```
+
+* **Recurso y servidor.** Los archivos se publican en `DESKTOP-RJ9VDRF`, recurso SMB
+  `\\DESKTOP-RJ9VDRF\Compartido KM5`. El servidor que corre Apache es `DESKTOP-LI5MEHE`; por eso
+  la raíz es una ruta UNC y no una carpeta local.
+* **Cuenta de servicio.** Apache (`wampapache64`) se ejecuta como `DESKTOP-LI5MEHE\SIGOA_APACHE`,
+  que existe en ambos equipos y tiene permisos de lectura, escritura y borrado sobre el recurso.
+  Los permisos SMB y NTFS quedaron verificados y no se modificaron.
+* **Sin credenciales en SIGOA.** No hay usuario ni contraseña en `.env` ni en el código, y no deben
+  añadirse: la identidad se resuelve a nivel de sistema con la cuenta de servicio. Guardarlas en
+  `.env` expondría un secreto en un archivo que se copia entre equipos y no se versiona (§10). La
+  plantilla `env` lo advierte, y `AlmacenamientoCompartidoTest` verifica que no aparezcan.
+* **Por qué no `Z:` ni `Y:`.** Son alias que Windows crea en la sesión del usuario interactivo.
+  Apache corre como `SIGOA_APACHE`, no como ese usuario, y no ve las unidades mapeadas por otro: la
+  ruta resolvería como inexistente. La ruta UNC es la misma para todos los equipos y para cualquier
+  proceso del servidor. Por eso `esUnidadDeDisco()` marca `C:\…`, `Z:\…` y `Y:\…` como
+  inválidas cuando el despliegue está declarado como compartido.
+
+#### 59.3.2 Cómo se declara la raíz
+
+`SIGOA_STORAGE_COMPARTIDO` acepta las dos formas, y distinguir una de otra es un problema real: un
+indicador (`1`, `true`, `si`) no lleva separadores, y una ruta absoluta o UNC siempre los lleva.
+
+| Declaración | Raíz efectiva | Compartido |
+|---|---|---|
+| `SIGOA_STORAGE_COMPARTIDO = '//EQUIPO/RECURSO/SIGOA'` | esa ruta | sí, implícito |
+| `SIGOA_STORAGE_COMPARTIDO = 0` + `SIGOA_STORAGE_PATH = C:\ruta` | `SIGOA_STORAGE_PATH` | no |
+| `SIGOA_STORAGE_COMPARTIDO = 1` + `SIGOA_STORAGE_PATH = '//EQUIPO/RECURSO/SIGOA'` | `SIGOA_STORAGE_PATH` | sí |
+
+* Una ruta en `SIGOA_STORAGE_COMPARTIDO` **anula** `SIGOA_STORAGE_PATH`. La precedencia es
+  deliberada: si las dos variables existieran con valores distintos, gana la que declara el
+  despliegue, para que una configuración antigua no sobreviva en silencio y siga recibiendo las
+  escrituras.
+* Declarar una ruta implica `compartido = true`. Es redundante a propósito: preguntar por separado
+  "qué ruta" y "si es compartida" admite combinaciones imposibles, como una UNC con
+  `compartido = 0`.
+* Se conserva `SIGOA_STORAGE_PATH` para el desarrollo local y por compatibilidad. No se usa en
+  producción.
+
+#### 59.3.3 Estructura física y rutas relativas
+
+Cambiar la raíz no obliga a migrar datos. La base guarda **solo referencias relativas**, y
+`ObraAlmacenamiento` las combina con la raíz:
+
+```
+OBR-000001/2026-09-25/e4cba23b-…/IMAGENES/INS-00001-20260925-180447-d3b819.jpg
+OBR-000001/2026-09-25/e4cba23b-…/THUMBNAILS/THB-00001-20260925-180447-76eeee.jpg
+```
+
+`rutaRelativaImagen()` y `rutaRelativaThumbnail()` no dependen de la raíz: siguen devolviendo esas
+cadenas, y `absolutoDesdeRelativa()` es quien las une a la raíz configurada. Ninguna fila de la
+base depende de dónde esté la raíz.
+
+**Pendiente de decidir: los archivos existentes no están en el recurso.** La fotografía real está
+en `C:\Compartida\SIGOA`, y la carpeta `SIGOA` del recurso compartido se verificó **vacía**. Con la
+nueva raíz, esa fotografía no se resuelve hasta que el árbol se copie al recurso. No se movió nada:
+es una decisión de despliegue que requiere autorización explícita (§3).
+
+### 59.4 Auditoría de las pruebas: ninguna toca la base ni los archivos reales
+
+Requisito de D.6.2 y de §10 (seguridad): ninguna prueba puede escribir en la base `sigoa` ni en el
+recurso compartido.
+
+* `tests/database/SincronizarMysqlRealTest.php` es la única prueba que escribe en MySQL de verdad.
+  Crea y destruye **únicamente** la base `sigoa_d61_descartable`, redirige el grupo `tests` a esa
+  base y sustituye la raíz de almacenamiento por un directorio temporal propio. No usa `sigoa`.
+* Bajo PHPUnit, `ENVIRONMENT === 'testing'` hace que `db_connect()` use el grupo `tests`, no
+  `default`. El resto de `tests/database/` opera sobre SQLite en memoria.
+* `tests/database/EsquemaBaseAplicacionTest.php` es de solo lectura sobre el esquema real, y las
+  pruebas que crean la estructura física usan raíces temporales (`InspectorObrasStorageTest`,
+  `ObraAlmacenamientoTest`).
+* No se ejecutó ninguna migración, ni `migrate:fresh`, ni `migrate:refresh`, ni rollback, ni
+  `RepairDatabaseStructure`.
+
+Comprobado sobre el entorno real, en solo lectura, después de ejecutar la suite:
+
+* `sigoa_d61_descartable` **no existe** tras la prueba: la base descartable se creó y se eliminó
+  sola. Las bases presentes son `sigoa`, `information_schema`, `mysql`, `performance_schema` y
+  `sys`.
+* La base `sigoa` conserva su contenido: 1 obra, 3 usuarios, 1 inspección, 1 fotografía y 2
+  operaciones en `operaciones_sincronizacion`, ambas `PROCESADA`.
+* La inspección `5bda4d36-…` **no tiene fila** en `operaciones_sincronizacion`. Confirma que nunca
+  llegó al servidor: el fallo estaba en el dispositivo, no en el rechazo de un endpoint.
+* La fotografía real está íntegra y coincide con la base: `OBR-000001/2026-09-25/
+  e4cba23b-199a-…/IMAGENES/INS-00001-20260925-180447-d3b819.jpg` (392 322 bytes, 1920×2560) y su
+  `THUMBNAILS/THB-00001-20260925-180447-76eeee.jpg` (19 790 bytes) están en disco con los tamaños
+  exactos que declara la tabla, y `OBR-000001` contiene esos dos archivos y ningún otro. **No hay
+  nada que migrar**: la estructura y las rutas relativas son correctas, lo único incorrecto es la
+  raíz.
+
+### 59.5 Pruebas
+
+* Pruebas JS: **159 aserciones** (140 de `sincronizacion.test.js` + 19 de
+  `obra-inspecciones.test.js`). Las nuevas de D.6.2 cubren: la cola automática **no** reintenta una
+  operación agotada, "Sincronizar" sí la revive y completa el ciclo con su fotografía dependiente,
+  la reactivación no toca la cola de otra obra, la idempotencia con `ALREADY_SYNCED`, la
+  visibilidad del botón de reintento y que `diagnostico()` no escribe nada.
+* Pruebas PHP: `tests/unit/AlmacenamientoCompartidoTest.php` (**29 tests / 51 assertions**), que
+  cubren la doble semántica de `SIGOA_STORAGE_COMPARTIDO` (ruta o booleano), la precedencia sobre
+  `SIGOA_STORAGE_PATH`, el rechazo de `C:\…`/`Z:\…`/`Y:\…` y rutas relativas en producción, la
+  validity de la ruta UNC real del despliegue, las dos grafías válidas del `.env` leídas contra el
+  lector real, y que la plantilla no fije una unidad ni pida credenciales. Suite `tests/unit`:
+  **112 tests / 399 assertions**. Ninguna prueba toca el recurso de red: `ObraAlmacenamiento` recibe
+  su raíz por constructor o por inyección de configuración, y las que crean estructura usan
+  directorios temporales.
+ Suite `tests/database`, archivo por archivo:
+  `EsquemaBaseAplicacionTest` (3/10), `ExampleDatabaseTest` (2/3), `InspeccionFotografiaUuidTest`
+  (16/36), `InspeccionNuevaAutorizacionTest` (6/14), `InspectorObrasAutorizacionTest` (1/3),
+  `InspectorObrasStorageTest` (4/13), `InspectoresObrasModelTest` (13/21), `MisDatosCsrfTest` (7/15),
+  `RepresentantesTecnicosModelTest` (8/19), `SincronizarFotografiasTest` (26/90) y
+  `SincronizarInspeccionesTest` (24/72), todas en verde.
+* `SincronizarMysqlRealTest` contra el motor real: **8 tests / 83 assertions** en verde, en 4 min
+  23 s (ejecuta las 29 migraciones reales sobre la base descartable). Se verificó después que la
+  base descartable se eliminó (§59.4). Conviene excluirla con `--exclude-group mysql-real` en las
+  vueltas rápidas: es la que domina el tiempo de la suite.
+* Queda un error **preexistente** en `tests/unit`:
+  `ApiSeguridadBaseTest::testInspectorConRolCorrectoAtraviesaElFiltroDeRol`, por
+  `no such table: db_inspectores_obras` — falta esa tabla en la base SQLite en memoria del entorno
+  de pruebas. Se comprobó con `git stash` que ya fallaba antes de esta fase y no está relacionado
+  con ella. Es además **dependiente del orden**: la tabla existe una vez que otra prueba la creó en
+  el mismo proceso, así que `tests/unit` + un archivo de `tests/database` pasa en verde y `tests/unit`
+  solo falla. Es un defecto de aislamiento de pruebas, no de almacenamiento. No se corrigió por
+  estar fuera del alcance de D.6.2.
+* Dos pruebas de estructura dejaron de fijar `sigoa-shell-v5`: `InfraestructuraOfflineTest` ahora
+  comprueba la **forma** de `CACHE_VERSION` y que `SHELL_CACHE` avance con ella, y
+  `SincronizacionEstructuraTest` comprueba el comportamiento de `revivirAgotadas`. Fijar el número
+  obligaba a editar las pruebas en cada despliegue, que es justo lo que contradice la regla
+  documentada en `sw.js`.
+* App shell a `sigoa-shell-v6`: `sincronizacion.js`, `obra-inspecciones.js` e
+  `inspector-obra.css` están en el precaché y sin el incremento los dispositivos seguirían con los
+  recursos anteriores.
+
+### 59.6 Comprobación manual en el dispositivo
+
+Procedimiento para cerrar los dos puntos que no se pueden verificar desde el servidor. Requiere
+publicar `CACHE_VERSION = 'sigoa-shell-v6'` y recargar una vez con la aplicación abierta.
+
+1. **Confirmar la raíz antes de nada.** En el servidor, con las credenciales del recurso: la raíz
+   debe ser UNC y tener escritura para la cuenta de Apache. Si no se corrige, la sincronización
+   escribirá donde siempre y el resultado será idéntico.
+2. **Clasificar el caso antes de tocar nada.** En el navegador del teléfono, con la obra abierta:
+
+   ```js
+   SIGOA.sincronizacion.diagnostico()
+   ```
+
+   Es de solo lectura. Anotar, para cada operación `agotada`, `elegible`,
+   `requiere_reintento_manual` y `estado`, además de `inspecciones[].estado_local` y
+   `fotografias[].tiene_blob`. Es el dato que faltaba en D.6 y D.6.1.
+3. **Reintentar** con el botón "Sincronizar" de la obra. Debe aparecer un aviso indicando cuántas
+   operaciones se reactivaron; si el aviso no las menciona, el recurso sigue en `sigoa-shell-v5` y
+   hay que forzar la recarga.
+4. **Comprobar el resultado:** en "Nueva inspección" la ficha debe pasar a sincronizada, y en
+   `operaciones_sincronizacion` del servidor debe aparecer una fila `PROCESADA` con el `uuid` de la
+   inspección y, si llevaba fotos, otra por fotografía.
+5. **Repetir "Sincronizar"** para verificar que no duplica: el aviso debe salir como "nada
+   pendiente" y no crear filas nuevas.
+6. **Orden de la pantalla** (§59.1) a 360 px y a escritorio: volver, datos, nueva inspección con
+   su explicación, inspecciones locales.
+
+### 59.7 Fuera de D.6.2
+
+* Sin migraciones nuevas ni modificación de migraciones existentes.
+* Sin endpoints, estados de cola, permisos ni mecanismos nuevos. Se amplían los ya existentes.
+* Sin cambiar el backoff: `[0, 5 s, 15 s, 30 s, 60 s, 5 min]` y 6 intentos se conservan. El
+  agotamiento es una protección contra el fallo permanente, no un defecto.
+* Sin migrar ni reescribir los archivos ya existentes bajo `C:\Compartida\SIGOA`. Cambiar la raíz no
+  traslada datos: las referencias de la base son relativas y seguirán resolviendo igual, pero solo
+  cuando la raíz correcta esté configurada.
+* Sin tocar la pantalla "Nueva inspección".
+* La clasificación exacta del caso observado en el dispositivo (A–G) sigue pendiente: requiere
+  ejecutar `SIGOA.sincronizacion.diagnostico()` en el navegador del teléfono. La corrección cubre
+  los dos estados en los que la operación quedaba sin salida (`ERROR` agotada y `SINCRONIZANDO`
+  agotada), pero el caso concreto debe confirmarse en el dispositivo.
 
 ---

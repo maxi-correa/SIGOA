@@ -27,17 +27,25 @@
    * `ERROR`         — error permanente o reintentos agotados; requiere
                       una acción manual de reintento.
 
-   -------------------------------------------------------------------
-   Backoff progresivo (§52.13)
-   -------------------------------------------------------------------
-   5 s → 15 s → 30 s → 60 s → 5 min, y después `ERROR`.
+    -------------------------------------------------------------------
+    Backoff progresivo (§52.13)
+    -------------------------------------------------------------------
+    5 s → 15 s → 30 s → 60 s → 5 min, y después `ERROR`.
 
-   La espera se calcula SIEMPRE a partir de `intentos` + `ultimo_intento`
-   persistidos en IndexedDB, nunca desde un `setTimeout()` en memoria: al
-   cerrar y reabrir la aplicación, la decisión se retoma desde el disco.
-   El temporizador del navegador es solo una comodidad de uso; si se
-   descarta (pestaña en segundo plano, cierre), el siguiente disparo
-   reevalúa el mismo cálculo.
+    La espera se calcula SIEMPRE a partir de `intentos` + `ultimo_intento`
+    persistidos en IndexedDB, nunca desde un `setTimeout()` en memoria: al
+    cerrar y reabrir la aplicación, la decisión se retoma desde el disco.
+    El temporizador del navegador es solo una comodidad de uso; si se
+    descarta (pestaña en segundo plano, cierre), el siguiente disparo
+    reevalúa el mismo cálculo.
+
+    Agotados los intentos, la operación sale de la cola automática. Ningún
+    dato se elimina y la entidad conserva sus blobs. La única salida es una
+    acción manual: el botón "Sincronizar" (`revivirAgotadas`) o el botón de
+    reintento por ítem (`reintentar`). El agotamiento en estado
+    `SINCRONIZANDO` —la aplicación se cerró a mitad del último intento— se
+    trata igual que en `ERROR`: no era recuperable por sí solo.
+
 
    -------------------------------------------------------------------
    Orden obligatorio (§52.13)
@@ -404,6 +412,158 @@
     }
 
     /**
+     * Indica si una operación agotó sus intentos y quedó fuera de la cola
+     * automática.
+     *
+     * Importa el estado y no solo el contador: una operación que quedó
+     * `SINCRONIZANDO` porque la aplicación se cerró a mitad del sexto
+     * intento tiene los mismos `MAX_INTENTOS` consumidos que una que pasó a
+     * `ERROR`, y en ambos casos ningún disparador automático —ni
+     * `programarDiferido`— la vuelve a intentar. Sin esta comprobación, la
+     * única salida es la acción manual del usuario.
+     */
+    function estaAgotada(operacion) {
+        if (!operacion || operacion.estado === OP_SINCRONIZADA) {
+            return false;
+        }
+
+        return (Number(operacion.intentos) || 0) >= MAX_INTENTOS;
+    }
+
+    /**
+     * Indica si la operación necesita una acción manual para volver a la
+     * cola: un error permanente (`ERROR`) o el agotamiento de reintentos.
+     *
+     * La interfaz usa esta comprobación para ofrecer el botón de reintento
+     * también en el caso de agotamiento, que antes quedaba sin ninguna
+     * salida visible.
+     */
+    function requiereReintentoManual(operacion) {
+        return !!operacion
+            && operacion.estado !== OP_SINCRONIZADA
+            && (operacion.estado === OP_ERROR || estaAgotada(operacion));
+    }
+
+    /**
+     * Reinicia el contador de intentos de una operación y la devuelve a la
+     * cola. No borra datos ni reconstruye la entidad: solo deshace el
+     * agotamiento.
+     */
+    function revivirOperacion(operacion) {
+        var copia = Object.assign({}, operacion);
+
+        copia.estado         = OP_PENDIENTE;
+        copia.intentos       = 0;
+        copia.ultimo_intento = null;
+        copia.error          = null;
+
+        return guardarOperacion(copia);
+    }
+
+    /**
+     * Devuelve la entidad local a `PENDIENTE_SYNC` conservando todos sus
+     * datos (incluidos los blobs de una fotografía).
+     */
+    function revivirEntidad(tipo, entidadUuid) {
+        var store = tipo === TIPO_FOTOGRAFIA
+            ? ALMACEN.ALMACENES.fotografias
+            : ALMACEN.ALMACENES.inspecciones;
+
+        return ALMACEN.obtener(store, entidadUuid).then(function (entidad) {
+            if (!entidad) {
+                return null;
+            }
+
+            var copia = Object.assign({}, entidad);
+
+            copia.estado_local     = ESTADO_PENDIENTE_SYNC;
+            copia.error_local      = null;
+            copia.updated_at_local = ahoraISO();
+
+            return ALMACEN.guardar(store, copia);
+        });
+    }
+
+    /**
+     * Obra a la que pertenece una operación, según la entidad que representa
+     * y, para una fotografía, su inspección padre.
+     */
+    function obraDeOperacion(operacion, inspecciones, fotografias) {
+        var entidad = operacion.tipo === TIPO_FOTOGRAFIA
+            ? (fotografias || []).filter(function (foto) {
+                return foto.uuid === operacion.entidad_uuid;
+            })[0]
+            : (inspecciones || []).filter(function (inspeccion) {
+                return inspeccion.uuid === operacion.entidad_uuid;
+            })[0];
+
+        if (!entidad) {
+            return null;
+        }
+
+        if (operacion.tipo !== TIPO_FOTOGRAFIA) {
+            return entidad.obra_id;
+        }
+
+        var padre = (inspecciones || []).filter(function (inspeccion) {
+            return inspeccion.uuid === entidad.inspeccion_uuid;
+        })[0];
+
+        return padre ? padre.obra_id : null;
+    }
+
+    /**
+     * Revive las operaciones agotadas (§56).
+     *
+     * Es la contrapartida de la acción manual "Sincronizar": tras agotar los
+     * reintentos, una operación queda fuera de la cola automática y el
+     * dispositivo ya no la envía por sí solo. Esta función reinicia su
+     * contador para que el ciclo que está a punto de ejecutarse la incluya,
+     * sin tocar ningún otro dato local.
+     *
+     * Solo actúa sobre operaciones **agotadas**: un error permanente con
+     * intentos disponibles sigue requiriendo el reintento explícito por
+     * ítem, de modo que un rechazo que se repetiría no se reintenta en cada
+     * pulsación del botón.
+     *
+     * @param {number} [obraId] Limita la revive a una obra.
+     * @returns {Promise<object[]>} Operaciones revividas.
+     */
+    function revivirAgotadas(obraId) {
+        return Promise.all([
+            obtenerOperaciones(),
+            ALMACEN.obtenerTodos(ALMACEN.ALMACENES.inspecciones),
+            ALMACEN.obtenerTodos(ALMACEN.ALMACENES.fotografias)
+        ]).then(function (datos) {
+            var operaciones    = datos[0] || [];
+            var inspecciones   = datos[1] || [];
+            var fotografias    = datos[2] || [];
+            var acotarAUnaObra = obraId !== undefined && obraId !== null && isFinite(obraId);
+
+            var objetivo = operaciones.filter(function (operacion) {
+                if (!estaAgotada(operacion)) {
+                    return false;
+                }
+
+                if (!acotarAUnaObra) {
+                    return true;
+                }
+
+                return obraDeOperacion(operacion, inspecciones, fotografias) === obraId;
+            });
+
+            return Promise.all(objetivo.map(function (operacion) {
+                return revivirOperacion(operacion).then(function (revivida) {
+                    return revivirEntidad(operacion.tipo, operacion.entidad_uuid)
+                        .then(function () {
+                            return revivida;
+                        });
+                });
+            }));
+        });
+    }
+
+    /**
      * Registra un fallo de una operación.
      *
      * - Fallo transitorio: vuelve a `PENDIENTE` y espera el backoff.
@@ -440,32 +600,9 @@
                 return null;
             }
 
-            var copia = Object.assign({}, operacion);
-
-            copia.estado         = OP_PENDIENTE;
-            copia.intentos       = 0;
-            copia.ultimo_intento = null;
-            copia.error          = null;
-
-            return guardarOperacion(copia).then(function (operacionReprogramada) {
-                var store = tipo === TIPO_FOTOGRAFIA
-                    ? ALMACEN.ALMACENES.fotografias
-                    : ALMACEN.ALMACENES.inspecciones;
-
-                return ALMACEN.obtener(store, entidadUuid).then(function (entidad) {
-                    if (!entidad) {
-                        return operacionReprogramada;
-                    }
-
-                    var copiaEntidad = Object.assign({}, entidad);
-
-                    copiaEntidad.estado_local     = ESTADO_PENDIENTE_SYNC;
-                    copiaEntidad.error_local      = null;
-                    copiaEntidad.updated_at_local = ahoraISO();
-
-                    return ALMACEN.guardar(store, copiaEntidad).then(function () {
-                        return operacionReprogramada;
-                    });
+            return revivirOperacion(operacion).then(function (operacionReprogramada) {
+                return revivirEntidad(tipo, entidadUuid).then(function () {
+                    return operacionReprogramada;
                 });
             });
         });
@@ -1220,12 +1357,17 @@
      * @param {string}  [opciones.motivo] Solo informativo.
      * @param {boolean} [opciones.soloInspecciones] Omite la fase de fotos.
      * @param {boolean} [opciones.soloFotografias] Omite la fase de inspecciones.
+     * @param {boolean} [opciones.revivirAgotadas] Revive las operaciones que
+     *        agotaron sus reintentos. Lo usa la acción manual "Sincronizar":
+     *        ningún disparador automático lo hace, porque reintentar para
+     *        siempre una operación sin red no terminaría nunca.
      * @returns {Promise<object>}
      */
     function sincronizarTodo(opciones) {
         var config = opciones || {};
         var soloInspecciones = config.soloInspecciones === true;
         var soloFotografias  = config.soloFotografias === true;
+        var revivir          = config.revivirAgotadas === true;
 
         if (!supported()) {
             return Promise.resolve({ error: 'NO_LOCAL_STORAGE' });
@@ -1243,11 +1385,21 @@
 
         var resumen = {
             vacio:         true,
+            revividas:     0,
             inspecciones:  resumenInspeccionesVacio(),
             fotografias:   resumenFotografiasVacio()
         };
 
         return asegurarCola()
+            .then(function () {
+                if (!revivir) {
+                    return;
+                }
+
+                return revivirAgotadas(config.obraId).then(function (revividas) {
+                    resumen.revividas = revividas.length;
+                });
+            })
             .then(function () {
                 return obtenerOperaciones();
             })
@@ -1366,6 +1518,100 @@
     }
 
     /* ==================================================================
+       Diagnóstico de la cola (Fase D.6.2)
+       ================================================================== */
+
+    /**
+     * Estado completo de la cola local, en forma de informe.
+     *
+     * Es **de solo lectura**: no escribe en IndexedDB, no encola, no
+     * programa reintentos y no realiza ninguna petición al servidor. Existe
+     * porque el estado real de un dispositivo no es observable desde el
+     * servidor (la cola vive solo en el navegador) y sin él no hay forma de
+     * distinguir una operación agotada de una que simplemente espera su
+     * backoff.
+     *
+     * Para cada operación informa por qué puede o no volver a intentarse:
+     *
+     *   * `eligible`    — la cola automática la reintentará sola;
+     *   * `esperando`   — dentro de su backoff, con los ms restantes;
+     *   * `agotada`     — consumió los `MAX_INTENTOS` y requiere la acción
+     *                    manual "Sincronizar" o el botón de reintento;
+     *   * `error`       — rechazo permanente;
+     *   * `sincronizada`— confirmada por el servidor.
+     *
+     * @returns {Promise<object>}
+     */
+    function diagnostico() {
+        if (!supported()) {
+            return Promise.resolve({ soportado: false, operaciones: [] });
+        }
+
+        return Promise.all([
+            obtenerOperaciones(),
+            ALMACEN.obtenerTodos(ALMACEN.ALMACENES.inspecciones),
+            ALMACEN.obtenerTodos(ALMACEN.ALMACENES.fotografias)
+        ]).then(function (datos) {
+            var operaciones  = datos[0] || [];
+            var inspecciones = datos[1] || [];
+            var fotografias  = datos[2] || [];
+            var ahora        = ahoraMilisegundos();
+
+            var informe = {
+                soportado:     true,
+                maxIntentos:   MAX_INTENTOS,
+                resumen:       resumir(operaciones),
+                inspecciones:  inspecciones.map(resumenEntidad),
+                fotografias:   fotografias.map(resumenEntidad),
+                operaciones:   operaciones.map(function (operacion) {
+                    return {
+                        id:              operacion.id,
+                        tipo:            operacion.tipo,
+                        entidad_uuid:    operacion.entidad_uuid,
+                        dependencia_uuid: operacion.dependencia_uuid || null,
+                        estado:          operacion.estado,
+                        intentos:        Number(operacion.intentos) || 0,
+                        ultimo_intento:  operacion.ultimo_intento || null,
+                        error:           operacion.error || null,
+                        created_at:      operacion.created_at || null,
+                        obra_id:         obraDeOperacion(operacion, inspecciones, fotografias),
+                        elegible:        puedeReintentar(operacion, ahora),
+                        espera_restante: esperaRestante(operacion, ahora),
+                        agotada:         estaAgotada(operacion),
+                        requiere_reintento_manual: requiereReintentoManual(operacion)
+                    };
+                })
+            };
+
+            /* Las operaciones sin entidad local no pueden adscribirse a
+               ninguna obra: se informan aparte en lugar de omitirse. */
+            informe.operaciones_huerfanas = informe.operaciones
+                .filter(function (operacion) {
+                    return operacion.obra_id === null;
+                })
+                .length;
+
+            return informe;
+        });
+    }
+
+    function resumenEntidad(entidad) {
+        return {
+            uuid:             entidad.uuid,
+            obra_id:          entidad.obra_id,
+            inspeccion_uuid:  entidad.inspeccion_uuid || null,
+            estado_local:     entidad.estado_local,
+            servidor_id:      entidad.servidor_id === undefined ? null : entidad.servidor_id,
+            error_local:      entidad.error_local || null,
+            created_at_local: entidad.created_at_local || null,
+            updated_at_local: entidad.updated_at_local || null,
+            ruta_relativa:    entidad.ruta_relativa || null,
+            tiene_blob:       !!entidad.blob,
+            tiene_thumbnail:  !!entidad.thumbnail
+        };
+    }
+
+    /* ==================================================================
        Disparadores
        ================================================================== */
 
@@ -1474,6 +1720,7 @@
         /* Cola */
         encolar:                    encolar,
         reintentar:                 reintentar,
+        revivirAgotadas:            revivirAgotadas,
         asegurarCola:               asegurarCola,
         obtenerOperaciones:         obtenerOperaciones,
         marcarIntentando:           marcarIntentando,
@@ -1485,9 +1732,14 @@
         buscarOperacion:            buscarOperacion,
 
         /* Reintentos */
-        retrasoPara:     retrasoPara,
-        puedeReintentar: puedeReintentar,
-        esperaRestante:  esperaRestante,
+        retrasoPara:               retrasoPara,
+        puedeReintentar:           puedeReintentar,
+        esperaRestante:            esperaRestante,
+        estaAgotada:               estaAgotada,
+        requiereReintentoManual:   requiereReintentoManual,
+
+        /* Diagnóstico (solo lectura) */
+        diagnostico: diagnostico,
 
         /* Códigos del servidor */
         esErrorPermanente: esErrorPermanente,

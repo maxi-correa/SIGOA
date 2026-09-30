@@ -11,8 +11,9 @@ use CodeIgniter\Test\ControllerTestTrait;
  * Integración: acceso del inspector a la vista de obra y preparación de
  * la estructura física de almacenamiento.
  *
- * No se toca la ruta real C:\Compartida\SIGOA: se inyecta una
- * configuración SigoaStorage con raíz temporal propia de cada prueba.
+ * No se toca la raíz real de almacenamiento, que en producción es un recurso
+ * UNC de red: se inyecta una configuración SigoaStorage con raíz temporal
+ * propia de cada prueba.
  *
  * La suite usa la conexión `tests` (SQLite en memoria) con el esquema
  * mínimo necesario, igual que InspectoresObrasModelTest.

@@ -63,7 +63,32 @@ final class InfraestructuraOfflineTest extends CIUnitTestCase
         $this->assertMatchesRegularExpression('/addEventListener\(\s*[\'"]install[\'"]/', $sw);
         $this->assertMatchesRegularExpression('/addEventListener\(\s*[\'"]activate[\'"]/', $sw);
         $this->assertMatchesRegularExpression('/addEventListener\(\s*[\'"]fetch[\'"]/', $sw);
-        $this->assertStringContainsString('sigoa-shell-v5', $sw);
+
+        /* Se comprueba la forma de la versión, no un número concreto: la
+           regla de `sw.js` es incrementarla al tocar cualquier asset, y
+           fixar aquí el número obligaría a editar esta prueba cada vez,
+           que es justo lo que esta comprobación debe evitar. */
+        $this->assertMatchesRegularExpression(
+            "/CACHE_VERSION = 'sigoa-shell-v\d+';/",
+            $sw,
+            'CACHE_VERSION debe numerarse para poder invalidar la caché'
+        );
+        $this->assertSame(
+            $this->versionDeCache($sw, 'CACHE_VERSION'),
+            $this->versionDeCache($sw, 'SHELL_CACHE'),
+            'CACHE_VERSION y SHELL_CACHE deben avanzar juntos: si no, los clientes quedan con assets viejos'
+        );
+    }
+
+    private function versionDeCache(string $sw, string $variable): string
+    {
+        $this->assertSame(
+            1,
+            preg_match("/{$variable} = '(sigoa-shell-v\d+)';/", $sw, $coincidencia),
+            "No se encontró {$variable} con la forma esperada"
+        );
+
+        return $coincidencia[1];
     }
 
     public function testServiceWorkerNoUsaBackgroundSync(): void

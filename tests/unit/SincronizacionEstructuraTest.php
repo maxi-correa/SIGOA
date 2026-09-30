@@ -122,7 +122,16 @@ final class SincronizacionEstructuraTest extends CIUnitTestCase
 
         $pagina = $this->leerPublic('assets/js/pages/obra-inspecciones.js');
         $this->assertStringContainsString('window.SIGOA.sincronizacion', $pagina);
-        $this->assertStringContainsString('sincronizarTodo({ obraId: obraId })', $pagina);
+
+        // D.6.2: el botón "Sincronizar" es la única vía para revivir una
+        // operación que agotó sus reintentos, así que debe pedirlo siempre.
+        $this->assertStringContainsString('sincronizarTodo({ obraId: obraId', $pagina);
+        $this->assertStringContainsString('revivirAgotadas: true', $pagina);
+
+        // D.6.2: el botón de reintento depende del componente, no de un
+        // estado concreto, para que una operación agotada a mitad de intento
+        // tenga también salida manual.
+        $this->assertStringContainsString('requiereReintentoManual', $pagina);
 
         // La estrategia "offline primero" se conserva: la página no dispara fetch().
         $this->assertStringNotContainsString('fetch(', $pagina);
@@ -253,7 +262,9 @@ final class SincronizacionEstructuraTest extends CIUnitTestCase
     {
         $sw = $this->leerPublic('sw.js');
 
-        $this->assertStringContainsString("'sigoa-shell-v5'", $sw);
+        /* El número de versión cambia en cada despliegue y lo comprueba
+           InfraestructuraOfflineTest; aquí importa que el componente esté
+           en la lista de precache, no a qué versión se publicara. */
         $this->assertStringContainsString("'/assets/js/components/sincronizacion.js'", $sw);
     }
 
