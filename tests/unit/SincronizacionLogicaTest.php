@@ -4,13 +4,13 @@ use CodeIgniter\Test\CIUnitTestCase;
 
 /**
  * Pruebas de la lógica de la cola de sincronización (Fase D.4,
- * docs/SIGOA.md §56).
+ * docs/SIGOA.md §56) y del componente de token CSRF (Fase D.6.3, §61).
  *
  * A diferencia de `SincronizacionEstructuraTest`, que solo comprueba que
  * los archivos existen y que su texto contiene las piezas esperadas,
- * estas pruebas EJECUTAN `public/assets/js/components/sincronizacion.js`
- * en Node mediante un banco de pruebas simulado (`tests/js/`), sin
- * navegador y sin IndexedDB real.
+ * estas pruebas EJECUTAN `public/assets/js/components/sincronizacion.js` y
+ * `public/assets/js/components/csrf.js` en Node mediante un banco de
+ * pruebas simulado (`tests/js/`), sin navegador y sin IndexedDB real.
  *
  * El script de Node se salta, en lugar de fallar, cuando el intérprete no
  * está disponible: en un entorno donde Node no forma parte de las
@@ -55,22 +55,22 @@ final class SincronizacionLogicaTest extends CIUnitTestCase
     /**
      * Traduce la ruta del guion al sistema de archivos donde corre Node.
      */
-    private function rutaGuion(string $comando): ?string
+    private function rutaGuion(string $comando, string $guion): ?string
     {
-        $guion = realpath(__DIR__ . '/../js/sincronizacion.test.js');
+        $ruta = realpath(__DIR__ . '/../js/' . $guion);
 
-        if ($guion === false) {
+        if ($ruta === false) {
             return null;
         }
 
         if (! str_contains($comando, '--desde-wsl')) {
-            return $guion;
+            return $ruta;
         }
 
         $salida = [];
         $codigo = 1;
 
-        @exec('wsl.exe -e wslpath -a ' . escapeshellarg($guion) . ' 2>&1', $salida, $codigo);
+        @exec('wsl.exe -e wslpath -a ' . escapeshellarg($ruta) . ' 2>&1', $salida, $codigo);
 
         if ($codigo !== 0 || $salida === []) {
             return null;
@@ -81,15 +81,30 @@ final class SincronizacionLogicaTest extends CIUnitTestCase
 
     public function testLogicaDeLaColaSeEjecutaSinErrores(): void
     {
+        $this->assertGuionJsverde('sincronizacion.test.js');
+    }
+
+    public function testResolucionDelTokenCsrfSeEjecutaSinErrores(): void
+    {
+        $this->assertGuionJsverde('csrf.test.js');
+    }
+
+    /**
+     * Ejecuta un guion de `tests/js/` y verifica que termina en verde.
+     *
+     * @param string $guion Nombre del archivo dentro de `tests/js/`.
+     */
+    private function assertGuionJsverde(string $guion): void
+    {
         $comando = $this->comandoNode();
 
         if ($comando === null) {
             $this->markTestSkipped('Node no está disponible en este entorno.');
         }
 
-        $guion = $this->rutaGuion($comando);
+        $ruta = $this->rutaGuion($comando, $guion);
 
-        $this->assertNotNull($guion, 'No se encontró tests/js/sincronizacion.test.js.');
+        $this->assertNotNull($ruta, "No se encontró tests/js/{$guion}.");
 
         $interprete = str_replace(' --desde-wsl', '', $comando);
         $salida = [];
@@ -99,7 +114,7 @@ final class SincronizacionLogicaTest extends CIUnitTestCase
            incluir argumentos (`wsl.exe -e node`), por lo que no se entrecomilla
            como una ruta única: solo se protege la ruta del guion. */
         exec(
-            $interprete . ' ' . escapeshellarg((string) $guion) . ' 2>&1',
+            $interprete . ' ' . escapeshellarg((string) $ruta) . ' 2>&1',
             $salida,
             $codigo
         );
@@ -107,7 +122,7 @@ final class SincronizacionLogicaTest extends CIUnitTestCase
         $this->assertSame(
             0,
             $codigo,
-            "Las pruebas de lógica de sincronización fallaron:\n" . implode("\n", $salida)
+            "Las pruebas de {$guion} fallaron:\n" . implode("\n", $salida)
         );
 
         $this->assertStringContainsString('0 fallos', implode("\n", $salida));

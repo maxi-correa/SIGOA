@@ -1802,11 +1802,13 @@ Decisiones cerradas en esta fase: HTTPS, UUID, CSRF, sesión, múltiples inspecc
 * El filtro CSRF está **activado globalmente desde la Fase B** (§52.22), antes de exponer las APIs de sincronización. Se apoya en la configuración de `Config\Security` (protección `cookie`, `tokenName = csrf_test_name`, `headerName = X-CSRF-TOKEN`). La activación es transversal y afecta todos los formularios del sistema (ver §32 y §45.8).
 * El manejo debe ser transparente para el usuario.
 * **No se almacenan tokens CSRF en la cola offline.**
-* Con la rotación activa (`Security::$regenerate = true`, mantenido salvo incompatibilidad demostrada), al **comenzar cada sincronización se dispone automáticamente de un token vigente**, sin petición previa ni almacenamiento persistente:
-  1. el layout autenticado (`app/Views/layouts/auth.php`) emite el token con `<?= csrf_meta() ?>` en cada carga de página, lo que **renueva la cookie CSRF cuando esta venció** (`Config\Security::$expires = 7200`);
-  2. `public/assets/js/components/sincronizacion.js` lee ese `<meta name="X-CSRF-TOKEN">` y lo envía como cabecera `X-CSRF-TOKEN` en cada `fetch()`; la cookie `csrf_cookie_name` queda como respaldo.
+* Con la rotación activa (`Security::$regenerate = true`, mantenido salvo incompatibilidad demostrada), cada `fetch()` **resuelve el token en el momento de enviarlo**, sin almacenamiento persistente:
+  1. `public/assets/js/components/csrf.js` (`SIGOA.csrf`) es el **único origen** del token que el cliente envía. Resuelve, en este orden, **cookie `csrf_cookie_name` → cabecera `X-CSRF-TOKEN` de la última respuesta API → `<meta name="X-CSRF-TOKEN">`**, y lo conserva solo en memoria;
+  2. la cookie es la fuente primaria porque es la que el servidor acaba de comparar (`csrfProtection = cookie`) y la que su propia respuesta renueva. Es además el único canal compartido entre pestañas;
+  3. el `<meta>` que emite `app/Views/layouts/auth.php` con `<?= csrf_meta() ?>` queda como **último recurso**: renueva la cookie cuando esta venció (`Config\Security::$expires = 7200`), pero es una foto del token del momento de cargar la página y el navegador no lo actualiza, por lo que **no puede ser la fuente primaria** (causa del defecto documentado en §61);
+  4. cada respuesta API publica el token vigente en la cabecera `X-CSRF-TOKEN` (`App\Filters\CsrfApi::after()`), de modo que la siguiente petición salga con el token renovado sin recargar (§61).
 * Un token vencido o ausente en una petición de la API no produce un error 500: `App\Filters\CsrfApi` (alias global `csrf`, sustituye a `CodeIgniter\Filters\CSRF`) responde **403 JSON `{"ok": false, "error": "CSRF_INVALID"}`**. Las peticiones HTML conservan el comportamiento del filtro original (redirección con mensaje en producción).
-* El cliente trata `CSRF_INVALID` como un rechazo de sesión, no como un fallo de la operación: **no consume intentos**, vuelve la operación a `PENDIENTE` y pide recargar la página (que renueva el token). Los formularios HTML siguen lanzando `SecurityException` como hasta ahora (§52.22).
+* El cliente trata `CSRF_INVALID` como un rechazo de sesión, no como un fallo de la operación: **no consume intentos**, vuelve la operación a `PENDIENTE` y espera su siguiente disparador (reintento manual, reautenticación o recarga). Un rechazo **no renueva el token**: la pausa es real, no un reintento en bucle (§61). Los formularios HTML siguen lanzando `SecurityException` como hasta ahora (§52.22).
 * `tokenRandomize = false`: el token coincide con el hash de la cookie.
 * Los endpoints de sincronización combinan: autenticación, rol/autorización, validación de vigencia histórica (§52.4) y CSRF.
 * Las APIs devuelven `401` explícito ante sesión expirada (§52.6).
@@ -2054,12 +2056,12 @@ Decisiones pendientes (solo las realmente abiertas):
 
 ### CSRF (implementado)
 
-* `Config\Filters`: el alias `csrf` está activo en `$globals['before']`.
+* `Config\Filters`: el alias `csrf` está activo en `$globals['before']` y en `$globals['after']`. La fase `after` es la que publica el token vigente en las respuestas API (§61).
 * `Config\Security` se mantiene sin cambios: protección `cookie`, `tokenRandomize = false`, `tokenName = csrf_test_name`, `headerName = X-CSRF-TOKEN`, `cookieName = csrf_cookie_name`, `expires = 7200`, `regenerate = true`, `redirect` solo en producción (`ENVIRONMENT === 'production'`).
 * `Config\Cookie::$httponly = false`: la cookie CSRF es legible por JavaScript (esquema double-submit). La cookie de sesión `ci_session` **sigue siendo HttpOnly** porque el framework PHP la fuerza en `Session` independientemente de `Config\Cookie`.
 * Formularios HTML tipo POST (12 formularios): incluyen `<?= csrf_field() ?>` (helper global de CI4): login, mis-datos (email y contraseña), empresas (alta/edición, subir logo, eliminar logo), representantes (alta/edición, cambio de estado), obras (alta, ficha, cambio de inspector vigente, cambio de representante vigente).
-* JavaScript (único `fetch()` del sistema, `mis-datos.js`): lee la cookie `csrf_cookie_name` en cada envío y la envía como header `X-CSRF-TOKEN` (además de `X-Requested-With: XMLHttpRequest`). Como `regenerate = true` rota el token en cada petición, leer la cookie en cada `fetch()` garantiza tokens vigentes incluso ante reintentos.
-* Comportamiento ante rechazo CSRF: en producción y petición no-AJAX → redirección hacia atrás con mensaje de error; en peticiones AJAX/API → `SecurityException` (respuesta de error del servidor). Las APIs de sincronización deben enviar siempre un token vigente; un token inválido rechaza la petición.
+* JavaScript: el token lo resuelve `public/assets/js/components/csrf.js` (`SIGOA.csrf`) en cada envío —cookie `csrf_cookie_name`, luego la cabecera `X-CSRF-TOKEN` de la última respuesta, y por último el `<meta name="X-CSRF-TOKEN">` del layout— y lo envía como header `X-CSRF-TOKEN` (además de `X-Requested-With: XMLHttpRequest`). Como `regenerate = true` rota el token en cada petición, resolverlo en cada `fetch()` garantiza tokens vigentes incluso ante reintentos (§61).
+* Comportamiento ante rechazo CSRF: en producción y petición no-AJAX → redirección hacia atrás con mensaje de error; en peticiones AJAX/API → 403 JSON `CSRF_INVALID` (§52.7, §61). Un rechazo no renueva el token: el vigente sigue siendo válido para reintentar.
 * **Ajuste Fase D.5:** el alias global `csrf` apunta a `App\Filters\CsrfApi`, que extiende el filtro del framework y solo cambia el resultado de las peticiones AJAX/API: en lugar de dejar propagating `SecurityException` (que el manejador de excepciones convertía en **500**, indistinguible de una caída del servidor y tratada por el cliente como fallo transitorio) responde **403 JSON `CSRF_INVALID`**. Las peticiones HTML mantienen exactamente el comportamiento anterior. El token vigente lo aporta el layout autenticado con `csrf_meta()` (§52.7).
 
 ### Seguridad base para APIs (implementado)
@@ -2870,12 +2872,16 @@ migraciones: el esquema de `app/Database/Migrations` no se modificó.
   con `intentos = 6`, es decir **congelada**: `puedeReintentar()` es falso, no se programa
   temporizador, el botón de reintento solo aparece en `ERROR` y reautenticarse no la revive.
 * **Solución:** el layout autenticado emite `<?= csrf_meta() ?>`, que renueva la cookie cuando
-  venció y expone el token en `<meta name="X-CSRF-TOKEN">`; `sincronizacion.js` lo prefiere
-  sobre la cookie. `App\Filters\CsrfApi` responde **403 JSON `CSRF_INVALID`** en peticiones
-  AJAX/API en lugar de un 500, y el cliente trata 401/403 como rechazo de sesión **sin consumir
-  intentos** (§52.6, §52.7, §56.6). El temporizador diferido pasó a programarse solo para
-  operaciones con espera real, para que una operación pausada no cancele la planificación de
-  las demás.
+  venció y expone el token en `<meta name="X-CSRF-TOKEN">`; `App\Filters\CsrfApi` responde
+  **403 JSON `CSRF_INVALID`** en peticiones AJAX/API en lugar de un 500, y el cliente trata
+  401/403 como rechazo de sesión **sin consumir intentos** (§52.6, §52.7, §56.6). El temporizador
+  diferido pasó a programarse solo para operaciones con espera real, para que una operación pausada
+  no cancele la planificación de las demás.
+* **Corrección posterior (Fase D.6.3, §61):** este arreglo resolví el caso del token *vencido*
+  —cuando no hay ningún token válido—, pero paneles el orden de las fuentes y dejó el `<meta>` como
+  fuente primaria. Con `regenerate = true` eso solo funcionaba para la **primera** petición de cada
+  carga de página: a partir de la segunda, el `<meta>` quedaba obsoleto y la cola recibía 403. El
+  token vigente se resuelve ahora en `public/assets/js/components/csrf.js`, con la cookie primero.
 
 ### 57.1.2 Fuga de Object URLs en la lista de inspecciones locales
 
@@ -3327,5 +3333,282 @@ publicar `CACHE_VERSION = 'sigoa-shell-v6'` y recargar una vez con la aplicació
   ejecutar `SIGOA.sincronizacion.diagnostico()` en el navegador del teléfono. La corrección cubre
   los dos estados en los que la operación quedaba sin salida (`ERROR` agotada y `SINCRONIZANDO`
   agotada), pero el caso concreto debe confirmarse en el dispositivo.
+
+---
+
+## 60. La cola se drenaba de una en una — drenaje encadenado del ciclo
+
+Defecto observado en el dispositivo después de D.6.2: con varias fotografías capturadas, **solo
+se subía una por recarga**. Cada recarga de la página liberaba exactamente la siguiente. No era
+un problema de red, de permisos ni del servidor —la fila de `operaciones_sincronizacion` llegaba
+bien—, sino que el ciclo no VOLVÍA a mirar la cola después de consumirla.
+
+### 60.1 Causa raíz
+
+Dos defectos en el mismo sitio (`public/assets/js/components/sincronizacion.js`), ambos visibles
+solo con fotografías que se capturan mientras las anteriores se están subiendo:
+
+1. **El ciclo trabaja con una foto de la cola.** `sincronizarTodo()` leía las operaciones una vez por
+   fase y procesaba esa lista. Lo que se capturara durante el ciclo no entraba en la lista ya
+   tomada, así que quedaba `PENDIENTE` sin que nada lo recogiera.
+2. **No había ningún continuador.** Al terminar, el ciclo solo llamaba a `programarDiferido()`, que
+   por definición solo programa cuando queda una espera pendiente (§56.6). Una operación recién
+   encolada tiene `esperaRestante() === 0`, de modo que **no se programaba nada**: la cola quedaba
+   congelada hasta el siguiente disparador externo (`online`, `visibilitychange`, apertura, botón
+   "Sincronizar"). En el dispositivo, el siguiente disparador era la recarga manual.
+
+A esto se sumaba un tercero, relacionado con el lock: una petición que llegaba mientras había un ciclo en
+curso se descartaba con `{ enCurso: true }` sin dejar rastro. Si la petición era un temporizador de
+reintento ya consumido, ese reintento se perdía sin más.
+
+Reproducido de forma determinista antes de corregir (nodo simulado, sin red ni servidor): tras
+subir `f1`, las capturas `f2` y `f3` quedaban `PENDIENTE` y no existía ningún disparador
+programado. Con el componente original, la prueba de regresión `pruebaDrenajeTrasCadaExito` falla
+exactamente así: sube `foto-1` y deja dos en la cola.
+
+### 60.2 Corrección
+
+Se mantiene **un único consumidor** de la cola. El drenaje no es un segundo procesador: es el mismo
+ciclo pidiendo más trabajo.
+
+* `sincronizarTodo()` queda como entrada pública y aplica los guardas (soporte, conexión, lock).
+  Ya no contiene el cuerpo del ciclo.
+* `drenar(opciones)` toma el lock una sola vez, ejecuta `ejecutarCiclo()` y decide si abre otra
+  vuelta. Lo que llega mientras dura el drenaje —el botón "Sincronizar", `online`,
+  `visibilitychange`, la apertura, el temporizador del backoff o una foto capturada en ese
+  instante— se acumula en `cicloPendiente` y se ejecuta **como vuelta siguiente**, nunca en
+  paralelo. Ningún disparador se pierde y nunca hay dos consumidores de la misma cola.
+* `combinarOpciones()` fusiona esa petición con la del ciclo en curso: `revivirAgotadas` se
+  acumula, el alcance solo se acota si ambas peticiones son de la misma obra y la fase solo se
+  restringe si ambas piden la misma. La combinación es deliberadamente más amplia que cada
+  petición por separado, porque su único propósito es que la unión de lo pedido se ejecute.
+* `fusionarResumenes()` acumula los contadores de todas las vueltas, de modo que quien lo pidió —la
+  vista de obra, el botón "Sincronizar"— recibe el resultado del **drenaje completo**. Sin esto, una
+  tanda de fotografías se informaría como "sin cambios" aunque se hubieran enviado todas.
+* `puedeSeguirDrenando()` impide continuar cuando el ciclo se detuvo por una condición real: sin
+  conexión, sesión caducada (401), permiso denegado (403), token de seguridad inválido o fallo de
+  red. En esos casos insistir agotaría los reintentos, que es justo lo que D.6.2 vino a evitar.
+* `ejecutarCiclo()` conserva el comportamiento anterior de una vuelta (orden inspecciones →
+  fotografías, `asegurarCola()`, revive solo si se pide) y añade dos datos al resumen: `intentos`,
+  el número de operaciones que consumieron un intento, y `pendientesElegibles`, cuántas podría
+  tomar la cola automática ahora mismo.
+* `MAX_VUELTAS_DRENADO = 100` acota las vueltas como red de seguridad. El número real de vueltas
+  está acotado por la cola, porque **una vuelta solo continúa si la anterior avanzó**: si consume
+  intentos y todavía queda cola elegible.
+
+### 60.3 Invariantes
+
+* **Un solo consumidor.** El lock `enCurso` se toma una vez al entrar y se suelta al terminar. Un
+  disparo concurrente recibe `{ enCurso: true }` y su petición se encadena, no se ejecuta en
+  paralelo.
+* **El drenaje exige progreso.** Continuar exige `intentos > 0` **y** `pendientesElegibles > 0`.
+  Una cola con solo fotografías bloqueadas por su padre, con operaciones esperando su backoff o en
+  `ERROR` no se pone a girar: espera su propio disparador.
+* **Los fallos no detienen el drenaje.** Un fallo transitorio consume un intento (como ya hacía) y
+  deja la operación en espera de backoff, pero las fotografías siguientes se envían igual. El
+  bloqueo por padre sigue siendo la única dependencia dura.
+* **La cola vacía no programa temporizadores.** Sin esperas pendientes, `programarDiferido()`
+  sigue sin programar nada: el drenaje no deja temporizadores huérfanos.
+* Sin cambios en el backoff `[0, 5 s, 15 s, 30 s, 60 s, 5 min]`, en `MAX_INTENTOS = 6`, en los
+  estados de la cola, en los endpoints, en el orden inspecciones → fotografías ni en la liberación
+  de blobs (sigue siendo solo tras la confirmación del servidor).
+
+### 60.4 Pruebas
+
+Siete pruebas nuevas en `tests/js/sincronizacion.test.js`, todas sobre el comportamiento y no
+sobre la estructura:
+
+* `pruebaVariasFotografiasEnUnCiclo` — tres fotografías pendientes salen con **una sola** llamada a
+  `sincronizarTodo()`, en orden, y un ciclo posterior con la cola vacía no repite peticiones.
+* `pruebaDrenajeTrasCadaExito` — regresión del defecto real: cada fotografía se captura cuando el
+  servidor confirma la anterior, es decir fuera de la foto de la cola que tomó el ciclo. Sin
+  recargar, las tres acaban sincronizadas.
+* `pruebaDrenajeNoAbreSegundoProcesador` — con la primera subida retenida llegan un disparador y
+  otra captura: el disparador devuelve `{ enCurso: true }`, nunca hay dos peticiones simultáneas y
+  lo capturado en vuelo se drena al terminar.
+* `pruebaFalloNoBloqueaElDrenaje` — la segunda falla con 500: la tercera se envía igual, la fallida
+  vuelve a la cola con un intento, no es elegible todavía y el reintento queda programado con la
+  espera del backoff, no de inmediato.
+* `pruebaColaVaciaNoProgramaTemporizador` — ni peticiones ni temporizadores.
+* `pruebaHijoSaleAlConfirmarElPadre` — la fotografía bloqueada se envía en la vuelta que confirma
+  al padre, respetando el orden obligatorio.
+* `pruebaColaBloqueadaNoGira` — con el padre fallando, la fotografía no consume intentos ni se
+  reintenta sola.
+
+Las pruebas de drenaje se envuelven en un tiempo límite para que un eventual bucle infinito falle
+en lugar de colgar la suite. Suite JS: **190 aserciones** en `sincronizacion.test.js` y **19
+pruebas** en `obra-inspecciones.test.js`, en verde. Se comprobó restaurando temporalmente el
+componente anterior (`git checkout`) que las pruebas de drenaje fallan contra él: suben
+`foto-1` y dejan el resto pendiente, que es exactamente el defecto reportado.
+
+No se pudo ejecutar PHPUnit en este entorno: no hay PHP disponible en WSL. Las pruebas PHP
+afectadas son las estructurales (`SincronizacionEstructuraTest`,
+`InfraestructuraOfflineTest`), que solo comprueban la presencia de cadenas y formas en los
+archivos —se verificaron por `grep`— y `SincronizacionLogicaTest`, que se limita a ejecutar
+`sincronizacion.test.js` con Node. Ninguna toca el backend, la base ni los archivos físicos.
+
+*Corrección posterior (Fase D.6.3, §61):* PHP 8.3.28 sí estaba disponible y la suite completa se
+ejecutó en verde. La limitación era del entorno, no del proyecto.
+
+App shell a `sigoa-shell-v7` por el cambio en `sincronizacion.js`. Sin esto, el servicio seguiría
+sirviendo el componente viejo y el dispositivo no observaría ningún cambio.
+
+### 60.5 Fuera de alcance
+
+* Sin cambios en el backend, los endpoints, el modelo de datos ni las rutas.
+* Sin migraciones nuevas ni modificación de migraciones existentes.
+* Sin tocar la raíz física de almacenamiento (§59.3) ni los archivos existentes.
+* Sin cambiar la interfaz: no hay mensajes, botones ni estados visuales nuevos.
+* Sin un procesador paralelo, sin Background Sync y sin cola en el Service Worker. El Service
+  Worker sigue sirviendo el app shell; la cola sigue siendo del componente de sincronización.
+
+---
+
+## 61. Fase D.6.3 — el token CSRF se quedaba obsoleto y frenaba la cola tras la primera petición
+
+§60 arregló el continuador del ciclo, de modo que una tanda de fotografías ya no quedaba
+congelada esperando una recarga. Al ejecutarse en el dispositivo, el síntoma se había desplazado
+una petición: **la primera fotografía subía y las siguientes seguían dando 403 `CSRF_INVALID`**,
+también sin recargar. El defecto ya no estaba en la cola sino en el token.
+
+### 61.1 Causa raíz
+
+`Config\Security` combina dos decisiones que juntas son incompatibles con un `<meta>` estático:
+
+* `csrfProtection = cookie` — la cookie `csrf_cookie_name` **es** el valor contra el que el
+  servidor compara.
+* `regenerate = true` — cada petición que supera la verificación **genera un token nuevo** y
+  reescribe esa cookie.
+
+`csrf_meta()` emite `<meta name="X-CSRF-TOKEN" content="A">` usando el nombre de cabecera
+configurado, de modo que el selector era correcto. El problema es de ciclo de vida: el `<meta>` es
+una **foto** del token en el momento de renderizar la página, y el navegador no lo actualiza.
+
+Con la resolución que venía de D.5 —«el `<meta>` primero, la cookie de respaldo»— la secuencia
+era:
+
+| # | Petición | Token enviado | Cookie tras la respuesta | `<meta>` |
+|---|----------|---------------|---------------------------|----------|
+| 1 | foto 1 | A (meta) | B | A |
+| 2 | foto 2 | A (meta) | B | A |
+| 3 | foto 3 | A (meta) | B | A |
+
+La petición 1 comparaba A con A y devolvía 200 **renovando la cookie a B**. Las peticiones 2 y 3
+seguían enviando A porque el `<meta>` no había cambiado: el servidor esperaba B, devolvía 403 y la
+operación quedaba en `PENDENTE` **sin consumir intentos**. Como el `<meta>` solo se actualiza al
+recargar, la única salida era recargar —justo el rodeo que D.5 había dejado instalado: pedir al
+usuario que recargara para recuperar un token.
+
+Reproducido de forma determinista antes de corregir (nodo simulado, cookie y `<meta>` mutables
+por separado): con el orden defectuoso, la regresión `pruebaVariasFotografiasConRotacionDeToken`
+sube una fotografía y deja las otras dos pendientes, con 403 en cada intento posterior.
+
+### 61.2 Corrección
+
+La renovación deja de ser un efecto secundario invisible: **cada respuesta dice con qué token puede
+hacerse la siguiente petición.**
+
+* **`App\Filters\CsrfApi::after()`** publica el token vigente en la cabecera
+  `X-CSRF-TOKEN` —el mismo nombre que el cliente ya envía, tomado de
+  `Security::getHeaderName()`— en las respuestas de peticiones API/AJAX, las mismas que
+  `before()` distingue. Se registra en `Config\Filters::$globals['after']`. Las respuestas HTML no
+  la llevan: ya llevan el token en la cookie y en el `<meta>` del layout.
+* **`public/assets/js/components/csrf.js`** expone `SIGOA.csrf` con dos operaciones: `token()` y
+  `actualizar(respuesta)`. No hace peticiones, no guarda nada y no sabe nada de la cola: solo
+  resuelve qué token usar ahora mismo.
+* **Orden de resolución** en `token()`: **cookie `csrf_cookie_name` → cabecera `X-CSRF-TOKEN` de la
+  última respuesta → `<meta name="X-CSRF-TOKEN">`**.
+  * *Cookie primero* porque es el valor contra el que el servidor acaba de comparar y el que su
+    propia respuesta renueva. Es además el único canal compartido entre pestañas, así que no se
+    queda obsoleta si otra pestaña sincroniza antes.
+  * *Cabecera después* porque es un canal explícito e independiente de la configuración de cookies
+    (seguiría funcionando con `httponly = true` o si el navegador bloquea la escritura) y no
+    duplica el token en el DOM ni en el cuerpo JSON.
+  * *`<meta>` al final* porque cubre el primer render y el caso de token vencido
+    (`Security::$expires = 7200`), donde todavía no hubo ninguna respuesta API que renovar.
+* **`sincronizacion.js`** y **`mis-datos.js`** dejan de resolver el token por su cuenta y delegan en
+  `SIGOA.csrf`. `actualizar()` se llama **antes de leer el cuerpo y el estado** de cada respuesta,
+  porque cabecera y JSON son excluyentes en el mismo objeto `Response`.
+* `csrf.js` se carga en el layout autenticado antes que `sincronizacion.js` y `app.js`, y se
+  precachea en el app shell.
+
+### 61.3 Invariantes
+
+* **El token se resuelve en cada envío.** Nunca se fija al cargar la página ni se guarda.
+* **Nada se persiste.** El valor resuelto vive solo en memoria del componente: no entra en
+  IndexedDB, ni en la cola, ni en `localStorage`/`sessionStorage` (§52.6, §52.7). Se pierde al
+  recargar, que es lo correcto para un valor rotado.
+* **Un rechazo no renueva nada.** En el camino 403, `verify()` lanza antes de regenerar y, además,
+  `before()` devuelve directamente la respuesta, por lo que los filtros `after` no llegan a
+  ejecutarse. `actualizar()` descarta el valor memorizado y la siguiente resolución vuelve a mirar
+  la cookie y el `<meta>`: la pausa de la cola sigue siendo real, sin reintento en bucle y sin
+  consumir intentos (§56.6).
+* **Sin decisiones de seguridad nuevas.** No se toca `Config\Security`: siguen
+  `csrfProtection = cookie`, `regenerate = true`, `tokenRandomize = false` y `expires = 7200`. La
+  cabecera solo informa a un cliente **del mismo origen** de un valor que ese mismo cliente ya
+  puede leer en su cookie; no habilita por sí mismo ningún ataque ni relaja la protección.
+* Sin cambios en los endpoints, los estados de la cola, el backoff `[0, 5 s, 15 s, 30 s, 60 s,
+  5 min]`, `MAX_INTENTOS = 6`, el orden inspecciones → fotografías ni la liberación de blobs.
+* La cookie CSRF sigue legible por JavaScript (`Config\Cookie::$httponly = false`), como exige el
+  esquema double-submit; la de sesión continúa HttpOnly.
+
+### 61.4 Pruebas
+
+`tests/js/csrf.test.js` (nuevo, **16 aserciones**) sobre `SIGOA.csrf` en banco simulado:
+resolución por cookie; por `<meta>` cuando no hay cookie legible; cadena vacía sin ninguna fuente;
+uso de la cabecera de la respuesta; lectura de la cabecera sin distinguir mayúsculas; descarte del
+valor memorizado cuando la respuesta no trae token; respuesta ausente o sin cabeceras sin romper
+nada; y que no se escriba en ningún almacenamiento (con `localStorage` y `sessionStorage` que
+lanzan si alguien los toca).
+
+En `tests/js/sincronizacion.test.js` el banco pasó a simular la cookie de forma mutable y a dejar
+el `<meta>` congelado, de modo que reproduce el ciclo real de rotación. Nuevas regresiones:
+tres fotografías seguidas con token renovado en cada respuesta; el token renovado es el que sale en
+la petición siguiente; renovación cuando no hay cookie legible y solo llega por cabecera; un token
+irrenovable (ni cookie ni cabecera que renueve) que **no** entra en bucle ni consume intentos; y
+recarga de página, tras la cual la operación se envía con el token vigente y sin renovar el resto de
+la cola. Suite JS: **236 aserciones** en `sincronizacion.test.js`, **16** en `csrf.test.js` y **19
+pruebas** en `obra-inspecciones.test.js`, en verde. Se comprobó que las nuevas regresiones fallan
+contra el componente con el orden defectuoso.
+
+En PHP, `tests/unit/CsrfProteccionTest.php` (12 pruebas): la respuesta API publica la cabecera con
+el token **nuevo** (no con el que envió el cliente), el token publicado permite la petición
+siguiente —que a su vez rota—, y un rechazo 403 deja el token vigente intacto. El caso «el HTML no
+lleva la cabecera» se comprueba invocando el filtro sobre respuestas limpias, porque el banco de
+pruebas comparte el objeto `Response` entre clases (`CIUnitTestCase::$app` es estático) y una
+cabecera publicada por otra prueba aparecería como si la hubiera puesto esa.
+
+Estructurales: `SincronizacionEstructuraTest` verifica el registro de `csrf` en
+`$globals['after']`, la firma de `CsrfApi::after()`, que `csrf.js` no persiste nada (sobre el
+código, sin comentarios, porque el componente documenta la prohibición nombrando esos almacenes),
+que `sincronizacion.js` delega y no lee el DOM, el orden de carga en el layout y el precache del
+Service Worker. `InfraestructuraOfflineTest` verifica que dentro de `token()` la cookie se resuelve
+antes que el `<meta>`, y añade `csrf.js` a los componentes que deben existir.
+
+`SincronizacionLogicaTest` ejecuta ahora los dos guiones de `tests/js/` (cola y token) con Node.
+
+**PHPUnit sí pudo ejecutarse en este entorno**: PHP 8.3.28 (WAMP) sobre el que corre la suite
+completa, **242 pruebas y 838 aserciones en verde**. Ninguna prueba toca la base ni los archivos
+físicos (§59.4).
+
+App shell a `sigoa-shell-v8` por los cambios en `sincronizacion.js`, `csrf.js` y `mis-datos.js`. Sin
+esto el servicio seguiría sirviendo los componentes viejos y el dispositivo no observaría cambio.
+
+*Discrepancia detectada al aplicar este cambio:* `public/sw.js` estaba en `sigoa-shell-v6`, no en
+`sigoa-shell-v7` como afirma §60.4. El salto a v8 invalida cualquier caché anterior, así que la
+discrepancia no tiene efecto funcional; queda registrada y no se ha tocado el texto de §60, que
+describe lo que hizo D.6.2.
+
+### 61.5 Fuera de alcance
+
+* Sin cambios en `Config\Security` ni en ninguna decisión de seguridad preexistente.
+* Sin migraciones nuevas ni modificación de migraciones existentes.
+* Sin tocar la raíz física de almacenamiento (§59.3) ni los archivos existentes.
+* Sin cambios en los endpoints, las rutas, el modelo de datos ni la autorización.
+* Sin cambiar la interfaz: no hay mensajes, botones ni estados visuales nuevos.
+* Sin Background Sync, sin cola en el Service Worker y sin segundo procesador: el Service Worker
+  sigue sirviendo el app shell y la cola sigue siendo del componente de sincronización.
+* Sin reintento automático ante un token inválido: la decisión de reintentar es del sincronizador,
+  no del componente de token.
 
 ---

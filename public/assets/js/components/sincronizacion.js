@@ -67,7 +67,9 @@
    * Ante 401 (`AUTH_REQUIRED`) el ciclo se detiene sin tocar un solo
      registro de entidad: al volver a iniciar sesión, la cola se reanuda
      sola.
-   * No se almacena ninguna credencial ni token CSRF en IndexedDB.
+   * No se almacena ninguna credencial ni token CSRF en IndexedDB. El token
+     no forma parte de la operación persistida: lo resuelve `SIGOA.csrf` en
+     cada envío y lo renueva con cada respuesta (§52.7, §61).
 
    No se usa Background Sync: los disparadores son la apertura de la
    aplicación, la recuperación de conectividad, la visibilidad de la
@@ -80,6 +82,12 @@
 
     var ALMACEN = (window.SIGOA && window.SIGOA.almacenamiento) ? window.SIGOA.almacenamiento : null;
     var CONECTIVIDAD = (window.SIGOA && window.SIGOA.conectividad) ? window.SIGOA.conectividad : null;
+
+    /* Token CSRF vigente. No se resuelve aquí: lo resuelve `SIGOA.csrf`, que
+       es el único origen del token en el cliente y conoce su renovación tras
+       cada respuesta (§61). Este componente no almacena tokens ni de uno ni
+       de otro (§52.7). */
+    var CSRF = (window.SIGOA && window.SIGOA.csrf) ? window.SIGOA.csrf : null;
 
     var ENDPOINT_INSPECCIONES = '/inspector/sincronizar/inspecciones';
     var ENDPOINT_FOTOGRAFIAS  = '/inspector/sincronizar/fotografias';
@@ -125,10 +133,23 @@
 
     /* Lock en memoria: impide ejecuciones simultáneas provocadas por el
        botón "Sincronizar", el evento `online`, `visibilitychange` y la
-       apertura de la aplicación. */
+       apertura de la aplicación.
+
+       `cicloPendiente` no es un segundo procesador: es la petición que llegó
+       mientras había un ciclo en curso. No se ejecuta en paralelo —eso sí
+       sería consumir la misma cola dos veces— sino como continuación del
+       drenaje, de modo que ningún disparador se pierde y siempre hay un
+       único consumidor. */
     var enCurso = false;
+    var cicloPendiente = null;
     var disparadoresRegistrados = false;
     var temporizador = null;
+
+    /* Tope de vueltas del drenaje. Una vuelta solo continúa si la anterior
+       consumió intentos, de modo que el número de vueltas está acotado por la
+       cola; este tope protege frente a un ciclo que "avanzara" sin resolver
+       nada. */
+    var MAX_VUELTAS_DRENADO = 100;
 
     /* ==================================================================
        Utilidades
@@ -154,29 +175,23 @@
         return typeof navigator === 'undefined' || navigator.onLine !== false;
     }
 
-    function obtenerTokenCsrf() {
-        var meta = null;
+    function tokenCsrf() {
+        return CSRF ? CSRF.token() : '';
+    }
 
-        if (typeof document !== 'undefined' && typeof document.querySelector === 'function') {
-            meta = document.querySelector('meta[name="X-CSRF-TOKEN"]');
+    /**
+     * Registra el token que deja vigente una respuesta.
+     *
+     * `SIGOA.csrf` lo resuelve al leer la cabecera `X-CSRF-TOKEN`, que
+     * `App\Filters\CsrfApi::after()` publica en toda respuesta API con el
+     * token vigente tras la regeneración. Sin esto, la segunda petición del
+     * drenaje iría con el token de la primera y el servidor la rechazaría
+     * (§61).
+     */
+    function renovarTokenCsrf(respuesta) {
+        if (CSRF) {
+            CSRF.actualizar(respuesta);
         }
-
-        if (meta && meta.getAttribute('content')) {
-            return meta.getAttribute('content');
-        }
-
-        var prefijo = 'csrf_cookie_name=';
-        var cookies = document.cookie.split(';');
-
-        for (var i = 0; i < cookies.length; i++) {
-            var par = cookies[i].trim();
-
-            if (par.indexOf(prefijo) === 0) {
-                return par.slice(prefijo.length);
-            }
-        }
-
-        return '';
     }
 
     function cabecerasAjson() {
@@ -184,7 +199,7 @@
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRF-TOKEN': obtenerTokenCsrf()
+            'X-CSRF-TOKEN': tokenCsrf()
         };
     }
 
@@ -951,6 +966,12 @@
                 })).then(function (marcadas) {
                     return enviarLoteInspecciones(marcadas)
                         .then(function (resp) {
+                            /* El servidor rota el token en toda petición
+                               aceptada: se registra antes de mirar el estado
+                               o el cuerpo, para que la siguiente operación
+                               salga ya con el vigente (§61). */
+                            renovarTokenCsrf(resp);
+
                             if (resp.status === 401) {
                                 /* Sesión expirada: NO se toca ninguna entidad.
                                    Los intentos ya consumidos quedan
@@ -1001,6 +1022,14 @@
                                 .then(function (resumen) {
                                     return { resumen: resumen };
                                 });
+                        })
+                        .then(function (resultado) {
+                            /* Todo el lote salió: cada operación consumió un
+                               intento, aunque alguna acabara en error. Lo usa
+                               el drenaje para saber que esta vuelta avanzó. */
+                            resultado.procesadas = marcadas.length;
+
+                            return resultado;
                         });
                 });
             });
@@ -1106,7 +1135,7 @@
             headers: {
                 'Accept': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-TOKEN': obtenerTokenCsrf()
+                'X-CSRF-TOKEN': tokenCsrf()
             },
             /* Sin `Content-Type`: el navegador agrega el límite multipart. */
             body: construirFormulario(fotografia, inspeccion)
@@ -1176,6 +1205,13 @@
 
                 return enviarFotografia(item.fotografia, item.inspeccion)
                     .then(function (resp) {
+                        /* Se renueva el token antes de cualquier otra
+                           consideración: aunque esta fotografía falle o se
+                           pause, la siguiente petición del mismo drenaje debe
+                           salir con el token que el servidor acaba de emitir
+                           (§61). */
+                        renovarTokenCsrf(resp);
+
                         if (resp.status === 401) {
                             return pausarTodas([actual], 'Sesión expirada. Se reanudará al iniciar sesión.')
                                 .then(function () {
@@ -1256,6 +1292,15 @@
                         ).then(function () {
                             return { errores: 1 };
                         });
+                    })
+                    .then(function (parcial) {
+                        /* La petición salió: el intento ya está consumido y la
+                           operación esperará su backoff aunque el resultado
+                           sea un error. Lo usa el drenaje para saber que esta
+                           vuelta avanzó. */
+                        parcial.procesada = true;
+
+                        return parcial;
                     });
             });
     }
@@ -1291,7 +1336,11 @@
             bloqueadas: seleccion.bloqueadas.length,
             authRequerida: false,
             prohibido: false,
-            csrfInvalido: false
+            csrfInvalido: false,
+            /* Operaciones que el ciclo puso en `SINCRONIZANDO`, es decir las
+               que consumieron un intento. Es lo que permite decidir si el
+               drenaje puede continuar (§ drenado). */
+            procesadas: 0
         };
         var detener = false;
 
@@ -1328,6 +1377,10 @@
 
                     resumen.sincronizadas += parcial.sincronizadas || 0;
                     resumen.errores += parcial.errores || 0;
+
+                    if (parcial.procesada) {
+                        resumen.procesadas++;
+                    }
                 });
             });
         });
@@ -1350,7 +1403,147 @@
     }
 
     /**
+     * Fase que pide una petición: `null` es el ciclo completo.
+     */
+    function faseDe(config) {
+        if (config && config.soloInspecciones === true) {
+            return 'inspecciones';
+        }
+
+        if (config && config.soloFotografias === true) {
+            return 'fotografias';
+        }
+
+        return null;
+    }
+
+    /**
+     * Obra que acota una petición: `null` es un ciclo global.
+     */
+    function alcanceDe(config) {
+        if (!config || config.obraId === undefined || config.obraId === null) {
+            return null;
+        }
+
+        return config.obraId;
+    }
+
+    /**
+     * Combina dos peticiones de ciclo sin perder trabajo.
+     *
+     * Se usa cuando una segunda petición llega mientras ya hay un ciclo en
+     * curso. La combinación es deliberadamente más amplia que cada petición
+     * por separado, porque su único propósito es que la unión de lo pedido se
+     * ejecute alguna vez:
+     *
+     * * `revivirAgotadas` se acumula: la acción manual del inspector no puede
+     *   perderse porque otra petición fuera automática;
+     * * el alcance solo se acota si ambas peticiones apuntan a la misma obra.
+     *   Si una es global, o si discrepan, la combinación es global;
+     * * la fase solo se restringe si ambas piden la misma. Si una pide el
+     *   ciclo completo, la combinación también es completa.
+     */
+    function combinarOpciones(primera, segunda) {
+        var a = primera || {};
+        var b = segunda || {};
+        var resultado = Object.assign({}, a, b);
+
+        resultado.revivirAgotadas = a.revivirAgotadas === true || b.revivirAgotadas === true;
+
+        var alcanceA = alcanceDe(a);
+        var alcanceB = alcanceDe(b);
+
+        if (alcanceA === null || alcanceB === null || alcanceA !== alcanceB) {
+            delete resultado.obraId;
+        }
+
+        if (faseDe(a) !== faseDe(b)) {
+            delete resultado.soloInspecciones;
+            delete resultado.soloFotografias;
+        }
+
+        return resultado;
+    }
+
+    /**
+     * Suma dos resúmenes de ciclo.
+     *
+     * El drenaje puede comprise varias vueltas y quien lo pidió (la vista de
+     * obra, el botón "Sincronizar") necesita el resultado de **todo** el
+     * drenaje: si solo devolviera la última vuelta, una tanda de fotografías
+     * se informaría como "sin cambios" aunque se hubieran enviado todas.
+     *
+     * Los contadores se suman y los indicadores de pausa se propagan; el
+     * estado de la cola (`pendientes`, `pendientesElegibles`, `bloqueadas`,
+     * `vacio`) es una foto del final y lo decide la última vuelta.
+     */
+    function fusionarResumenes(acumulado, nuevo) {
+        var previo = acumulado || {};
+        var inspeccionesPrevias = previo.inspecciones || resumenInspeccionesVacio();
+        var fotografiasPrevias = previo.fotografias || resumenFotografiasVacio();
+        var inspeccionesNuevas = nuevo.inspecciones || resumenInspeccionesVacio();
+        var fotografiasNuevas = nuevo.fotografias || resumenFotografiasVacio();
+        var total = Object.assign({}, previo);
+
+        total.revividas = (previo.revividas || 0) + (nuevo.revividas || 0);
+        total.intentos  = (previo.intentos || 0) + (nuevo.intentos || 0);
+
+        total.inspecciones = {
+            sincronizadas:   (inspeccionesPrevias.sincronizadas || 0) + (inspeccionesNuevas.sincronizadas || 0),
+            yaSincronizadas: (inspeccionesPrevias.yaSincronizadas || 0) + (inspeccionesNuevas.yaSincronizadas || 0),
+            rechazadas:      (inspeccionesPrevias.rechazadas || 0) + (inspeccionesNuevas.rechazadas || 0),
+            errores:         (inspeccionesPrevias.errores || 0) + (inspeccionesNuevas.errores || 0)
+        };
+
+        total.fotografias = {
+            sincronizadas:   (fotografiasPrevias.sincronizadas || 0) + (fotografiasNuevas.sincronizadas || 0),
+            yaSincronizadas: (fotografiasPrevias.yaSincronizadas || 0) + (fotografiasNuevas.yaSincronizadas || 0),
+            errores:         (fotografiasPrevias.errores || 0) + (fotografiasNuevas.errores || 0),
+            /* `bloqueadas` describe la cola al terminar, no un total. */
+            bloqueadas:      fotografiasNuevas.bloqueadas || 0,
+            authRequerida:   nuevo.authRequerida === true || previo.authRequerida === true,
+            prohibido:       nuevo.prohibido === true || previo.prohibido === true,
+            csrfInvalido:    nuevo.csrfInvalido === true || previo.csrfInvalido === true
+        };
+
+        total.authRequerida = nuevo.authRequerida === true || previo.authRequerida === true;
+        total.prohibido     = nuevo.prohibido === true || previo.prohibido === true;
+        total.csrfInvalido  = nuevo.csrfInvalido === true || previo.csrfInvalido === true;
+        total.sinConexion   = nuevo.sinConexion === true || previo.sinConexion === true;
+
+        if (!total.error && nuevo.error) {
+            total.error = nuevo.error;
+        }
+
+        total.pendientes          = nuevo.pendientes;
+        total.pendientesElegibles = nuevo.pendientesElegibles;
+        total.vacio               = nuevo.vacio;
+
+        return total;
+    }
+
+    /**
+     * Un ciclo puede seguir drenando solo si no se detuvo por una condición
+     * real. Una pausa por sesión, un rechazo de permisos, un token de
+     * seguridad vencido, un fallo de red o la pérdida de conectividad son
+     * motivos para dejar la cola como está y esperar al siguiente disparador
+     * (§56.6): seguir insistiendo aquí agotaría los reintentos.
+     */
+    function puedeSeguirDrenando(resumen) {
+        return hayConectividad()
+            && resumen.authRequerida !== true
+            && resumen.prohibido !== true
+            && resumen.csrfInvalido !== true
+            && resumen.sinConexion !== true
+            && !resumen.error;
+    }
+
+    /**
      * Sincroniza inspecciones y fotografías respetando el orden obligatorio.
+     *
+     * Es la entrada pública. Si ya hay un ciclo consumiendo la cola no abre
+     * un segundo procesador: registra la petición (`cicloPendiente`) y la
+     * ejecuta el propio ciclo, al final, como continuación del drenaje.
      *
      * @param {object}  [opciones]
      * @param {number}  [opciones.obraId] Limita el ciclo a una obra.
@@ -1365,15 +1558,14 @@
      */
     function sincronizarTodo(opciones) {
         var config = opciones || {};
-        var soloInspecciones = config.soloInspecciones === true;
-        var soloFotografias  = config.soloFotografias === true;
-        var revivir          = config.revivirAgotadas === true;
 
         if (!supported()) {
             return Promise.resolve({ error: 'NO_LOCAL_STORAGE' });
         }
 
         if (enCurso) {
+            cicloPendiente = combinarOpciones(cicloPendiente, config);
+
             return Promise.resolve({ enCurso: true });
         }
 
@@ -1381,11 +1573,25 @@
             return Promise.resolve({ sinConexion: true });
         }
 
-        enCurso = true;
+        return drenar(config);
+    }
+
+    /**
+     * Una pasada completa sobre la cola: inspecciones y después fotografías.
+     *
+     * Trabaja con la cola tal como la encuentra al empezar. Lo que se
+     * capture mientras dura la pasada lo recoge la vuelta siguiente del
+     * drenaje, no esta.
+     */
+    function ejecutarCiclo(config) {
+        var soloInspecciones = config.soloInspecciones === true;
+        var soloFotografias  = config.soloFotografias === true;
+        var revivir          = config.revivirAgotadas === true;
 
         var resumen = {
             vacio:         true,
             revividas:     0,
+            intentos:      0,
             inspecciones:  resumenInspeccionesVacio(),
             fotografias:   resumenFotografiasVacio()
         };
@@ -1432,6 +1638,10 @@
 
                         resumen.inspecciones = resultado.resumen;
 
+                        if (resultado.procesadas) {
+                            resumen.intentos += resultado.procesadas;
+                        }
+
                         return resumen;
                     });
             })
@@ -1457,6 +1667,7 @@
                                 resumen.authRequerida = parcial.authRequerida;
                                 resumen.prohibido = parcial.prohibido;
                                 resumen.csrfInvalido = parcial.csrfInvalido;
+                                resumen.intentos += parcial.procesadas || 0;
 
                                 if (parcial.sincronizadas > 0
                                     || parcial.errores > 0
@@ -1478,11 +1689,18 @@
                 return resumen;
             })
             .then(function (resultado) {
-                enCurso = false;
-
                 return obtenerOperaciones()
                     .then(function (operaciones) {
+                        var ahora = ahoraMilisegundos();
+
                         resultado.pendientes = resumir(operaciones);
+
+                        /* Cuántas operaciones podría tomar la cola automática
+                           ahora mismo. Es el criterio del drenaje: si queda
+                           algo elegible, un ciclo que advanced debe seguir. */
+                        resultado.pendientesElegibles = operaciones.filter(function (operacion) {
+                            return puedeReintentar(operacion, ahora);
+                        }).length;
 
                         if (!resultado.vacio) {
                             resultado.vacio = resultado.pendientes.total === 0;
@@ -1496,6 +1714,83 @@
                         return resultado;
                     });
             });
+    }
+
+    /**
+     * Mantiene un único ciclo de procesamiento activo y drena la cola.
+     *
+     * El bloqueo (`enCurso`) se toma una sola vez, al entrar, y se suelta
+     * al terminar: mientras dura el drenaje no hay un segundo procesador
+     * capaz de consumir las mismas operaciones. Lo que llega durante el
+     * drenaje (la apertura de la aplicación, `online`, `visibilitychange`, el
+     * botón "Sincronizar", el temporizador del backoff o una fotografía
+     * capturada en este instante) no se ejecuta en paralelo ni se descarta:
+     * se encadena como vuelta siguiente.
+     *
+     * El drenaje continúa cuando la vuelta anterior **consumió intentos** y
+     * todavía queda cola elegible. Exige avance a propósito: una cola que
+     * solo tiene fotografías bloqueadas por su padre —o operaciones en
+     * espera de su backoff, o en `ERROR`— no debe reiniciar el ciclo nunca
+     * sola. Esas esperan su propio disparador (§56.6).
+     */
+    function drenar(config) {
+        var opciones = config || {};
+        var acumulado = null;
+        var vueltas = 0;
+
+        enCurso = true;
+
+        function paso() {
+            return ejecutarCiclo(opciones).then(function (resumen) {
+                acumulado = fusionarResumenes(acumulado, resumen);
+
+                var pendiente = cicloPendiente;
+
+                cicloPendiente = null;
+
+                /* Una operación completada dispara la siguiente: si esta vuelta
+                   envió algo y queda cola elegible, se encadena otra vuelta sin
+                   esperar a ningún disparador externo. */
+                if (puedeSeguirDrenando(acumulado)
+                    && resumen.intentos > 0
+                    && resumen.pendientesElegibles > 0
+                    && vueltas < MAX_VUELTAS_DRENADO
+                ) {
+                    vueltas++;
+
+                    if (pendiente) {
+                        opciones = combinarOpciones(opciones, pendiente);
+                    }
+
+                    return paso();
+                }
+
+                /* Petición recibida durante el drenaje: se ejecuta ahora, en el
+                   mismo consumidor y sin dejar el lock en el camino. Si el
+                   ciclo se detuvo por una pausa real, la petición se abandona
+                   con él: la retomará el siguiente disparador (login, `online`,
+                   visibilidad o el propio botón). */
+                if (pendiente
+                    && puedeSeguirDrenando(acumulado)
+                    && vueltas < MAX_VUELTAS_DRENADO
+                ) {
+                    vueltas++;
+                    opciones = combinarOpciones(opciones, pendiente);
+
+                    return paso();
+                }
+
+                enCurso = false;
+
+                return acumulado;
+            }, function (error) {
+                enCurso = false;
+
+                throw error;
+            });
+        }
+
+        return paso();
     }
 
     /**

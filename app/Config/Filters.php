@@ -80,6 +80,11 @@ class Filters extends BaseFilters
         'after' => [
             // 'honeypot',
             // 'secureheaders',
+
+            /* `CsrfApi::after()` publica el token CSRF vigente en la cabecera
+               de las respuestas API, para que el cliente pueda renovarlo tras
+               cada petición correcta (`regenerate = true`). */
+            'csrf',
         ],
     ];
 

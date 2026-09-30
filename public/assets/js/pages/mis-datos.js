@@ -7,17 +7,15 @@
 
     /* ================================================================
        Token CSRF
-       ================================================================ */
+       ================================================================
+       `SIGOA.csrf` es el único origen del token vigente (§61): con
+       `Security::$regenerate = true` el servidor rota el token en cada
+       petición aceptada, así que no puede leerse una sola vez al cargar la
+       página. */
+    var CSRF = (window.SIGOA && window.SIGOA.csrf) ? window.SIGOA.csrf : null;
+
     function obtenerTokenCsrf() {
-        var prefijo = 'csrf_cookie_name=';
-        var cookies = document.cookie.split(';');
-        for (var i = 0; i < cookies.length; i++) {
-            var par = cookies[i].trim();
-            if (par.indexOf(prefijo) === 0) {
-                return par.slice(prefijo.length);
-            }
-        }
-        return '';
+        return CSRF ? CSRF.token() : '';
     }
 
     function actualizarTokenCsrfFormulario(form, idCampoCsrf) {
@@ -27,6 +25,18 @@
         var campo = document.getElementById(idCampoCsrf);
         if (campo) {
             campo.value = token;
+        }
+    }
+
+    /**
+     * Registra el token que deja vigente una respuesta.
+     *
+     * Debe ejecutarse antes de leer el cuerpo: la cabecera y el JSON son
+     * excluyentes en el mismo objeto `Response`.
+     */
+    function renovarTokenCsrf(respuesta) {
+        if (CSRF) {
+            CSRF.actualizar(respuesta);
         }
     }
 
@@ -272,6 +282,8 @@
                 }
             })
             .then(function (resp) {
+                renovarTokenCsrf(resp);
+
                 return resp.json();
             })
             .then(function (data) {

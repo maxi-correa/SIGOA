@@ -23,8 +23,8 @@
 
 'use strict';
 
-var CACHE_VERSION = 'sigoa-shell-v6';
-var SHELL_CACHE = 'sigoa-shell-v6';
+var CACHE_VERSION = 'sigoa-shell-v8';
+var SHELL_CACHE = 'sigoa-shell-v8';
 
 var PREFIJO_ESTATICO = '/assets/';
 
@@ -56,6 +56,7 @@ var SHELL_ASSETS = [
     '/assets/vendor/bootstrap-icons/fonts/bootstrap-icons.woff2',
     '/assets/js/components/sidebar.js',
     '/assets/js/components/uuid.js',
+    '/assets/js/components/csrf.js',
     '/assets/js/components/indexeddb.js',
     '/assets/js/components/connectivity.js',
     '/assets/js/components/camera-resize.js',

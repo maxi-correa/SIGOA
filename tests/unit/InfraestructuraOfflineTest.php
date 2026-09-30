@@ -130,6 +130,7 @@ final class InfraestructuraOfflineTest extends CIUnitTestCase
         $componentes = [
             'assets/js/app.js',
             'assets/js/components/uuid.js',
+            'assets/js/components/csrf.js',
             'assets/js/components/indexeddb.js',
             'assets/js/components/connectivity.js',
             'assets/js/components/camera-resize.js',
@@ -193,7 +194,7 @@ final class InfraestructuraOfflineTest extends CIUnitTestCase
     public function testLayoutAutenticadoExponeTokenCsrfVigente(): void
     {
         $layout = file_get_contents(APPPATH . 'Views/layouts/auth.php');
-        $js     = $this->leerPublic('assets/js/components/sincronizacion.js');
+        $js     = $this->leerPublic('assets/js/components/csrf.js');
 
         $this->assertNotFalse($layout);
         $this->assertStringContainsString(
@@ -201,10 +202,32 @@ final class InfraestructuraOfflineTest extends CIUnitTestCase
             $layout,
             'El layout autenticado debe emitir el token CSRF para que la cola disponga siempre de uno vigente.'
         );
-        $this->assertStringContainsString(
-            "meta[name=\"X-CSRF-TOKEN\"]",
-            $js,
-            'El cliente debe leer el token del meta emitted por el layout antes de recurrir a la cookie.'
+
+        /* La cookie es la fuente primaria: el layout solo cubre el primer
+           render y el meta no se renueva por sí solo (Fase D.6.3, §61). */
+        $this->assertStringContainsString('meta[name="X-CSRF-TOKEN"]', $js);
+        $this->assertStringContainsString('document.cookie', $js);
+
+        /* El orden importa dentro de `token()`, no en el archivo: el meta
+           queda congelado en el valor del primer render, mientras que la
+           cookie la reescribe cada respuesta. */
+        $inicio = strpos($js, 'function token()');
+        $fin    = strpos($js, 'function actualizar(', (int) $inicio);
+
+        $this->assertIsInt($inicio);
+        $this->assertIsInt($fin);
+
+        $cuerpo = substr($js, $inicio, $fin - $inicio);
+
+        $posCookie = strpos($cuerpo, 'tokenEnCookie()');
+        $posMeta   = strpos($cuerpo, 'tokenEnMeta()');
+
+        $this->assertIsInt($posCookie);
+        $this->assertIsInt($posMeta);
+        $this->assertLessThan(
+            $posMeta,
+            $posCookie,
+            'La cookie debe resolverse antes que el meta: leer el meta primero fue la causa del drenaje de fotografías.'
         );
     }
 }

@@ -268,6 +268,129 @@ final class SincronizacionEstructuraTest extends CIUnitTestCase
         $this->assertStringContainsString("'/assets/js/components/sincronizacion.js'", $sw);
     }
 
+    /**
+     * Quita comentarios de bloque y de línea.
+     *
+     * Permite comprobar restricciones sobre el *código* (por ejemplo, que un
+     * componente no lea `document.cookie`) sin que estorben los comentarios
+     * que documentan precisamente esa regla.
+     */
+    private function sinComentarios(string $js): string
+    {
+        $limpio = preg_replace('~/\*.*?\*/~s', '', $js);
+
+        return (string) preg_replace('~(^|\s)//.*$~m', '$1', (string) $limpio);
+    }
+
+    /* ==================================================================
+       Fase D.6.3 — token CSRF vigente (docs/SIGOA.md §61)
+       ================================================================== */
+
+    /**
+     * La renovación solo es utilizable si el cliente puede conocer el token
+     * nuevo, así que el filtro que devuelve el 403 en JSON debe registrar
+     * también su `after()`: es el que publica `X-CSRF-TOKEN`.
+     */
+    public function testFiltroCsrfApiRegistradoComoAfterGlobal(): void
+    {
+        $filtros = $this->leerApp('Config/Filters.php');
+
+        $this->assertMatchesRegularExpression(
+            '/\$globals\s*=\s*\[.*?[\'"]after[\'"]\s*=>\s*\[[^\]]*csrf/s',
+            $filtros,
+            'El filtro csrf debe ejecutarse en la fase `after` global, no solo en `before`.'
+        );
+    }
+
+    public function testFiltroCsrfApiPublicaElTokenVigenteEnLaRespuesta(): void
+    {
+        $filtro = $this->leerApp('Filters/CsrfApi.php');
+
+        $this->assertStringContainsString('class CsrfApi extends BaseCsrf', $filtro);
+        $this->assertMatchesRegularExpression('/function\s+after\s*\(/', $filtro);
+        $this->assertStringContainsString('getHeaderName()', $filtro);
+        $this->assertStringContainsString('setHeader(', $filtro);
+        $this->assertStringContainsString('getHash()', $filtro);
+
+        /* La cabecera solo se publica en peticiones API: el HTML ya lleva el
+           token en el `<meta>` y no necesita un canal adicional. */
+        $this->assertMatchesRegularExpression('/function\s+esPeticionApi\s*\(/', $filtro);
+        $this->assertStringContainsString('application/json', $filtro);
+    }
+
+    /**
+     * `csrf.js` debe existir por sí mismo: es el origen único del token y
+     * depende solo del DOM, no de la cola.
+     */
+    public function testComponenteCsrfEsElUnicoOrigenDelToken(): void
+    {
+        $componente = $this->leerPublic('assets/js/components/csrf.js');
+
+        $this->assertStringContainsString('SIGOA.csrf', $componente);
+        $this->assertStringContainsString('function token(', $componente);
+        $this->assertStringContainsString('function actualizar(', $componente);
+        $this->assertStringContainsString("CABECERA       = 'X-CSRF-TOKEN'", $componente);
+
+        /* El token se resuelve en cada envío, no se fija al cargar. */
+        $this->assertStringContainsString('meta[name="X-CSRF-TOKEN"]', $componente);
+
+        /* Nunca se persiste: el valor resuelto vive solo en memoria. Se
+           comprueba sobre el código, sin comentarios, porque el componente
+           documenta la prohibición nombrando esos almacenes. */
+        $codigo = $this->sinComentarios($componente);
+
+        $this->assertStringNotContainsString('localStorage', $codigo);
+        $this->assertStringNotContainsString('sessionStorage', $codigo);
+        $this->assertStringNotContainsString('indexedDB', $codigo);
+    }
+
+    /**
+     * La cola no debe leer el token por su cuenta: delegar en el componente
+     * es lo que impide que vuelva a colarse un `<meta>` congelado.
+     */
+    public function testSincronizacionDelegaElTokenEnElComponenteCsrf(): void
+    {
+        $componente = $this->leerPublic('assets/js/components/sincronizacion.js');
+
+        $this->assertStringContainsString('window.SIGOA.csrf', $componente);
+        $this->assertStringContainsString('CSRF.token()', $componente);
+        $this->assertStringContainsString('CSRF.actualizar(', $componente);
+
+        /* Sin lectura directa del DOM. */
+        $codigo = $this->sinComentarios($componente);
+
+        $this->assertStringNotContainsString('querySelector', $codigo);
+        $this->assertStringNotContainsString('document.cookie', $codigo);
+
+        /* Sigue enviando la cabecera que el servidor renovó. */
+        $this->assertStringContainsString("'X-CSRF-TOKEN'", $componente);
+    }
+
+    public function testComponenteCsrfSeCargaAntesDeLaSincronizacion(): void
+    {
+        $layout = $this->leerApp('Views/layouts/auth.php');
+
+        $this->assertStringContainsString('assets/js/components/csrf.js', $layout);
+
+        $posCsrf           = strpos($layout, "base_url('assets/js/components/csrf.js')");
+        $posSincronizacion = strpos($layout, "base_url('assets/js/components/sincronizacion.js')");
+
+        $this->assertNotFalse($posCsrf);
+        $this->assertNotFalse($posSincronizacion);
+        $this->assertLessThan(
+            $posSincronizacion,
+            $posCsrf,
+            'SIGOA.csrf debe existir cuando la cola resuelva el token.'
+        );
+    }
+
+    public function testServiceWorkerPrecacheaElComponenteCsrf(): void
+    {
+        $sw = $this->leerPublic('sw.js');
+
+        $this->assertStringContainsString("'/assets/js/components/csrf.js'", $sw);
+    }
+
     public function testAtributoHiddenGanaAMostrarDisplayDeLosComponentes(): void
     {
         $app = $this->leerPublic('assets/css/app.css');

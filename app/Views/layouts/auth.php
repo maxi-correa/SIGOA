@@ -84,6 +84,7 @@
 
     <script src="<?= base_url('assets/js/components/sidebar.js') ?>"></script>
     <script src="<?= base_url('assets/js/components/uuid.js') ?>"></script>
+    <script src="<?= base_url('assets/js/components/csrf.js') ?>"></script>
     <script src="<?= base_url('assets/js/components/indexeddb.js') ?>"></script>
     <script src="<?= base_url('assets/js/components/connectivity.js') ?>"></script>
     <script src="<?= base_url('assets/js/components/sincronizacion.js') ?>"></script>
