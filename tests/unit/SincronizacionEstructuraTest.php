@@ -200,8 +200,18 @@ final class SincronizacionEstructuraTest extends CIUnitTestCase
         $this->assertMatchesRegularExpression('/function\s+nombreThumbnailFotografia\s*\(/', $contenido);
         $this->assertMatchesRegularExpression('/function\s+absolutoDesdeRelativa\s*\(/', $contenido);
 
-        /* Se conserva la estructura base usada por Inspector\Obras::ver(). */
+        /* La carpeta base de la obra se conserva para Inspector\Obras::ver(). */
         $this->assertMatchesRegularExpression('/function\s+asegurarEstructuraObra\s*\(/', $contenido);
+
+        /* IMAGENES/THUMBNAILS solo existen dentro de la carpeta de una inspección:
+           asegurarEstructuraObra() no debe recrear el esquema legacy retirado. */
+        $this->assertSame(
+            1,
+            preg_match('/function\s+asegurarEstructuraObra\b.*?^\s{4}\}/ms', $contenido, $coincidencia),
+            'No se pudo aislar el cuerpo de asegurarEstructuraObra().'
+        );
+        $this->assertStringNotContainsString('DIR_IMAGENES', $coincidencia[0]);
+        $this->assertStringNotContainsString('DIR_THUMBNAILS', $coincidencia[0]);
     }
 
     public function testComponenteSincronizacionExponeColaYBackoff(): void

@@ -53,14 +53,44 @@ final class ObraAlmacenamientoTest extends CIUnitTestCase
         $this->assertFalse($servicio->asegurarEstructuraObra('OBR-000001'));
     }
 
-    public function testAsegurarEstructuraObraCreaCarpetas(): void
+    public function testAsegurarEstructuraObraCreaSoloLaCarpetaDeLaObra(): void
     {
         $servicio = new ObraAlmacenamiento($this->tmp);
 
         $this->assertTrue($servicio->asegurarEstructuraObra('OBR-000001'));
         $this->assertTrue(is_dir($this->tmp . DIRECTORY_SEPARATOR . 'OBR-000001'));
-        $this->assertTrue(is_dir($this->tmp . DIRECTORY_SEPARATOR . 'OBR-000001' . DIRECTORY_SEPARATOR . 'IMAGENES'));
-        $this->assertTrue(is_dir($this->tmp . DIRECTORY_SEPARATOR . 'OBR-000001' . DIRECTORY_SEPARATOR . 'THUMBNAILS'));
+    }
+
+    /**
+     * El esquema legacy `OBR-XXXXXX/{IMAGENES,THUMBNAILS}` fue retirado en la
+     * Fase E.1.2: dejar de recrearlo es el motivo del cambio, así que se
+     * verifica explícitamente que no vuelva a aparecer.
+     */
+    public function testAsegurarEstructuraObraNoCreaCarpetasLegacy(): void
+    {
+        $servicio = new ObraAlmacenamiento($this->tmp);
+
+        $this->assertTrue($servicio->asegurarEstructuraObra('OBR-000001'));
+
+        $obra = $this->tmp . DIRECTORY_SEPARATOR . 'OBR-000001';
+
+        $this->assertFalse(is_dir($obra . DIRECTORY_SEPARATOR . 'IMAGENES'));
+        $this->assertFalse(is_dir($obra . DIRECTORY_SEPARATOR . 'THUMBNAILS'));
+    }
+
+    public function testAsegurarEstructuraInspeccionCreaImagenesYThumbnails(): void
+    {
+        $servicio = new ObraAlmacenamiento($this->tmp);
+
+        $relativa = $servicio->asegurarEstructuraInspeccion(
+            'OBR-000001',
+            '2026-09-25',
+            'e4cba23b-199a-467f-942c-a09f4a4a4edb'
+        );
+
+        $this->assertSame('OBR-000001/2026-09-25/e4cba23b-199a-467f-942c-a09f4a4a4edb', $relativa);
+        $this->assertTrue(is_dir($this->tmp . DIRECTORY_SEPARATOR . 'OBR-000001' . DIRECTORY_SEPARATOR . '2026-09-25' . DIRECTORY_SEPARATOR . 'e4cba23b-199a-467f-942c-a09f4a4a4edb' . DIRECTORY_SEPARATOR . 'IMAGENES'));
+        $this->assertTrue(is_dir($this->tmp . DIRECTORY_SEPARATOR . 'OBR-000001' . DIRECTORY_SEPARATOR . '2026-09-25' . DIRECTORY_SEPARATOR . 'e4cba23b-199a-467f-942c-a09f4a4a4edb' . DIRECTORY_SEPARATOR . 'THUMBNAILS'));
     }
 
     public function testAsegurarEstructuraObraEsIdempotente(): void
@@ -77,29 +107,6 @@ final class ObraAlmacenamientoTest extends CIUnitTestCase
 
         $this->assertFalse($servicio->asegurarEstructuraObra('INVALIDO'));
         $this->assertFalse($servicio->asegurarEstructuraObra('OBR-000001/../EVIL'));
-    }
-
-    public function testDirectorioImagenes(): void
-    {
-        $servicio = new ObraAlmacenamiento($this->tmp);
-        $servicio->asegurarEstructuraObra('OBR-000003');
-
-        $esperado = $this->tmp . DIRECTORY_SEPARATOR . 'OBR-000003' . DIRECTORY_SEPARATOR . 'IMAGENES';
-
-        $this->assertSame($esperado, $servicio->directorioImagenes('OBR-000003'));
-        $this->assertNull($servicio->directorioImagenes('OBR-999999'));
-        $this->assertNull($servicio->directorioImagenes('INVALIDO'));
-    }
-
-    public function testDirectorioThumbnails(): void
-    {
-        $servicio = new ObraAlmacenamiento($this->tmp);
-        $servicio->asegurarEstructuraObra('OBR-000003');
-
-        $esperado = $this->tmp . DIRECTORY_SEPARATOR . 'OBR-000003' . DIRECTORY_SEPARATOR . 'THUMBNAILS';
-
-        $this->assertSame($esperado, $servicio->directorioThumbnails('OBR-000003'));
-        $this->assertNull($servicio->directorioThumbnails('OBR-999999'));
     }
 
     public function testRutaRelativaObra(): void

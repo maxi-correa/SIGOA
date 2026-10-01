@@ -12,9 +12,10 @@ use App\Services\ObraAlmacenamiento;
  * Vista operativa de las obras del inspector.
  *
  * En esta fase solo se prepara la ruta, la validación de pertenencia y la
- * estructura física de almacenamiento: un inspector únicamente puede
- * acceder a las obras que tiene asignadas de forma vigente. La vista
- * operativa completa se implementará en una etapa posterior.
+ * carpeta física de la obra: un inspector únicamente puede acceder a las obras
+ * que tiene asignadas de forma vigente. La estructura de fotografías se crea
+ * después, por inspección, mediante `ObraAlmacenamiento::asegurarEstructuraInspeccion()`.
+ * La vista operativa completa se implementará en una etapa posterior.
  */
 class Obras extends BaseController
 {
@@ -31,8 +32,7 @@ class Obras extends BaseController
      * Verifica que el usuario autenticado sea el inspector vigente de la
      * obra antes de mostrar cualquier contenido, para impedir el acceso
      * arbitrario por URL a obras que no le corresponden. Solo cuando la
-     * pertenencia es válida se prepara la estructura física de
-     * almacenamiento de la obra (IMAGENES y THUMBNAILS).
+     * pertenencia es válida se prepara la carpeta física de la obra.
      */
     public function ver(int $id)
     {

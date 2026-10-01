@@ -62,7 +62,7 @@ final class InspectorObrasStorageTest extends CIUnitTestCase
         parent::tearDown();
     }
 
-    public function testObraVigenteCreaEstructuraDeAlmacenamiento(): void
+    public function testObraVigenteCreaCarpetaDeAlmacenamiento(): void
     {
         $this->crearObra(1, 'CENTRO DE SALUD NORTE', 1);
         $this->crearAsignacionVigente(1, 10);
@@ -71,8 +71,23 @@ final class InspectorObrasStorageTest extends CIUnitTestCase
 
         $this->assertTrue($resultado->isOK());
         $this->assertTrue(is_dir($this->raiz . DIRECTORY_SEPARATOR . 'OBR-000001'));
-        $this->assertTrue(is_dir($this->raiz . DIRECTORY_SEPARATOR . 'OBR-000001' . DIRECTORY_SEPARATOR . 'IMAGENES'));
-        $this->assertTrue(is_dir($this->raiz . DIRECTORY_SEPARATOR . 'OBR-000001' . DIRECTORY_SEPARATOR . 'THUMBNAILS'));
+    }
+
+    /**
+     * Abrir la ficha de una obra no debe volver a crear las carpetas legacy
+     * `OBR-XXXXXX/{IMAGENES,THUMBNAILS}` retiradas en la Fase E.1.2.
+     */
+    public function testAbrirObraNoCreaCarpetasLegacy(): void
+    {
+        $this->crearObra(1, 'CENTRO DE SALUD NORTE', 1);
+        $this->crearAsignacionVigente(1, 10);
+
+        $this->controller(Obras::class)->execute('ver', 1);
+
+        $obra = $this->raiz . DIRECTORY_SEPARATOR . 'OBR-000001';
+
+        $this->assertFalse(is_dir($obra . DIRECTORY_SEPARATOR . 'IMAGENES'));
+        $this->assertFalse(is_dir($obra . DIRECTORY_SEPARATOR . 'THUMBNAILS'));
     }
 
     public function testEstructuraYaExistenteNoFalla(): void
@@ -85,8 +100,9 @@ final class InspectorObrasStorageTest extends CIUnitTestCase
         $resultado = $this->controller(Obras::class)->execute('ver', 1);
 
         $this->assertTrue($resultado->isOK());
-        $this->assertTrue(is_dir($this->raiz . DIRECTORY_SEPARATOR . 'OBR-000001' . DIRECTORY_SEPARATOR . 'IMAGENES'));
-        $this->assertTrue(is_dir($this->raiz . DIRECTORY_SEPARATOR . 'OBR-000001' . DIRECTORY_SEPARATOR . 'THUMBNAILS'));
+        $this->assertTrue(is_dir($this->raiz . DIRECTORY_SEPARATOR . 'OBR-000001'));
+        $this->assertFalse(is_dir($this->raiz . DIRECTORY_SEPARATOR . 'OBR-000001' . DIRECTORY_SEPARATOR . 'IMAGENES'));
+        $this->assertFalse(is_dir($this->raiz . DIRECTORY_SEPARATOR . 'OBR-000001' . DIRECTORY_SEPARATOR . 'THUMBNAILS'));
     }
 
     public function testInspectorNoVigenteRedirigeYNoCreaEstructura(): void

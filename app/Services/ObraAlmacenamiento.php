@@ -6,16 +6,9 @@ namespace App\Services;
  * Almacenamiento físico de archivos de una obra.
  *
  * Organiza el almacenamiento de fotografías por obra bajo la raíz
- * configurada en Config\SigoaStorage:
- *
- *   <RAIZ_SIGOA>/
- *   ├── OBR-000001/
- *   │   ├── IMAGENES/                (estructura base, Fase D.1/D.2)
- *   │   └── THUMBNAILS/
- *   └── OBR-000002/
- *
- * Desde la Fase D.4 (§52.8) las fotografías de una inspección se organizan
- * con la estructura anidada definitiva:
+ * configurada en Config\SigoaStorage. Desde la Fase D.4 (§52.8) la estructura
+ * de una obra es únicamente su carpeta, y las fotografías de cada inspección se
+ * organizan con la estructura anidada definitiva:
  *
  *   <RAIZ_SIGOA>/
  *   └── OBR-000001/
@@ -24,9 +17,14 @@ namespace App\Services;
  *               ├── IMAGENES/
  *               └── THUMBNAILS/
  *
- * Ambos esquemas conviven: `asegurarEstructuraObra()` y sus subdirectorios
- * siguen disponibles para el llamador de D.2 (`Inspector\Obras::ver()`), y los
- * métodos `*Inspeccion()` agregan el nivel fecha + uuid sin romperlos.
+ * `asegurarEstructuraObra()` crea solo la carpeta de la obra y se apoya en el
+ * llamador `Inspector\Obras::ver()`. `asegurarEstructuraInspeccion()` agrega
+ * los niveles fecha + uuid e IMAGENES/THUMBNAILS.
+ *
+ * El esquema anterior `OBR-XXXXXX/{IMAGENES,THUMBNAILS}`, que solo servía como
+ * estructura base, fue retirado en la Fase E.1.2 junto con las carpetas vacías
+ * que dejaba en el almacenamiento. Las carpetas IMAGENES y THUMBNAILS existen
+ * únicamente dentro de la carpeta de una inspección.
  *
  * La raíz se resuelve desde SIGOA_STORAGE_PATH. Los nombres de carpetas se
  * derivan únicamente de `obras.codigo`, de la fecha de la inspección y de su
@@ -38,10 +36,10 @@ namespace App\Services;
  */
 class ObraAlmacenamiento
 {
-    /** Carpeta de fotografías originales dentro de cada obra. */
+    /** Carpeta de fotografías originales dentro de cada inspección. */
     public const DIR_IMAGENES = 'IMAGENES';
 
-    /** Carpeta de miniaturas dentro de cada obra. */
+    /** Carpeta de miniaturas dentro de cada inspección. */
     public const DIR_THUMBNAILS = 'THUMBNAILS';
 
     /** Patrón de la carpeta de fecha (`YYYY-MM-DD`) dentro de una obra. */
@@ -111,11 +109,15 @@ class ObraAlmacenamiento
     }
 
     /**
-     * Crea automáticamente la estructura de carpetas de una obra:
-     * raíz, carpeta de la obra, IMAGENES y THUMBNAILS.
+     * Crea automáticamente la carpeta base de una obra: raíz y `OBR-XXXXXX`.
      *
-     * La operación es idempotente: si las carpetas ya existen solo
-     * verifica que estén escriturables.
+     * No crea las carpetas `IMAGENES` y `THUMBNAILS` de nivel de obra: desde la
+     * Fase E.1.2 ese esquema se retiró porque solo dejaba carpetas vacías en el
+     * almacenamiento. Los subdirectorios se crean por inspección, con fecha y
+     * UUID, mediante `asegurarEstructuraInspeccion()`.
+     *
+     * La operación es idempotente: si la carpeta ya existe solo verifica que
+     * esté escriturable.
      */
     public function asegurarEstructuraObra(string $codigo): bool
     {
@@ -125,45 +127,17 @@ class ObraAlmacenamiento
             return false;
         }
 
-        foreach ([
-            $codigo,
-            $codigo . DIRECTORY_SEPARATOR . self::DIR_IMAGENES,
-            $codigo . DIRECTORY_SEPARATOR . self::DIR_THUMBNAILS,
-        ] as $relativo) {
-            $directorio = $this->raiz . DIRECTORY_SEPARATOR . $relativo;
+        $directorio = $this->raiz . DIRECTORY_SEPARATOR . $codigo;
+
+        if (! is_dir($directorio)) {
+            @mkdir($directorio, self::PERMISOS_DIRECTORIO, true);
 
             if (! is_dir($directorio)) {
-                @mkdir($directorio, self::PERMISOS_DIRECTORIO, true);
-
-                if (! is_dir($directorio)) {
-                    return false;
-                }
-            }
-
-            if (! is_writable($directorio)) {
                 return false;
             }
         }
 
-        return true;
-    }
-
-    /**
-     * Directorio absoluto de fotografías de una obra, o null si la
-     * carpeta no existe o el código no es válido.
-     */
-    public function directorioImagenes(string $codigo): ?string
-    {
-        return $this->directorioObra($codigo, self::DIR_IMAGENES);
-    }
-
-    /**
-     * Directorio absoluto de miniaturas de una obra, o null si la
-     * carpeta no existe o el código no es válido.
-     */
-    public function directorioThumbnails(string $codigo): ?string
-    {
-        return $this->directorioObra($codigo, self::DIR_THUMBNAILS);
+        return is_writable($directorio);
     }
 
     /**
@@ -419,23 +393,6 @@ class ObraAlmacenamiento
             && $nombreArchivo !== '.'
             && $nombreArchivo !== '..'
             && preg_match('/\A[A-Za-z0-9._-]+\z/', $nombreArchivo) === 1;
-    }
-
-    /**
-     * Resuelve y valida un subdirectorio de una obra.
-     */
-    private function directorioObra(string $codigo, string $subdirectorio): ?string
-    {
-        $codigo = $this->normalizarCodigo($codigo);
-
-        if ($codigo === null || $this->raiz === '') {
-            return null;
-        }
-
-        $directorio = $this->raiz . DIRECTORY_SEPARATOR
-            . $codigo . DIRECTORY_SEPARATOR . $subdirectorio;
-
-        return is_dir($directorio) ? $directorio : null;
     }
 
     /**

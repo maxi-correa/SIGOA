@@ -1837,7 +1837,8 @@ Obra → Fecha → Inspección → archivos
 ```
 
 * El nombre de la carpeta de obra continúa siendo su código interno `OBR-XXXXXX` (de `obras.codigo`), validado con `ObraAlmacenamiento::normalizarCodigo()` (formato `^OBR-\d{6}$`, anti-traversal).
-* `ObraAlmacenamiento` (hoy crea `OBR/IMAGENES` y `OBR/THUMBNAILS`, usado en `Inspector\Obras::ver()`) deberá **ajustarse incrementalmente a la estructura anidada sin romper el código ya implementado**: nuevos métodos por obra+fecha+uuid, compatibilidad con el comportamiento actual y actualización de llamadores.
+* `ObraAlmacenamiento` ya expone los métodos por obra+fecha+uuid (`asegurarEstructuraInspeccion()`, `rutaRelativaInspeccion()`, `rutaRelativaImagen()`, `rutaRelativaThumbnail()`), usados por `FotografiaArchivo`. `asegurarEstructuraObra()`, llamado por `Inspector\Obras::ver()`, crea únicamente la carpeta `OBR-XXXXXX`.
+* Desde la Fase E.1.2 el esquema base `OBR-XXXXXX/{IMAGENES,THUMBNAILS}` quedó **retirado**: solo dejaba carpetas vacías en el almacenamiento y ninguna ruta de la base lo referencia. `IMAGENES` y `THUMBNAILS` existen únicamente dentro de la carpeta de una inspección.
 * En la base de datos se guardan **referencias relativas** a la raíz (`Config\SigoaStorage`), nunca rutas absolutas — misma convención que `empresas.ruta_logo`.
 * El código de la obra no se expone innecesariamente en la interfaz del inspector (§51.3, ya no se muestra).
 
