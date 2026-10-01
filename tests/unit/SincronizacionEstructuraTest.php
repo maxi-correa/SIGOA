@@ -214,6 +214,43 @@ final class SincronizacionEstructuraTest extends CIUnitTestCase
         $this->assertStringNotContainsString('DIR_THUMBNAILS', $coincidencia[0]);
     }
 
+    /**
+     * Fase E.2: la carpeta de la inspección se deriva de la hora, con un
+     * sufijo ordinal ante colisiones, y el UUID dejó de formar parte del
+     * esquema físico (sigue siendo la identidad técnica, en la base).
+     */
+    public function testEsquemaFisicoDeInspeccionSeDerivadDeLaHoraYNoDelUuid(): void
+    {
+        $almacenamiento = $this->leerApp('Services/ObraAlmacenamiento.php');
+
+        $this->assertMatchesRegularExpression('/function\s+nombreCarpetaInspeccion\s*\(/', $almacenamiento);
+        $this->assertMatchesRegularExpression('/function\s+normalizarHoraCarpeta\s*\(/', $almacenamiento);
+        $this->assertStringContainsString('SIN-HORA', $almacenamiento);
+
+        /* El UUID ya no se valida ni se compone en ninguna ruta física. */
+        $this->assertStringNotContainsString('normalizarUuid', $almacenamiento);
+        $this->assertStringNotContainsString('PATRON_UUID', $almacenamiento);
+        $this->assertStringNotContainsString('$uuidInspeccion', $almacenamiento);
+
+        /* El sufijo ordinal lo decide la base de datos, no el sistema de
+           archivos: el modelo lo resuelve por `inspecciones.id ASC`. */
+        $modelo = $this->leerApp('Models/InspeccionModel.php');
+
+        $this->assertMatchesRegularExpression('/function\s+sufijoCarpeta\s*\(/', $modelo);
+        $this->assertMatchesRegularExpression('/function\s+nombreCarpetaInspeccion\s*\(/', $modelo);
+        $this->assertStringContainsString("'id <', \$inspeccionId", $modelo);
+
+        /* El nombre de archivo fotográfico no cambia en E.2. */
+        $this->assertMatchesRegularExpression(
+            '/\'INS-%05d-%s-%s\.%s\'/',
+            $almacenamiento
+        );
+        $this->assertMatchesRegularExpression(
+            '/\'THB-%05d-%s-%s\.%s\'/',
+            $almacenamiento
+        );
+    }
+
     public function testComponenteSincronizacionExponeColaYBackoff(): void
     {
         $componente = $this->leerPublic('assets/js/components/sincronizacion.js');

@@ -38,6 +38,12 @@ use App\Services\FotografiaArchivo;
  * Desde la Fase D.4 el mismo controlador expone la alta de fotografías
  * (`fotografias()`), que hereda la autorización de su inspección y respeta
  * el orden inspecciones → fotografías (§52.13, §56).
+ *
+ * Desde la Fase E.2 el nombre de la carpeta física de la inspección se deriva
+ * de `fecha_inspeccion` + `hora_inspeccion` (con sufijo ordinal ante
+ * coincidencias, por `inspecciones.id ASC`) y **no** del `uuid`, que conserva
+ * su papel de identidad técnica y de idempotencia de la sincronización
+ * (§52.8).
  */
 class Sincronizar extends BaseController
 {
@@ -242,6 +248,30 @@ class Sincronizar extends BaseController
             ]);
         }
 
+        /* --- Nombre físico de la carpeta de la inspección (Fase E.2) ------ */
+        /* Se deriva de fecha_inspeccion + hora_inspeccion y, si esa
+           combinación ya está usada por otras inspecciones de la misma obra,
+           del desempate por `inspecciones.id ASC`. Nunca del UUID, que sigue
+           siendo la identidad técnica de la inspección. */
+
+        $nombreCarpeta = (new InspeccionModel())->nombreCarpetaInspeccion(
+            $obraId,
+            (string) $inspeccion->fecha_inspeccion,
+            $inspeccion->hora_inspeccion === null ? null : (string) $inspeccion->hora_inspeccion,
+            (int) $inspeccion->id
+        );
+
+        if ($nombreCarpeta === null) {
+            log_message('error', 'SIGOA sync: no se pudo determinar la carpeta física uuid=' . $uuidFoto);
+
+            return $this->respuestaErrorOperacion(
+                $usuarioId,
+                $uuidFoto,
+                'STORAGE_ERROR',
+                'No fue posible determinar el almacenamiento de la inspección.'
+            );
+        }
+
         /* --- Escritura del archivo y del thumbnail ---------------------- */
         /* Orden: validar (hecho) → carpetas → imagen → thumbnail → base de
            datos. Si la base de datos falla, se borran solo los archivos
@@ -251,7 +281,7 @@ class Sincronizar extends BaseController
             $resultadoArchivo['ruta_origen'],
             (string) $obra->codigo,
             (string) $inspeccion->fecha_inspeccion,
-            (string) $inspeccion->uuid,
+            $nombreCarpeta,
             (int) $inspeccion->id,
             $resultadoArchivo['datos']
         );
@@ -264,7 +294,7 @@ class Sincronizar extends BaseController
             $escritura['ruta_absoluta'],
             (string) $obra->codigo,
             (string) $inspeccion->fecha_inspeccion,
-            (string) $inspeccion->uuid,
+            $nombreCarpeta,
             (int) $inspeccion->id
         );
 

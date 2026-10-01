@@ -6,30 +6,40 @@ namespace App\Services;
  * Almacenamiento físico de archivos de una obra.
  *
  * Organiza el almacenamiento de fotografías por obra bajo la raíz
- * configurada en Config\SigoaStorage. Desde la Fase D.4 (§52.8) la estructura
- * de una obra es únicamente su carpeta, y las fotografías de cada inspección se
- * organizan con la estructura anidada definitiva:
+ * configurada en Config\SigoaStorage. La estructura de una obra es únicamente
+ * su carpeta, y las fotografías de cada inspección se organizan con la
+ * estructura anidada definitiva (Fase E.2, §52.8):
  *
  *   <RAIZ_SIGOA>/
  *   └── OBR-000001/
- *       └── 2026-09-22/
- *           └── UUID-DE-INSPECCION/
+ *       └── 2026-09-30/
+ *           ├── 11-14-00/
+ *           │   ├── IMAGENES/
+ *           │   └── THUMBNAILS/
+ *           └── 11-14-00-2/
  *               ├── IMAGENES/
  *               └── THUMBNAILS/
  *
  * `asegurarEstructuraObra()` crea solo la carpeta de la obra y se apoya en el
  * llamador `Inspector\Obras::ver()`. `asegurarEstructuraInspeccion()` agrega
- * los niveles fecha + uuid e IMAGENES/THUMBNAILS.
+ * los niveles fecha + nombre de inspección e IMAGENES/THUMBNAILS.
  *
  * El esquema anterior `OBR-XXXXXX/{IMAGENES,THUMBNAILS}`, que solo servía como
  * estructura base, fue retirado en la Fase E.1.2 junto con las carpetas vacías
  * que dejaba en el almacenamiento. Las carpetas IMAGENES y THUMBNAILS existen
  * únicamente dentro de la carpeta de una inspección.
  *
+ * Desde la Fase E.2 el nombre de la carpeta de inspección se deriva
+ * exclusivamente de `inspecciones.fecha_inspeccion` e
+ * `inspecciones.hora_inspeccion` (más un sufijo ordinal ante colisiones de
+ * fecha+hora dentro de la misma obra). El UUID de la inspección es su
+ * identidad técnica y de sincronización, pero nunca forma parte del nombre
+ * de una carpeta física.
+ *
  * La raíz se resuelve desde SIGOA_STORAGE_PATH. Los nombres de carpetas se
- * derivan únicamente de `obras.codigo`, de la fecha de la inspección y de su
- * UUID, los tres validados con formatos internos estricto antes de usarse,
- * lo que impide traversal de rutas.
+ * derivan de `obras.codigo`, de la fecha, de la hora y del sufijo, todos
+ * validados con formatos internos estrictos antes de usarse, lo que impide
+ * traversal de rutas.
  *
  * En la base de datos solo se almacenan referencias relativas; nunca
  * rutas absolutas (misma convención que `empresas.ruta_logo`).
@@ -45,8 +55,19 @@ class ObraAlmacenamiento
     /** Patrón de la carpeta de fecha (`YYYY-MM-DD`) dentro de una obra. */
     private const PATRON_FECHA = '/\A\d{4}-\d{2}-\d{2}\z/';
 
-    /** Patrón RFC 4122 de la carpeta de inspección. */
-    private const PATRON_UUID = '/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i';
+    /** Patrón de hora HH:MM:SS. */
+    private const PATRON_HORA = '/\A(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d\z/';
+
+    /**
+     * Patrón del nombre físico de la carpeta de una inspección: `HH-MM-SS`
+     * (o la medianoche `00-00-00`), `SIN-HORA`, y ambos con sufijo ordinal
+     * opcional (`-2`, `-3`, …). El sufijo es un entero positivo sin ceros a
+     * la izquierda: nunca se produce `-0` ni `-01`.
+     *
+     * Es la barrera anti-traversal del nombre de carpeta: aunque el nombre lo
+     * compone el propio servicio, se revalida antes de usarlo en una ruta.
+     */
+    private const PATRON_CARPETA_INSPECCION = '/\A(?:(?:[01]\d|2[0-3])-[0-5]\d-[0-5]\d|SIN-HORA)(?:-[1-9]\d{0,8})?\z/';
 
     /** Longitud de la trama aleatoria del nombre físico de una fotografía. */
     private const LONGITUD_TRAMA = 6;
@@ -114,7 +135,7 @@ class ObraAlmacenamiento
      * No crea las carpetas `IMAGENES` y `THUMBNAILS` de nivel de obra: desde la
      * Fase E.1.2 ese esquema se retiró porque solo dejaba carpetas vacías en el
      * almacenamiento. Los subdirectorios se crean por inspección, con fecha y
-     * UUID, mediante `asegurarEstructuraInspeccion()`.
+     * hora, mediante `asegurarEstructuraInspeccion()`.
      *
      * La operación es idempotente: si la carpeta ya existe solo verifica que
      * esté escriturable.
@@ -150,9 +171,9 @@ class ObraAlmacenamiento
     }
 
     /* ==================================================================
-       Estructura anidada de una inspección (Fase D.4 / §52.8)
+       Estructura anidada de una inspección (Fase D.4 / §52.8, E.2)
 
-       OBR-XXXXXX / YYYY-MM-DD / UUID-INSPECCION / {IMAGENES,THUMBNAILS}
+       OBR-XXXXXX / YYYY-MM-DD / NOMBRE-INSPECCION / {IMAGENES,THUMBNAILS}
        ================================================================== */
 
     /**
@@ -176,48 +197,91 @@ class ObraAlmacenamiento
     }
 
     /**
-     * Valida y normaliza el UUID de la inspección para usarlo como nombre de
-     * carpeta. Devuelve la forma canónica en minúsculas o null si no es un
-     * UUID RFC 4122.
+     * Normaliza la hora de inspección al nombre de carpeta correspondiente.
+     *
+     * Reglas (Fase E.2):
+     *
+     *  * `11:14:00` → `11-14-00`;
+     *  * `00:00:00` → `00-00-00`: la medianoche es una hora válida y **no**
+     *    equivale a una hora ausente;
+     *  * hora ausente (null o vacía) → `SIN-HORA`;
+     *  * cualquier otra forma → null.
+     *
+     * Una hora ilegible **no** se degrada a `SIN-HORA`: `SIN-HORA` significa
+     * exclusivamente "la inspección no tiene hora", y confundir ambas cosas
+     * mezclaría dos carpetas de inspecciones distintas. Un dato ilegible es un
+     * error de datos y se rechaza (null), no se renombra.
+     *
+     * La comparación con la base de datos para desambiguar inspecciones de
+     * una misma obra, fecha y hora es responsabilidad de quien determina el
+     * sufijo (`InspeccionModel::nombreCarpetaInspeccion()`); aquí solo se
+     * decide la forma del nombre a partir de la hora.
      */
-    public function normalizarUuid(string $uuid): ?string
+    public function normalizarHoraCarpeta(?string $hora): ?string
     {
-        $uuid = trim($uuid);
+        if ($hora === null || trim($hora) === '') {
+            return 'SIN-HORA';
+        }
 
-        return preg_match(self::PATRON_UUID, $uuid) === 1 ? strtolower($uuid) : null;
+        $hora = trim($hora);
+
+        return preg_match(self::PATRON_HORA, $hora) === 1 ? str_replace(':', '-', $hora) : null;
+    }
+
+    /**
+     * Nombre físico de la carpeta de una inspección a partir de su hora y del
+     * sufijo ordinal dentro de la misma obra + fecha + hora.
+     *
+     * El sufijo 1 (la inspección con menor `id` del grupo) usa el nombre base;
+     * los siguientes añaden `-2`, `-3`, etc.
+     *
+     * Devuelve null si el sufijo es menor que 1 o si la hora no es válida, de
+     * modo que una inspection nunca se escriba dentro de una carpeta que no le
+     * corresponde.
+     */
+    public function nombreCarpetaInspeccion(?string $hora, int $sufijo): ?string
+    {
+        $base = $this->normalizarHoraCarpeta($hora);
+
+        if ($base === null || $sufijo < 1) {
+            return null;
+        }
+
+        return $sufijo === 1 ? $base : $base . '-' . $sufijo;
     }
 
     /**
      * Ruta relativa de la carpeta de una inspección, sin subdirectorio final:
-     * `OBR-XXXXXX/YYYY-MM-DD/UUID-INSPECCION`.
+     * `OBR-XXXXXX/YYYY-MM-DD/NOMBRE-INSPECCION`.
      *
-     * Devuelve null si el código, la fecha o el UUID no son válidos, de modo
-     * que nunca se compone una ruta a partir de datos no verificados.
+     * Devuelve null si el código, la fecha o el nombre de carpeta no son
+     * válidos, de modo que nunca se compone una ruta a partir de datos no
+     * verificados.
      */
-    public function rutaRelativaInspeccion(string $codigo, string $fecha, string $uuidInspeccion): ?string
+    public function rutaRelativaInspeccion(string $codigo, string $fecha, string $nombreCarpetaInspeccion): ?string
     {
         $codigo = $this->normalizarCodigo($codigo);
         $fecha  = $this->normalizarFecha($fecha);
-        $uuid   = $this->normalizarUuid($uuidInspeccion);
+        $nombre = $this->validarNombreCarpeta($nombreCarpetaInspeccion);
 
-        if ($codigo === null || $fecha === null || $uuid === null) {
+        if ($codigo === null || $fecha === null || $nombre === null) {
             return null;
         }
 
-        return $codigo . '/' . $fecha . '/' . $uuid;
+        return $codigo . '/' . $fecha . '/' . $nombre;
     }
 
     /**
      * Crea (idempotentemente) la estructura completa de una inspección:
-     * obra / fecha / uuid / IMAGENES / THUMBNAILS.
+     * obra / fecha / nombre-carpeta / IMAGENES / THUMBNAILS.
      *
      * Devuelve la ruta relativa de la carpeta de la inspección
-     * (`OBR-XXXXXX/YYYY-MM-DD/UUID`) o null si algún dato no es válido o si
+     * (`OBR-XXXXXX/YYYY-MM-DD/NOMBRE`) o null si algún dato no es válido o si
      * el sistema de archivos no permite preparar las carpetas.
      */
-    public function asegurarEstructuraInspeccion(string $codigo, string $fecha, string $uuidInspeccion): ?string
+    public function asegurarEstructuraInspeccion(string $codigo, string $fecha, string $nombreCarpetaInspeccion): ?string
     {
-        $relativa = $this->rutaRelativaInspeccion($codigo, $fecha, $uuidInspeccion);
+        $relativa = $this->rutaRelativaInspeccion($codigo, $fecha, $nombreCarpetaInspeccion);
 
         if ($relativa === null || ! $this->asegurarRaiz()) {
             return null;
@@ -243,31 +307,27 @@ class ObraAlmacenamiento
      * Directorio absoluto de las imágenes de una inspección, o null si la
      * estructura no existe o algún dato no es válido.
      */
-    public function directorioImagenesInspeccion(string $codigo, string $fecha, string $uuidInspeccion): ?string
+    public function directorioImagenesInspeccion(string $codigo, string $fecha, string $nombreCarpetaInspeccion): ?string
     {
-        return $this->directorioRelativo(
-            $this->rutaRelativaInspeccion($codigo, $fecha, $uuidInspeccion) . '/' . self::DIR_IMAGENES
-        );
+        return $this->directorioSubcarpetaInspeccion($codigo, $fecha, $nombreCarpetaInspeccion, self::DIR_IMAGENES);
     }
 
     /**
      * Directorio absoluto de las miniaturas de una inspección, o null si la
      * estructura no existe o algún dato no es válido.
      */
-    public function directorioThumbnailsInspeccion(string $codigo, string $fecha, string $uuidInspeccion): ?string
+    public function directorioThumbnailsInspeccion(string $codigo, string $fecha, string $nombreCarpetaInspeccion): ?string
     {
-        return $this->directorioRelativo(
-            $this->rutaRelativaInspeccion($codigo, $fecha, $uuidInspeccion) . '/' . self::DIR_THUMBNAILS
-        );
+        return $this->directorioSubcarpetaInspeccion($codigo, $fecha, $nombreCarpetaInspeccion, self::DIR_THUMBNAILS);
     }
 
     /**
      * Ruta relativa del archivo de una imagen de una inspección
-     * (`OBR-XXXXXX/YYYY-MM-DD/UUID/IMAGENES/nombre`).
+     * (`OBR-XXXXXX/YYYY-MM-DD/NOMBRE/IMAGENES/nombre`).
      */
-    public function rutaRelativaImagen(string $codigo, string $fecha, string $uuidInspeccion, string $nombreArchivo): ?string
+    public function rutaRelativaImagen(string $codigo, string $fecha, string $nombreCarpetaInspeccion, string $nombreArchivo): ?string
     {
-        $base = $this->rutaRelativaInspeccion($codigo, $fecha, $uuidInspeccion);
+        $base = $this->rutaRelativaInspeccion($codigo, $fecha, $nombreCarpetaInspeccion);
 
         if ($base === null || ! $this->esNombreArchivoSeguro($nombreArchivo)) {
             return null;
@@ -278,11 +338,11 @@ class ObraAlmacenamiento
 
     /**
      * Ruta relativa del thumbnail de una fotografía
-     * (`OBR-XXXXXX/YYYY-MM-DD/UUID/THUMBNAILS/nombre`).
+     * (`OBR-XXXXXX/YYYY-MM-DD/NOMBRE/THUMBNAILS/nombre`).
      */
-    public function rutaRelativaThumbnail(string $codigo, string $fecha, string $uuidInspeccion, string $nombreArchivo): ?string
+    public function rutaRelativaThumbnail(string $codigo, string $fecha, string $nombreCarpetaInspeccion, string $nombreArchivo): ?string
     {
-        $base = $this->rutaRelativaInspeccion($codigo, $fecha, $uuidInspeccion);
+        $base = $this->rutaRelativaInspeccion($codigo, $fecha, $nombreCarpetaInspeccion);
 
         if ($base === null || ! $this->esNombreArchivoSeguro($nombreArchivo)) {
             return null;
@@ -396,8 +456,35 @@ class ObraAlmacenamiento
     }
 
     /**
+     * Valida un nombre de carpeta de inspección contra el patrón interno,
+     * rechazando separadores y rutas relativas.
+     */
+    private function validarNombreCarpeta(string $nombre): ?string
+    {
+        $nombre = trim($nombre);
+
+        return preg_match(self::PATRON_CARPETA_INSPECCION, $nombre) === 1 ? $nombre : null;
+    }
+
+    /**
+     * Resuelve un subdirectorio concreto de una inspección
+     * (`OBR/fecha/nombre/IMAGENES` o `/THUMBNAILS`) y lo devuelve si existe
+     * en disco.
+     */
+    private function directorioSubcarpetaInspeccion(string $codigo, string $fecha, string $nombreCarpetaInspeccion, string $subcarpeta): ?string
+    {
+        $relativa = $this->rutaRelativaInspeccion($codigo, $fecha, $nombreCarpetaInspeccion);
+
+        if ($relativa === null) {
+            return null;
+        }
+
+        return $this->directorioRelativo($relativa . '/' . $subcarpeta);
+    }
+
+    /**
      * Resuelve una ruta relativa de un subdirectorio ya compuesto
-     * (`OBR/fecha/uuid/IMAGENES`) y la devuelve si existe en disco.
+     * (`OBR/fecha/nombre/IMAGENES`) y la devuelve si existe en disco.
      */
     private function directorioRelativo(string $relativa): ?string
     {

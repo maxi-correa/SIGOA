@@ -23,8 +23,8 @@ use Config\Database as DatabaseConfig;
  * Verifica de punta a punta lo que la prueba manual no pudo confirmar:
  * `uuid` persistido en `inspecciones` y `fotografias`, trazabilidad en
  * `operaciones_sincronizacion`, escritura física de la imagen y su
- * thumbnail en la estructura `OBR-XXXXXX/AAAA-MM-DD/UUID/{IMAGENES,
- * THUMBNAILS}` e idempotencia del reenvío.
+ * thumbnail en la estructura `OBR-XXXXXX/AAAA-MM-DD/HH-mm-ss/{IMAGENES,
+ * THUMBNAILS}` (Fase E.2) e idempotencia del reenvío.
  *
  * La base real de la aplicación **no se toca**: se crea y se elimina una
  * base con nombre propio. Si el servidor no es MySQL/MariaDB o no permite
@@ -295,9 +295,12 @@ final class SincronizarMysqlRealTest extends CIUnitTestCase
         $this->assertSame('image/jpeg', $fila->mime_type);
         $this->assertSame('jpg', strtolower((string) $fila->extension));
 
-        /* Archivos físicos en la estructura definitiva. */
-        $this->assertStringStartsWith('OBR-000099/2026-03-15/' . $this->uuidInspeccion . '/IMAGENES/', (string) $fila->ruta_relativa);
-        $this->assertStringStartsWith('OBR-000099/2026-03-15/' . $this->uuidInspeccion . '/THUMBNAILS/', (string) $fila->ruta_thumbnail);
+        /* Archivos físicos en la estructura definitiva. Desde la Fase E.2 la
+           carpeta de la inspección se deriva de fecha + hora, no del UUID. */
+        $this->assertStringStartsWith('OBR-000099/2026-03-15/10-30-00/IMAGENES/', (string) $fila->ruta_relativa);
+        $this->assertStringStartsWith('OBR-000099/2026-03-15/10-30-00/THUMBNAILS/', (string) $fila->ruta_thumbnail);
+        $this->assertStringNotContainsString($this->uuidInspeccion, (string) $fila->ruta_relativa);
+        $this->assertStringNotContainsString($this->uuidInspeccion, (string) $fila->ruta_thumbnail);
 
         $this->assertFileExists($this->rutaAbsoluta((string) $fila->ruta_relativa), 'Debe existir la imagen original optimizada.');
         $this->assertFileExists($this->rutaAbsoluta((string) $fila->ruta_thumbnail), 'Debe existir el thumbnail regenerado en el servidor.');

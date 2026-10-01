@@ -1821,11 +1821,11 @@ Estructura prevista:
 SIGOA/
 └── OBR-000001/
     └── 2026-09-22/
-        ├── UUID-inspeccion-1/
+        ├── 10-30-00/
         │   ├── IMAGENES/
         │   └── THUMBNAILS/
         │
-        └── UUID-inspeccion-2/
+        └── 10-30-00-2/
             ├── IMAGENES/
             └── THUMBNAILS/
 ```
@@ -1833,11 +1833,16 @@ SIGOA/
 Conceptualmente:
 
 ```text
-Obra → Fecha → Inspección → archivos
+Obra → Fecha → Hora de inspección → archivos
 ```
 
 * El nombre de la carpeta de obra continúa siendo su código interno `OBR-XXXXXX` (de `obras.codigo`), validado con `ObraAlmacenamiento::normalizarCodigo()` (formato `^OBR-\d{6}$`, anti-traversal).
-* `ObraAlmacenamiento` ya expone los métodos por obra+fecha+uuid (`asegurarEstructuraInspeccion()`, `rutaRelativaInspeccion()`, `rutaRelativaImagen()`, `rutaRelativaThumbnail()`), usados por `FotografiaArchivo`. `asegurarEstructuraObra()`, llamado por `Inspector\Obras::ver()`, crea únicamente la carpeta `OBR-XXXXXX`.
+* Desde la Fase E.2 el nombre de la carpeta de la inspección se compone **exclusivamente a partir de `fecha_inspeccion` y `hora_inspeccion`**, no a partir del UUID: `HH-mm-ss` (`hora_inspeccion` nula → `SIN-HORA`). El UUID sigue siendo la identidad técnica de la inspección en la base, pero deja de formar parte del esquema físico.
+* `InspeccionModel::nombreCarpetaInspeccion()` resuelve la composición; el detalle del nombre queda centralizado en `ObraAlmacenamiento::nombreCarpetaInspeccion()` y `normalizarHoraCarpeta()`. `00:00:00` es una hora válida y produce `00-00-00`, nunca `SIN-HORA`.
+* `ObraAlmacenamiento` expone los métodos por obra+fecha+carpeta (`asegurarEstructuraInspeccion()`, `rutaRelativaInspeccion()`, `rutaRelativaImagen()`, `rutaRelativaThumbnail()`), usados por `FotografiaArchivo`. `asegurarEstructuraObra()`, llamado por `Inspector\Obras::ver()`, crea únicamente la carpeta `OBR-XXXXXX`.
+* **Colisiones.** Dos o más inspecciones de la misma obra, fecha y hora comparten el nombre base, así que el segundo recibe `-2`, el tercero `-3`, etc. El ordinal lo decide la base de datos, no el sistema de archivos: `InspeccionModel::sufijoCarpeta()` cuenta las inspecciones con **menor `id`** dentro de la misma terna `obra_id` + `fecha_inspeccion` + `hora_inspeccion`. Es determinista e independiente del orden de sincronización.
+* El nombre de carpeta recibido por el servicio se valida contra `^(\d{2}-\d{2}-\d{2}|SIN-HORA)(-\d+)?$` antes de construir rutas, de modo que ningún dato pueda escapar de la raíz.
+* Una `hora_inspeccion` **ilegible** (por ejemplo `24:00:00`) se rechaza con `STORAGE_ERROR` en lugar de guardarse como `SIN-HORA`: `SIN-HORA` significa "la inspección no tiene hora", y degradar un dato corrupto a ese nombre lo ocultaría detrás de una carpeta aparentemente válida.
 * Desde la Fase E.1.2 el esquema base `OBR-XXXXXX/{IMAGENES,THUMBNAILS}` quedó **retirado**: solo dejaba carpetas vacías en el almacenamiento y ninguna ruta de la base lo referencia. `IMAGENES` y `THUMBNAILS` existen únicamente dentro de la carpeta de una inspección.
 * En la base de datos se guardan **referencias relativas** a la raíz (`Config\SigoaStorage`), nunca rutas absolutas — misma convención que `empresas.ruta_logo`.
 * El código de la obra no se expone innecesariamente en la interfaz del inspector (§51.3, ya no se muestra).
@@ -1986,7 +1991,7 @@ La tabla `fotografias` no requiere eliminar columnas. El encaje con UUID y rutas
 
 * `uuid`: columna nueva `CHAR(36) NOT NULL UNIQUE`.
 * `nombre_archivo`: `{uuid}.{extension}` (asignado por el servidor al sincronizar).
-* `ruta_relativa`: `OBR-XXXXXX/YYYY-MM-DD/{uuid_inspeccion}/IMAGENES/{uuid}.{ext}` — relativa a la raíz de almacenamiento.
+* `ruta_relativa`: `OBR-XXXXXX/YYYY-MM-DD/{HH-mm-ss|SIN-HORA}[-{n}]/IMAGENES/{nombre}` — relativa a la raíz de almacenamiento.
 * `ruta_thumbnail`: igual con `THUMBNAILS`.
 * `extension`/`mime_type`: validados con `finfo` (solo jpg/jpeg/png/webp).
 * `tamano_bytes`, `ancho`, `alto`: metadata de la **versión procesada**.
@@ -2683,8 +2688,8 @@ application/json`):
     "id": 99,
     "inspeccion_id": 42,
     "nombre_archivo": "INS-00042-20260315-103000-a1b2c3.jpg",
-    "ruta_relativa": "OBR-000001/2026-03-15/{uuid}/IMAGENES/INS-00042-20260315-103000-a1b2c3.jpg",
-    "ruta_thumbnail": "OBR-000001/2026-03-15/{uuid}/THUMBNAILS/THB-00042-20260315-103000-d4e5f6.jpg",
+    "ruta_relativa": "OBR-000001/2026-03-15/10-30-00/IMAGENES/INS-00042-20260315-103000-a1b2c3.jpg",
+    "ruta_thumbnail": "OBR-000001/2026-03-15/10-30-00/THUMBNAILS/THB-00042-20260315-103000-d4e5f6.jpg",
     "reparado": false
   }],
   "resumen": {
@@ -2728,14 +2733,15 @@ application/json`):
 `app/Services/FotografiaArchivo.php` + `app/Config/SigoaStorage.php` (raíz declarada en `.env`):
 
 ```
-OBR-XXXXXX/YYYY-MM-DD/{uuid-inspeccion}/IMAGENES/INS-XXXXX-{Ymd-His}-{random6}.{ext}
-OBR-XXXXXX/YYYY-MM-DD/{uuid-inspeccion}/THUMBNAILS/THB-XXXXX-{Ymd-His}-{random6}.jpg
+OBR-XXXXXX/YYYY-MM-DD/{HH-mm-ss|SIN-HORA}[-{n}]/IMAGENES/INS-XXXXX-{Ymd-His}-{random6}.{ext}
+OBR-XXXXXX/YYYY-MM-DD/{HH-mm-ss|SIN-HORA}[-{n}]/THUMBNAILS/THB-XXXXX-{Ymd-His}-{random6}.jpg
 ```
 
 * El thumbnail se genera en servidor con GD, JPEG y lado mayor acotado a `400 px`.
 * `random6` es hexadecimal en minúsculas; el nombre físico se decide **en el servidor**.
-* La base de datos guarda solo rutas relativas; la resolución a ruta absoluta se valida
-  contra la raíz de almacenamiento (`ObraAlmacenamiento::raiz()`).
+* `{HH-mm-ss|SIN-HORA}` es la carpeta de la inspección (§52.8) y `{-n}` solo aparece ante
+  colisiones de obra + fecha + hora. La base de datos guarda solo rutas relativas; la resolución a
+  ruta absoluta se valida contra la raíz de almacenamiento (`ObraAlmacenamiento::raiz()`).
 * La raíz efectiva se declara con `SIGOA_STORAGE_COMPARTIDO`, que admite una ruta o un booleano
   (§59.3.2). En producción es el recurso UNC `//DESKTOP-RJ9VDRF/Compartido KM5/SIGOA` (§59.3.1). Si
   no está definida, las operaciones de archivos no pueden ejecutarse.
@@ -2986,7 +2992,7 @@ base real no tenía nada de eso: la divergencia SQLite/real era invisible para l
   **migraciones reales** sobre ella y ejercita los endpoints D.3/D.4 de punta a punta: alta de
   inspección con `uuid` persistido y trazabilidad en `operaciones_sincronizacion`, reenvío
   idempotente, dos inspecciones distintas de la misma obra y fecha, alta de fotografía con
-  escritura física de imagen y thumbnail en `OBR-XXXXXX/AAAA-MM-DD/UUID/{IMAGENES,THUMBNAILS}` y
+  escritura física de imagen y thumbnail en `OBR-XXXXXX/AAAA-MM-DD/HH-mm-ss/{IMAGENES,THUMBNAILS}` y
   reenvío que no duplica ni reescribe. La base real de la aplicación no se toca y la base
   descartable se elimina al terminar.
 * Ambos tests llevan el grupo `mysql-real` y se omiten si el entorno no ofrece MySQL/MariaDB con
@@ -3205,13 +3211,15 @@ Cambiar la raíz no obliga a migrar datos. La base guarda **solo referencias rel
 `ObraAlmacenamiento` las combina con la raíz:
 
 ```
-OBR-000001/2026-09-25/e4cba23b-…/IMAGENES/INS-00001-20260925-180447-d3b819.jpg
-OBR-000001/2026-09-25/e4cba23b-…/THUMBNAILS/THB-00001-20260925-180447-76eeee.jpg
+OBR-000001/2026-09-25/18-04-47/IMAGENES/INS-00001-20260925-180447-d3b819.jpg
+OBR-000001/2026-09-25/18-04-47/THUMBNAILS/THB-00001-20260925-180447-76eeee.jpg
 ```
 
 `rutaRelativaImagen()` y `rutaRelativaThumbnail()` no dependen de la raíz: siguen devolviendo esas
 cadenas, y `absolutoDesdeRelativa()` es quien las une a la raíz configurada. Ninguna fila de la
-base depende de dónde esté la raíz.
+base depende de dónde esté la raíz, ni del esquema de carpetas: la lectura se resuelve siempre a
+partir de la ruta relativa almacenada, de modo que las fotografías ya escritas conservan su
+ubicación aunque la carpeta de nuevas inspecciones siga otro esquema (§52.8).
 
 **Pendiente de decidir: los archivos existentes no están en el recurso.** La fotografía real está
 en `C:\Compartida\SIGOA`, y la carpeta `SIGOA` del recurso compartido se verificó **vacía**. Con la
@@ -3230,7 +3238,8 @@ recurso compartido.
   `default`. El resto de `tests/database/` opera sobre SQLite en memoria.
 * `tests/database/EsquemaBaseAplicacionTest.php` es de solo lectura sobre el esquema real, y las
   pruebas que crean la estructura física usan raíces temporales (`InspectorObrasStorageTest`,
-  `ObraAlmacenamientoTest`).
+  `ObraAlmacenamientoTest`, `SincronizarFotografiasTest`). `tests/database/InspeccionCarpetaFisicaTest.php`
+  no toca el sistema de archivos: solo compone nombres de carpeta contra SQLite en memoria.
 * No se ejecutó ninguna migración, ni `migrate:fresh`, ni `migrate:refresh`, ni rollback, ni
   `RepairDatabaseStructure`.
 

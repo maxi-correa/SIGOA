@@ -13,8 +13,10 @@ use CodeIgniter\Test\TestResponse;
  * uuid (idempotente) con autorización heredada de la inspección (§52.4),
  * identidad tomada de la sesión (nunca del payload), validación real del
  * archivo (finfo + getimagesize), escritura en la estructura definitiva
- * `OBR-XXXXXX/YYYY-MM-DD/UUID/{IMAGENES,THUMBNAILS}` y thumbnail regenerado
- * en el servidor. CSRF global y filtros auth + role:INSPECTOR.
+ * `OBR-XXXXXX/YYYY-MM-DD/HH-mm-ss/{IMAGENES,THUMBNAILS}` (Fase E.2: la
+ * carpeta se deriva de fecha + hora de la inspección, con sufijo ordinal ante
+ * coincidencias, nunca del UUID) y thumbnail regenerado en el servidor. CSRF
+ * global y filtros auth + role:INSPECTOR.
  *
  * Usa la conexión `tests` (SQLite en memoria compartida con el grupo) y una
  * raíz de almacenamiento temporal, eliminada al finalizar.
@@ -440,9 +442,13 @@ final class SincronizarFotografiasTest extends CIUnitTestCase
         $this->assertSame('image/jpeg', $registro->mime_type);
         $this->assertSame('jpg', $registro->extension);
 
-        /* Estructura anidada: OBR-XXXXXX / fecha / uuid / IMAGENES. */
-        $this->assertStringStartsWith('OBR-000001/2026-03-15/' . $this->uuidInspeccion . '/IMAGENES/', $registro->ruta_relativa);
-        $this->assertStringStartsWith('OBR-000001/2026-03-15/' . $this->uuidInspeccion . '/THUMBNAILS/', $registro->ruta_thumbnail);
+        /* Estructura anidada: OBR-XXXXXX / fecha / hora / IMAGENES.
+           El nombre de la carpeta viene de fecha_inspeccion + hora_inspeccion
+           (11-14-00), nunca del UUID (Fase E.2, §52.8). */
+        $this->assertStringStartsWith('OBR-000001/2026-03-15/10-30-00/IMAGENES/', $registro->ruta_relativa);
+        $this->assertStringStartsWith('OBR-000001/2026-03-15/10-30-00/THUMBNAILS/', $registro->ruta_thumbnail);
+        $this->assertStringNotContainsString($this->uuidInspeccion, $registro->ruta_relativa);
+        $this->assertStringNotContainsString($this->uuidInspeccion, $registro->ruta_thumbnail);
 
         /* El nombre físico lo decide el servidor, no el cliente:
            INS-{id de inspección en 5 dígitos}-{Ymd-His}-{random6}.{ext} */
@@ -453,6 +459,195 @@ final class SincronizarFotografiasTest extends CIUnitTestCase
 
         $this->assertFileExists($this->rutaAbsoluta($registro->ruta_relativa));
         $this->assertFileExists($this->rutaAbsoluta($registro->ruta_thumbnail));
+    }
+
+    /* =================================================================
+       Fase E.2 — carpeta física derivada de fecha + hora
+       ================================================================= */
+
+    /**
+     * `IMAGENES/` y `THUMBNAILS/` existen dentro de la carpeta de la
+     * inspección, y en ningún otro nivel.
+     */
+    public function testImagenesYThumbnailsSeCreanDentroDeLaCarpetaDeInspeccion(): void
+    {
+        $this->enviar($this->parametros(), $this->crearJpeg());
+
+        $carpeta = $this->tmp . DIRECTORY_SEPARATOR . 'OBR-000001'
+            . DIRECTORY_SEPARATOR . '2026-03-15' . DIRECTORY_SEPARATOR . '10-30-00';
+
+        $this->assertTrue(is_dir($carpeta . DIRECTORY_SEPARATOR . 'IMAGENES'));
+        $this->assertTrue(is_dir($carpeta . DIRECTORY_SEPARATOR . 'THUMBNAILS'));
+
+        /* No se reintroduce el esquema legacy de nivel de obra. */
+        $obra = $this->tmp . DIRECTORY_SEPARATOR . 'OBR-000001';
+        $this->assertFalse(is_dir($obra . DIRECTORY_SEPARATOR . 'IMAGENES'));
+        $this->assertFalse(is_dir($obra . DIRECTORY_SEPARATOR . 'THUMBNAILS'));
+    }
+
+    public function testInspeccionSinHoraUsaCarpetaSinHora(): void
+    {
+        $this->conn->table('inspecciones')->where('id', $this->inspeccionId)
+            ->update(['hora_inspeccion' => null]);
+
+        $resultado = $this->enviar($this->parametros(), $this->crearJpeg());
+
+        $resultado->assertStatus(200);
+
+        $registro = $this->primeraFotografia();
+
+        $this->assertStringStartsWith('OBR-000001/2026-03-15/SIN-HORA/IMAGENES/', $registro->ruta_relativa);
+        $this->assertStringStartsWith('OBR-000001/2026-03-15/SIN-HORA/THUMBNAILS/', $registro->ruta_thumbnail);
+        $this->assertFileExists($this->rutaAbsoluta($registro->ruta_relativa));
+    }
+
+    public function testInspeccionAMedianocheUsaCarpetaDeMedianoche(): void
+    {
+        $this->conn->table('inspecciones')->where('id', $this->inspeccionId)
+            ->update(['hora_inspeccion' => '00:00:00']);
+
+        $resultado = $this->enviar($this->parametros(), $this->crearJpeg());
+
+        $resultado->assertStatus(200);
+
+        $registro = $this->primeraFotografia();
+
+        $this->assertStringStartsWith('OBR-000001/2026-03-15/00-00-00/IMAGENES/', $registro->ruta_relativa);
+        $this->assertStringNotContainsString('SIN-HORA', $registro->ruta_relativa);
+    }
+
+    /**
+     * Dos inspecciones de la misma obra, fecha y hora reciben carpetas
+     * distintas: la base conserva el nombre y la segunda gana el sufijo `-2`.
+     */
+    public function testDosInspeccionesConMismaFechaYHoraNoCompartenCarpeta(): void
+    {
+        $this->enviar($this->parametros(['inspeccion_uuid' => $this->uuidInspeccion]), $this->crearJpeg(800, 600, 'a.jpg'));
+
+        $segundaUuid = Uuid::v4();
+
+        $this->conn->table('inspecciones')->insert([
+            'uuid'             => $segundaUuid,
+            'obra_id'          => $this->obraId,
+            'inspector_id'     => $this->inspectorId,
+            'fecha_inspeccion' => '2026-03-15',
+            'hora_inspeccion'  => '10:30:00',
+            'created_at'       => date('Y-m-d H:i:s'),
+            'updated_at'       => date('Y-m-d H:i:s'),
+        ]);
+
+        $this->enviar($this->parametros(['inspeccion_uuid' => $segundaUuid]), $this->crearJpeg(800, 600, 'b.jpg'));
+
+        $rutas = $this->conn->table('fotografias')->orderBy('id', 'ASC')->get()->getResultArray();
+
+        $this->assertCount(2, $rutas);
+        $this->assertStringStartsWith('OBR-000001/2026-03-15/10-30-00/IMAGENES/', $rutas[0]['ruta_relativa']);
+        $this->assertStringStartsWith('OBR-000001/2026-03-15/10-30-00-2/IMAGENES/', $rutas[1]['ruta_relativa']);
+
+        /* Ambas carpetas existen en disco y cada una guarda lo suyo. */
+        $this->assertFileExists($this->rutaAbsoluta($rutas[0]['ruta_relativa']));
+        $this->assertFileExists($this->rutaAbsoluta($rutas[1]['ruta_relativa']));
+        $this->assertNotSame(
+            dirname($rutas[0]['ruta_relativa']),
+            dirname($rutas[1]['ruta_relativa'])
+        );
+    }
+
+    /**
+     * El sufijo lo decide `inspecciones.id ASC`, no el orden en que se
+     *_insertaron_ las inspecciones: la de menor id conserva el nombre base
+     * aunque se haya creado después.
+     */
+    public function testElSufijoLoDeterminaElIdDeInspeccion(): void
+    {
+        $tardiaUuid = Uuid::v4();
+
+        $this->conn->query('DELETE FROM ' . $this->tabla('inspecciones'));
+
+        /* La inspección de menor id se inserta segunda a propósito. */
+        $this->conn->table('inspecciones')->insert([
+            'id'               => 50,
+            'uuid'             => $this->uuidInspeccion,
+            'obra_id'          => $this->obraId,
+            'inspector_id'     => $this->inspectorId,
+            'fecha_inspeccion' => '2026-03-15',
+            'hora_inspeccion'  => '10:30:00',
+            'created_at'       => date('Y-m-d H:i:s'),
+            'updated_at'       => date('Y-m-d H:i:s'),
+        ]);
+
+        $this->conn->table('inspecciones')->insert([
+            'id'               => 100,
+            'uuid'             => $tardiaUuid,
+            'obra_id'          => $this->obraId,
+            'inspector_id'     => $this->inspectorId,
+            'fecha_inspeccion' => '2026-03-15',
+            'hora_inspeccion'  => '10:30:00',
+            'created_at'       => date('Y-m-d H:i:s'),
+            'updated_at'       => date('Y-m-d H:i:s'),
+        ]);
+
+        /* Se sincroniza primero la de mayor id: aun así recibe el sufijo. */
+        $this->enviar($this->parametros(['inspeccion_uuid' => $tardiaUuid]), $this->crearJpeg(800, 600, 'a.jpg'));
+        $this->enviar($this->parametros(['inspeccion_uuid' => $this->uuidInspeccion]), $this->crearJpeg(800, 600, 'b.jpg'));
+
+        $rutas = $this->conn->table('fotografias')->orderBy('id', 'ASC')->get()->getResultArray();
+
+        $this->assertCount(2, $rutas);
+        $this->assertStringStartsWith('OBR-000001/2026-03-15/10-30-00-2/IMAGENES/', $rutas[0]['ruta_relativa']);
+        $this->assertStringStartsWith('OBR-000001/2026-03-15/10-30-00/IMAGENES/', $rutas[1]['ruta_relativa']);
+    }
+
+    public function testMedianocheYSinHoraProducenCarpetasDistintas(): void
+    {
+        $sinHoraUuid = Uuid::v4();
+
+        $this->conn->table('inspecciones')->insert([
+            'uuid'             => $sinHoraUuid,
+            'obra_id'          => $this->obraId,
+            'inspector_id'     => $this->inspectorId,
+            'fecha_inspeccion' => '2026-03-15',
+            'hora_inspeccion'  => null,
+            'created_at'       => date('Y-m-d H:i:s'),
+            'updated_at'       => date('Y-m-d H:i:s'),
+        ]);
+
+        $this->enviar($this->parametros(['inspeccion_uuid' => $sinHoraUuid]), $this->crearJpeg(800, 600, 'a.jpg'));
+
+        $this->conn->table('inspecciones')->where('id', $this->inspeccionId)
+            ->update(['hora_inspeccion' => '00:00:00']);
+
+        $this->enviar($this->parametros(['inspeccion_uuid' => $this->uuidInspeccion]), $this->crearJpeg(800, 600, 'b.jpg'));
+
+        $rutas = $this->conn->table('fotografias')->orderBy('id', 'ASC')->get()->getResultArray();
+
+        $this->assertCount(2, $rutas);
+        $this->assertStringStartsWith('OBR-000001/2026-03-15/SIN-HORA/IMAGENES/', $rutas[0]['ruta_relativa']);
+        $this->assertStringStartsWith('OBR-000001/2026-03-15/00-00-00/IMAGENES/', $rutas[1]['ruta_relativa']);
+    }
+
+    /**
+     * Ninguna ruta almacenada contiene el uuid de la inspección.
+     */
+    public function testNingunaRutaAlmacenadaContieneElUuidDeInspeccion(): void
+    {
+        $this->enviar($this->parametros(), $this->crearJpeg());
+
+        $registro = $this->primeraFotografia();
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i',
+            $registro->ruta_relativa
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i',
+            $registro->ruta_thumbnail
+        );
+
+        /* Tampoco existe ninguna carpeta con el nombre del uuid. */
+        $fecha = $this->tmp . DIRECTORY_SEPARATOR . 'OBR-000001' . DIRECTORY_SEPARATOR . '2026-03-15';
+
+        $this->assertFalse(is_dir($fecha . DIRECTORY_SEPARATOR . $this->uuidInspeccion));
     }
 
     public function testThumbnailSeGeneraEnElServidorAcotadoA400Px(): void
@@ -781,5 +976,32 @@ final class SincronizarFotografiasTest extends CIUnitTestCase
 
         $this->assertNotNull($operacion);
         $this->assertSame('ERROR', $operacion->estado);
+    }
+
+    /**
+     * Una `hora_inspeccion` ilegible se rechaza en lugar de guardarse dentro de
+     * una carpeta `SIN-HORA`: esa carpeta pertenece a las inspecciones sin hora
+     * y el error debe quedar visible, no oculto detrás de un nombre válido.
+     */
+    public function testHoraIlegibleNoSeGuardaComoSiFueraSinHora(): void
+    {
+        $this->conn->table('inspecciones')->where('id', $this->inspeccionId)
+            ->update(['hora_inspeccion' => 'no-es-una-hora']);
+
+        $resultado = $this->enviar($this->parametros(), $this->crearJpeg());
+
+        $resultado->assertStatus(422);
+        $this->assertSame('STORAGE_ERROR', $this->cuerpo($resultado)['error']);
+
+        $this->assertSame(0, (int) $this->conn->table('fotografias')->countAllResults());
+
+        /* No se crea ninguna carpeta: ni `SIN-HORA` ni ninguna otra. */
+        $fecha = $this->tmp . DIRECTORY_SEPARATOR . 'OBR-000001' . DIRECTORY_SEPARATOR . '2026-03-15';
+        $this->assertFalse(is_dir($fecha . DIRECTORY_SEPARATOR . 'SIN-HORA'));
+        $this->assertSame(
+            [],
+            is_dir($fecha) ? array_values(array_diff(scandir($fecha) ?: [], ['.', '..'])) : [],
+            'Una hora ilegible no debe dejar carpetas de inspección en el almacenamiento.'
+        );
     }
 }

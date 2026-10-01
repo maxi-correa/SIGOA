@@ -12,8 +12,10 @@ namespace App\Services;
  *     `$_FILES['name']`, en el `type` declarado por el cliente ni en la
  *     extensión enviada.
  *  2. **Escribir el archivo y su thumbnail** en la estructura definitiva
- *     `OBR-XXXXXX/YYYY-MM-DD/UUID-INSPECCION/{IMAGENES,THUMBNAILS}`, con
- *     nombres físicos generados por el servidor (§52.8).
+ *     `OBR-XXXXXX/YYYY-MM-DD/NOMBRE-INSPECCION/{IMAGENES,THUMBNAILS}`, con
+ *     nombres físicos generados por el servidor (§52.8). El nombre de la
+ *     carpeta de inspección se deriva de `fecha_inspeccion`/`hora_inspeccion`
+ *     y un sufijo ordinal; nunca del UUID.
  *  3. **Generar el thumbnail en el servidor** a partir del archivo ya
  *     optimizado por el cliente: no se confía en un thumbnail enviado por el
  *     dispositivo, que podría haber sido alterado.
@@ -134,21 +136,21 @@ final class FotografiaArchivo
         string $rutaOrigen,
         string $codigoObra,
         string $fechaInspeccion,
-        string $uuidInspeccion,
+        string $nombreCarpetaInspeccion,
         int $inspeccionId,
         array $datos
     ): array {
         $directorio = $this->almacenamiento->directorioImagenesInspeccion(
             $codigoObra,
             $fechaInspeccion,
-            $uuidInspeccion
+            $nombreCarpetaInspeccion
         );
 
         if ($directorio === null) {
             $preparada = $this->almacenamiento->asegurarEstructuraInspeccion(
                 $codigoObra,
                 $fechaInspeccion,
-                $uuidInspeccion
+                $nombreCarpetaInspeccion
             );
 
             if ($preparada === null) {
@@ -158,7 +160,7 @@ final class FotografiaArchivo
             $directorio = $this->almacenamiento->directorioImagenesInspeccion(
                 $codigoObra,
                 $fechaInspeccion,
-                $uuidInspeccion
+                $nombreCarpetaInspeccion
             );
 
             if ($directorio === null) {
@@ -175,7 +177,7 @@ final class FotografiaArchivo
         $rutaRelativa = $this->almacenamiento->rutaRelativaImagen(
             $codigoObra,
             $fechaInspeccion,
-            $uuidInspeccion,
+            $nombreCarpetaInspeccion,
             $nombre
         );
 
@@ -209,7 +211,7 @@ final class FotografiaArchivo
         string $rutaImagen,
         string $codigoObra,
         string $fechaInspeccion,
-        string $uuidInspeccion,
+        string $nombreCarpetaInspeccion,
         int $inspeccionId
     ): array {
         if (! $this->puedeGenerarThumbnail()) {
@@ -219,14 +221,14 @@ final class FotografiaArchivo
         $directorio = $this->almacenamiento->directorioThumbnailsInspeccion(
             $codigoObra,
             $fechaInspeccion,
-            $uuidInspeccion
+            $nombreCarpetaInspeccion
         );
 
         if ($directorio === null) {
             $preparada = $this->almacenamiento->asegurarEstructuraInspeccion(
                 $codigoObra,
                 $fechaInspeccion,
-                $uuidInspeccion
+                $nombreCarpetaInspeccion
             );
 
             if ($preparada === null) {
@@ -236,7 +238,7 @@ final class FotografiaArchivo
             $directorio = $this->almacenamiento->directorioThumbnailsInspeccion(
                 $codigoObra,
                 $fechaInspeccion,
-                $uuidInspeccion
+                $nombreCarpetaInspeccion
             );
 
             if ($directorio === null) {
@@ -254,7 +256,7 @@ final class FotografiaArchivo
         $rutaRelativa = $this->almacenamiento->rutaRelativaThumbnail(
             $codigoObra,
             $fechaInspeccion,
-            $uuidInspeccion,
+            $nombreCarpetaInspeccion,
             $nombre
         );
 
