@@ -1,11 +1,12 @@
 /* ===================================================================
-   SIGOA — Página: Detalle de inspección (inspector, Fase E.4)
+   SIGOA — Página: Detalle de inspección (inspector, Fases E.4 y E.5)
    ===================================================================
    Muestra los datos registrados de una inspección: fecha, hora,
-   observaciones e inspector. Es de solo lectura y no resuelve archivos:
-   la galería de fotografías es E.5. Reutiliza los componentes globales
+   observaciones e inspector, y la galería en línea de sus fotografías.
+   Es de solo lectura y no resuelve archivos: las imágenes se piden por
+   `uuid` a `Inspector\Fotografias`. Reutiliza los componentes globales
    (`btn`, `estado-badge`) y los tokens vigentes: sin colores, iconos ni
-   tipografías nuevos.
+   tipografías nuevas.
    =================================================================== */
 
 .iid-page {
@@ -130,7 +131,28 @@
     font-style: italic;
 }
 
-/* --- Fotografías: zona declarada y vacía hasta E.5 --- */
+/* --- Fotografías: galería en línea (Fase E.5) ---
+   La retícula sigue el patrón de la galería local de la pantalla de obra
+   (`.io-locales-fotos`), con el prefijo de esta página. No se crea un
+   componente CSS compartido: el markup solo existe aquí. */
+.iid-fotografias {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+}
+
+.iid-fotografias-conteo {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0 0 var(--space-md);
+}
+
+/* Sin fotografías: estado vacío, con el mismo tratamiento que ya usaba esta
+   sección desde E.4. */
 .iid-fotografias-aviso {
     display: flex;
     align-items: center;
@@ -148,10 +170,94 @@
     line-height: 1.5;
 }
 
+/* Aviso de estado sin conexión: mismo tratamiento que el aviso de la
+   galería vacía, con el color de advertencia para que se lea como un
+   estado transitorio y no como un dato ausente. */
+.iid-fotografias-sin-conexion {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    background-color: var(--color-warning-bg);
+    border: 1px solid var(--color-warning-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    color: var(--color-warning);
+    margin: 0 0 var(--space-md);
+}
+
+.iid-fotografias-sin-conexion[hidden] {
+    display: none;
+}
+
+.iid-galeria {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 8rem), 1fr));
+    gap: var(--space-md) var(--space-sm);
+    min-width: 0;
+}
+
+.iid-foto {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    min-width: 0;
+}
+
+.iid-foto-enlace {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+}
+
+.iid-foto-imagen {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-background);
+    transition: border-color 0.2s;
+}
+
+.iid-foto-enlace:hover .iid-foto-imagen,
+.iid-foto-enlace:focus-visible .iid-foto-imagen {
+    border-color: var(--color-primary);
+}
+
+.iid-foto-accion {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-primary);
+}
+
+.iid-foto-cap {
+    display: flex;
+    flex-direction: column;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    overflow-wrap: anywhere;
+}
+
+.iid-fotografias-nota {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin: var(--space-md) 0 0;
+}
+
 /* --- Responsive --- */
 @media (max-width: 580px) {
     .iid-encabezado,
-    .iid-datos {
+    .iid-datos,
+    .iid-fotografias {
         padding: var(--space-md);
     }
 
@@ -170,5 +276,15 @@
 
     .iid-grid {
         grid-template-columns: 1fr;
+    }
+
+    /* Dos columnas en teléfono: miniaturas grandes se leen mejor que
+       una tira diminuta que obliga a ampliar. */
+    .iid-galeria {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .iid-foto-imagen {
+        aspect-ratio: 1 / 1;
     }
 }

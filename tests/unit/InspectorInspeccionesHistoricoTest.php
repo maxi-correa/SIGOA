@@ -17,6 +17,12 @@ use CodeIgniter\Test\FeatureTestTrait;
  * 3. la galería de fotografías **no** se implementa: sin miniaturas, sin
  *    descarga, sin caché y sin IndexedDB histórico (eso es E.5).
  *
+ * El punto 3 quedó superado por E.5: la galería en línea sí existe, en
+ * `Inspector\Fotografias` y en `inspector/inspeccion_detalle.php`. Aquí se
+ * mantienen las fronteras que E.5 no cruza —sin descarga, sin caché, sin
+ * guardado en el dispositivo— y la consulta de fotografías se verifica en
+ * `InspectorInspeccionesGaleriaTest`.
+ *
  * @internal
  */
 final class InspectorInspeccionesHistoricoTest extends CIUnitTestCase
@@ -53,9 +59,9 @@ final class InspectorInspeccionesHistoricoTest extends CIUnitTestCase
     /**
      * Código de una vista sin los comentarios HTML.
      *
-     * Las vistas documentan en comentarios qué **no** se implementa (la
-     * galería de E.5), y esa documentación no es implementación: comprobarla
-     * como si lo fuera daría un falso positivo en cada fase.
+     * Las vistas documentan en comentarios qué **no** se implementa, y esa
+     * documentación no es implementación: comprobarla como si lo fuera daría un
+     * falso positivo en cada fase.
      */
     private function sinComentarios(string $contenido): string
     {
@@ -291,48 +297,99 @@ final class InspectorInspeccionesHistoricoTest extends CIUnitTestCase
         $this->assertStringNotContainsString(
             'usarApp',
             $vista,
-            'No se agrega JS a la vista.'
+            'No se agrega un framework JS a la vista.'
         );
-        $this->assertStringNotContainsString('assets/js/', $vista);
+
+        /* Desde E.5 la vista carga un único script de página, y solo para el
+           estado sin conexión de la galería; el resto del detalle es HTML. */
+        $this->assertSame(
+            1,
+            substr_count($vista, '<script'),
+            'El detalle carga un solo script: el estado sin conexión de la galería.'
+        );
+        $this->assertStringContainsString('assets/js/pages/inspeccion-detalle.js', $vista);
     }
 
     /* ----------------------------------------------------------------
-     * E.5: la galería no se implementa todavía
+     * E.5: fronteras de la galería en línea
      * ---------------------------------------------------------------- */
 
-    public function testLaGaleriaDeFotografiasNoSeImplementa(): void
+    /**
+     * El listado de inspecciones sigue sin resolver fotografías: la galería es
+     * del detalle, no del histórico por fecha.
+     */
+    public function testElListadoNoResuelveFotografias(): void
     {
-        foreach (['Views/inspector/inspecciones.php', 'Views/inspector/inspeccion_detalle.php'] as $vista) {
-            $contenido = $this->sinComentarios($this->leerApp($vista));
+        $contenido = $this->sinComentarios($this->leerApp('Views/inspector/inspecciones.php'));
 
-            foreach ([
-                '<img',
-                'ruta_thumbnail',
-                'ruta_relativa',
-                'download',
-                'descargar',
-                'miniatura',
-                'thumbnail',
-                'indexeddb',
-                'SIGOA.indexeddb',
-                'crearObjectURL',
-            ] as $prohibido) {
-                $this->assertStringNotContainsStringIgnoringCase(
-                    $prohibido,
-                    $contenido,
-                    "{$vista} no debe resolver fotografías: la galería corresponde a E.5."
-                );
-            }
+        foreach ([
+            '<img',
+            'fotografias/mini',
+            'fotografias/ver',
+            'ruta_thumbnail',
+            'ruta_relativa',
+        ] as $prohibido) {
+            $this->assertStringNotContainsStringIgnoringCase(
+                $prohibido,
+                $contenido,
+                'El listado por fecha no muestra fotografías: eso es del detalle.'
+            );
         }
     }
 
-    public function testElDetalleNoConsultaFotografias(): void
+    /**
+     * La galería no expone rutas del almacenamiento, no ofrece descarga y no
+     * guarda nada en el dispositivo.
+     */
+    public function testLaGaleriaNoExponeRutasNiGuardaLasFotosEnElDispositivo(): void
+    {
+        $contenido = $this->sinComentarios($this->leerApp('Views/inspector/inspeccion_detalle.php'));
+
+        foreach ([
+            'ruta_relativa',
+            'ruta_thumbnail',
+            'miniatura',
+            'thumbnail',
+            'download',
+            'descargar',
+            'indexeddb',
+            'SIGOA.indexeddb',
+            'crearObjectURL',
+            'localStorage',
+            'sessionStorage',
+            'caches',
+        ] as $prohibido) {
+            $this->assertStringNotContainsStringIgnoringCase(
+                $prohibido,
+                $contenido,
+                'La galería pide imágenes por uuid y no administra archivos ni caché en el dispositivo.'
+            );
+        }
+    }
+
+    /**
+     * El detalle pide las fotografías al modelo y se las pasa a la vista; los
+     * archivos los sirve otro controlador.
+     */
+    public function testElDetalleEntregaLasFotografiasYNoLosArchivos(): void
     {
         $contenido = $this->leerApp('Controllers/Inspector/Inspecciones.php');
         $metodo    = $this->metodo($contenido, 'public function detalle(');
 
-        $this->assertStringNotContainsString('Fotografia', $metodo, 'Las fotografías son E.5.');
-        $this->assertStringNotContainsString('fotografias', $metodo);
+        $this->assertStringContainsString(
+            'listarPorInspeccion',
+            $metodo,
+            'El detalle consulta las fotografías no anuladas de la inspección.'
+        );
+        $this->assertStringContainsString("'fotografias'", $metodo, 'La vista las recibe para mostrarlas.');
+
+        foreach (['file_get_contents', 'ruta_relativa', 'ruta_thumbnail', 'finfo'] as $prohibido) {
+            $this->assertStringNotContainsString(
+                $prohibido,
+                $metodo,
+                'El detalle no lee archivos: solo entrega los datos que la galería necesita.'
+            );
+        }
     }
 
     public function testNoSeAgregoNingunaMigracion(): void

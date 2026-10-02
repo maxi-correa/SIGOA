@@ -4,6 +4,7 @@ namespace App\Controllers\Inspector;
 
 use App\Controllers\BaseController;
 use App\Models\EstadoObraModel;
+use App\Models\FotografiaModel;
 use App\Models\InspeccionModel;
 use App\Models\InspectoresObrasModel;
 use App\Models\ObraModel;
@@ -27,7 +28,9 @@ use App\Models\ObraModel;
  *    que ser posible.
  *
  * 3. `detalle()` — identificación de una inspección concreta (E.4): fecha, hora
- *    y observaciones, tal como quedaron registradas.
+ *    y observaciones, tal como quedaron registradas. Desde E.5 incluye la
+ *    galería de sus fotografías, que se sirven aparte desde
+ *    `Inspector\Fotografias`.
  *
  * El alta y la consulta histórica son caminos separados a propósito: el alta
  * restringe por estado de obra (F.7) y la consulta no, porque el registro ya
@@ -124,15 +127,18 @@ class Inspecciones extends BaseController
     }
 
     /**
-     * Detalle de una inspección registrada (Fase E.4).
+     * Detalle de una inspección registrada (Fases E.4 y E.5).
      *
      * La autorización es la misma que la del histórico y se resuelve sobre la
      * obra **de la inspección**, no sobre un identificador recibido del
      * cliente: pedir el detalle de una inspección de otra obra recibe el mismo
      * rechazo que pedir el histórico de una obra ajena.
      *
-     * Es de solo lectura: no se modifica ni recalcula ningún dato histórico, y
-     * las fotografías no se resuelven (corresponde a E.5).
+     * Entrega además las fotografías no anuladas de la inspección, en orden de
+     * registro, para que la galería muestre exactamente lo que el servidor tiene
+     * de esa inspección. Es de solo lectura: no se modifica ni recalcula ningún
+     * dato histórico. Los archivos se sirven desde `Inspector\Fotografias`, que
+     * repite esta misma autorización para cada imagen.
      */
     public function detalle(int $inspeccionId)
     {
@@ -160,12 +166,13 @@ class Inspecciones extends BaseController
         }
 
         return view('inspector/inspeccion_detalle', [
-            'titulo'     => 'Detalle de inspección',
-            'user_name'  => $session->get('user_name'),
-            'username'   => $session->get('username'),
-            'roles'      => $session->get('roles') ?? [],
-            'obra'       => $obra,
-            'inspeccion' => $inspeccion,
+            'titulo'      => 'Detalle de inspección',
+            'user_name'   => $session->get('user_name'),
+            'username'    => $session->get('username'),
+            'roles'       => $session->get('roles') ?? [],
+            'obra'        => $obra,
+            'inspeccion'  => $inspeccion,
+            'fotografias' => (new FotografiaModel())->listarPorInspeccion((int) $inspeccion->id),
         ]);
     }
 

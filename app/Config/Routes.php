@@ -161,6 +161,10 @@ $routes->group('inspector', [
 
     // SINCRONIZACIÓN DE FOTOGRAFÍAS (Fase D.4) — alta multipart por uuid, idempotente (§56)
     $routes->post('sincronizar/fotografias', 'Inspector\Sincronizar::fotografias');
+
+    // FOTOGRAFÍAS DE UNA INSPECCIÓN (Fase E.5) — solo lectura, por identidad técnica (uuid)
+    $routes->get('fotografias/ver/(:segment)', 'Inspector\Fotografias::ver/$1');
+    $routes->get('fotografias/mini/(:segment)', 'Inspector\Fotografias::miniatura/$1');
 });
 
 // =============================================

@@ -64,4 +64,40 @@ class FotografiaModel extends Model
     {
         return $this->where('uuid', $uuid)->first();
     }
+
+    /**
+     * Fotografías no anuladas de una inspección, para su galería (E.5).
+     *
+     * Orden: `id ASC`, es decir, el orden en que el servidor registró cada
+     * fotografía. No existe una regla previa documentada que ordene las
+     * fotografías de una inspección y ninguna se deduce del nombre físico del
+     * archivo; `id ASC` es estable entre visitas y coincide con la secuencia de
+     * captura de la inspección.
+     *
+     * `anulada = 0` es parte de la consulta y no un filtro del controlador: una
+     * fotografía anulada no es una fotografía de la inspección.
+     *
+     * @return list<object>
+     */
+    public function listarPorInspeccion(int $inspeccionId): array
+    {
+        return $this->where('inspeccion_id', $inspeccionId)
+            ->where('anulada', false)
+            ->orderBy('id', 'ASC')
+            ->findAll();
+    }
+
+    /**
+     * Fotografía localizable por su identidad técnica y no anulada (E.5).
+     *
+     * Es la contraparte de lectura de `findByUuid()`, que se reserva para la
+     * idempotencia de la sincronización y por eso ignora `anulada`: el
+     * sincronizador debe reencontrar una fotografía anulada para no duplicarla.
+     */
+    public function findVisiblePorUuid(string $uuid): ?object
+    {
+        return $this->where('uuid', $uuid)
+            ->where('anulada', false)
+            ->first();
+    }
 }

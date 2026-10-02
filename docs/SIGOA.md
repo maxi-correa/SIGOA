@@ -1966,8 +1966,8 @@ Endpoints (grupo `inspector`, filtros `auth` + `role:INSPECTOR` + CSRF):
 | POST | `/inspector/sincronizar/inspecciones` | Alta confirmada de inspecciones por uuid (idempotente) | **implementado — ver §55** |
 | POST | `/inspector/sincronizar/fotografias` | Alta de fotografías (multipart): archivo + thumbnail + metadata | pendiente |
 | GET | `/inspector/offline/obras` | Snapshot de obras vigentes (§52.11) | pendiente |
-| GET | `/inspector/fotografias/ver/{uuid}` | Servir fotografía optimizada | pendiente |
-| GET | `/inspector/fotografias/mini/{uuid}` | Servir thumbnail | pendiente |
+| GET | `/inspector/fotografias/ver/{uuid}` | Servir fotografía original | **implementado — ver §64** |
+| GET | `/inspector/fotografias/mini/{uuid}` | Servir miniatura | **implementado — ver §64** |
 
 * **Idempotencia:** si el `uuid` ya existe, el servidor devuelve el registro existente (200) sin duplicar.
 * **401:** sesión expirada → JSON 401 → proceso de reautenticación (§52.6).
@@ -3866,3 +3866,131 @@ App shell a `sigoa-shell-v10`, con los dos CSS de inspecciones en el precache.
   técnica de la inspección (§52.3) y no aparece en las rutas web.
 * El total que mostraba E.3 como consulta independiente dejó de existir como método: ahora es una
   propiedad de los datos agrupados. Es una deuda a favor, no una pérdida de información.
+
+## 64. Fase E.5 implementada — la fotografía deja de ser una columna y se ve en la inspección
+
+E.4 dejó la navegación **Obra → Inspecciones → Fecha → Inspección** funcionando. Al llegar a la
+inspección, la página decía que las fotografías no se mostraban todavía. E.5 cierra ese hueco: la
+galería se ve en el servidor, con miniatura y original, y sin tocar sincronización, permisos ni esquema.
+
+### 64.1 El detalle ya tenía los datos: faltaba pedirlos
+
+`Inspector\Inspecciones::detalle()` resuelve la inspección con `InspeccionModel::findDetalle()` y pasa
+además `fotografias => FotografiaModel::listarPorInspeccion((int) $inspeccion->id)`. La página no
+consulta fotografías por su cuenta ni recibe rutas físicas: recibe filas de la tabla `fotografias` y
+solo usa identidad técnica y metadatos.
+
+`listarPorInspeccion()` filtra `anulada = 0` y ordena `id ASC`: el orden de alta en el servidor, que es
+estable y no depende de nombres de archivo (§52.8). Las fotografías anuladas no se listan, no se sirven
+y no se ven en el contador.
+
+`findVisiblePorUuid(string $uuid)` es la consulta de servicio: `uuid` + `anulada = 0`.
+`findByUuid()` se deja como estaba, porque la idempotencia de la sincronización necesita encontrar la
+fotografía aunque esté anulada (§52.15).
+
+### 64.2 La URL lleva `uuid`, no una ruta
+
+Las dos rutas del grupo `inspector` (`auth` + `role:INSPECTOR`) resuelven por identidad técnica:
+
+| Ruta | Método | Qué devuelve |
+| --- | --- | --- |
+| `/inspector/fotografias/ver/{uuid}` | `Inspector\Fotografias::ver()` | Archivo original (`ruta_relativa`) |
+| `/inspector/fotografias/mini/{uuid}` | `Inspector\Fotografias::miniatura()` | Miniatura (`ruta_thumbnail`) |
+
+No hay endpoint público de imágenes y no hay descarga. El navegador nunca envía rutas: pide una
+fotografía por `uuid` y es el servidor quien decide si puede enseñarla.
+
+### 64.3 Autorización: cuatro pasos, en orden
+
+`fotografiaAutorizada()` encadena: `Uuid::isValid()` → fotografía no anulada con ese `uuid` →
+`InspeccionModel::findDetalle()` (inspección y obra) →
+`InspectoresObrasModel::esVigente($obra_id, (int) session('user_id'))`. La autorización de obra es la
+de E.4, sin excepciones: una fotografía de otra obra devuelve 404, no 403.
+
+El archivo que se sirve es siempre el de la fila autorizada. La ruta relativa que llega en la petición no
+se usa para componer nada, de modo que no existe forma de pedir "otra foto de la misma obra" cambiando
+un parámetro.
+
+### 64.4 La ruta se resuelve en el servidor, y comprueba que no se salga
+
+`servirImagen()` usa `App\Services\ObraAlmacenamiento::absolutoDesdeRelativa()`, que ya rechaza
+relativas con `..`, absolutas y rutas con letra de unidad. Sobre eso añade dos comprobaciones:
+
+* `realpath()` de la raíz y del archivo, comparado con `DIRECTORY_SEPARATOR` para que un archivo cuyo
+  nombre empiece por el nombre de la raíz no cuela como "dentro";
+* `finfo` debe devolver `image/*`; un `.jpg` que en realidad sea texto no se sirve.
+
+Solo se sirve lo que existe y es legible. `Content-Length` se calcula sobre lo leído y
+`X-Content-Type-Options: nosniff` impide que el navegador interprete el archivo como otra cosa.
+
+### 64.5 Una sola respuesta para todo lo que no se puede servir
+
+Fotografía inexistente, `uuid` inválido, fotografía anulada, obra ajena, sesión ausente, inspección
+`FINALIZADA`, ruta que se sale de la raíz, archivo ausente y archivo que no es imagen responden **404 con
+cuerpo vacío**. Distinguir los casos le diría al navegador qué fotografías existen en obras que no puede
+ver.
+
+### 64.6 La caché: declarada, no heredada
+
+La respuesta de imagen fija su `Cache-Control` después de eliminar el que trae la respuesta por defecto:
+`MessageTrait::setHeader()` concatena valores cuando la cabecera ya existe, así que sin `removeHeader()`
+el valor final dependía de lo que hubiera puesto el framework. El valor es
+`private, no-store, max-age=0, must-revalidate`.
+
+`public/sw.js` sube a `sigoa-shell-v11`: el precache sigue siendo solo el shell y los CSS/JS, y las
+rutas de fotografía nunca entran en la caché del service worker. La galería es online.
+
+### 64.7 Desconexión: se dice, no se disimula
+
+`public/assets/js/pages/inspeccion-detalle.js` usa `window.SIGOA.conectividad` (`esOnline()` y
+`alCambiar()`), el mismo indicador global del resto del sistema: oculta la galería y muestra el aviso de
+"las fotografías requieren conexión" mientras no hay red. Sin `fetch`, sin IndexedDB, sin blobs, sin
+cola. La caché histórica de fotografías en el dispositivo es una fase posterior, no implementada aquí
+(§63.7).
+
+### 64.8 La página: lo mínimo y legible
+
+Grid mobile-first de miniaturas con el enlace "Ver original", contador ("N fotografías"), dimensiones,
+tamaño legible y fecha de captura formateada con `HoraInspeccion`/`PlazoObra`. Estado vacío explícito
+("Esta inspección no tiene fotografías registradas"). Estilos en
+`public/assets/css/pages/inspector-inspeccion-detalle.css`, script en `public/assets/js/pages/`: ni CSS
+ni JavaScript embebidos en la vista, y ninguna ruta física en el marcado.
+
+### 64.9 Pruebas
+
+* `tests/unit/InspectorInspeccionesGaleriaTest.php` (15 pruebas, 84 aserciones): rutas dentro del grupo
+  `inspector` con sus filtros, ausencia de endpoint público, cadena de autorización, `anulada = 0`, orden
+  `id ASC`, resolución por `ObraAlmacenamiento` con contención de raíz, sin escritura, sin
+  `mkdir`/`copy`/`rename`, sin sincronización, sin IndexedDB, sin caché de fotografías y sin migración
+  nueva.
+* `tests/database/InspectorInspeccionesGaleriaRenderTest.php` (18 pruebas, 101 aserciones): render real
+  sobre base de datos y archivos reales en el almacén temporal: estado vacío, una fotografía, varias en
+  orden de alta, anuladas no listadas, miniatura con el contenido de `ruta_thumbnail`, original con el de
+  `ruta_relativa`, `no-store`/`nosniff`, `uuid` inexistente, `uuid` inválido, anulada, obra ajena, sesión
+  ausente, `FINALIZADA`, traversal, ruta absoluta, archivo no imagenario, archivo ausente y consulta sin
+  modificar datos.
+* `tests/unit/InspectorInspeccionesHistoricoTest.php` (21 pruebas, 124 aserciones): los límites de E.4
+  pasan a ser límites de E.5 (el detalle ya pide fotografías y ya no dice que la galería está pendiente).
+
+Suite completa: **355 pruebas y 1316 aserciones en verde** (antes 321 y 1129), excluyendo el grupo
+`mysql-real`. JS sin cambios en E.5: `obra-inspecciones.test.js` en 32 pruebas,
+`sincronizacion.test.js` en 236 aserciones y `csrf.test.js` en 16; el comportamiento offline de la
+galería está cubierto por el test estructural, no por una prueba JS.
+
+### 64.10 Fuera de alcance
+
+* Sin alta de fotografías: el endpoint `POST /inspector/sincronizar/fotografias` sigue pendiente
+  (§52.15). E.5 solo sirve lo que ya está en el servidor.
+* Sin caché, descarga, zoom, lightbox, agrupado por fecha ni orden configurable.
+* Sin volver consultable la galería sin conexión, sin IndexedDB y sin blobs.
+* Sin migraciones, sin cambios en roles/permisos, en la cola, los reintentos ni el CSRF.
+* Sin segunda ruta de servicio para las fotografías de las obras (administrador/consulta): E.5 cubre el
+  detalle del inspector, que es donde el registro ya está autorizado.
+
+### 64.11 Discrepancias
+
+* El servicio de imagen no distingue `FINALIZADA`: una fotografía de una inspección finalizada se sigue
+  viendo mientras el inspector siga vigente en la obra. Es el mismo criterio de lectura de E.4 y evita que
+  el historial se cierre por una ventana de estado.
+* `findByUuid()` y `findVisiblePorUuid()` se parecen y no son intercambiables: la sincronización necesita
+  la fotografía anulada; la galería, no.

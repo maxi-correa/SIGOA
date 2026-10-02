@@ -34,6 +34,11 @@ $inspectorNombre = trim(implode(' ', array_filter([
 if ($inspectorNombre === '') {
     $inspectorNombre = trim((string) ($inspeccion->inspector_usuario ?? ''));
 }
+
+/* Fotografías no anuladas de la inspección, ya ordenadas por la base de datos
+   (Fase E.5). La View solo las presenta: no conoce rutas del almacenamiento. */
+$fotografias = is_array($fotografias ?? null) ? $fotografias : [];
+$totalFotos  = count($fotografias);
 ?>
 
 <div class="iid-page">
@@ -93,23 +98,130 @@ if ($inspectorNombre === '') {
     <!-- ============================================================
          Fotografías
 
-         La zona queda señalada pero vacía a propósito (E.5): la galería,
-         las miniaturas y la descarga de originales no se implementan en
-         esta fase, y anticipar markup o rutas de archivo sería mostrar
-         algo que el servidor todavía no entrega.
+         Galería de las fotografías no anuladas de esta inspección
+         (Fase E.5). Miniatura y original se piden por identidad técnica
+         (`uuid`) a `Inspector\Fotografias`; la View nunca recibe ni
+         compone rutas del almacenamiento.
+
+         La galería es en línea: el servidor responde con `no-store` y no
+         hay caché histórica de fotografías en esta fase. Sin conexión
+         no se ven, y tanto el aviso de esta sección como el indicador
+         de la barra (D.1) lo dicen con texto e iconografía, nunca solo
+         con color (RNF §44).
          ============================================================ -->
     <section class="iid-fotografias">
         <h2 class="iid-seccion-titulo">Fotografías</h2>
 
-        <div class="iid-fotografias-aviso">
-            <i class="bi bi-camera" aria-hidden="true"></i>
-            <p class="iid-fotografias-texto">
-                Las fotografías de esta inspección se incorporarán en una etapa
-                posterior.
+        <?php if ($totalFotos === 0): ?>
+
+            <div class="iid-fotografias-aviso">
+                <i class="bi bi-camera" aria-hidden="true"></i>
+                <p class="iid-fotografias-texto">
+                    Esta inspección no tiene fotografías registradas.
+                </p>
+            </div>
+
+        <?php else: ?>
+
+            <p class="iid-fotografias-conteo">
+                <?= $totalFotos === 1 ? '1 fotografía' : $totalFotos . ' fotografías' ?>
             </p>
-        </div>
+
+            <div class="iid-fotografias-sin-conexion" id="iidGaleriaSinConexion" hidden>
+                <i class="bi bi-wifi-off" aria-hidden="true"></i>
+                <p class="iid-fotografias-texto">
+                    Sin conexión no se pueden ver las fotografías de esta
+                    inspección: se sirven desde el servidor.
+                </p>
+            </div>
+
+            <div class="iid-galeria" id="iidGaleria">
+
+                <?php foreach ($fotografias as $indice => $fotografia): ?>
+                    <?php
+                    /* Solo presentación de lo registrado: si un dato no está, no
+                       se inventa nada y simplemente no se muestra. */
+                    $medida = '';
+
+                    if ($fotografia->ancho !== null && $fotografia->alto !== null) {
+                        $medida = (int) $fotografia->ancho . ' × ' . (int) $fotografia->alto . ' px';
+                    }
+
+                    $tamano = $fotografia->tamano_bytes === null ? null : (int) $fotografia->tamano_bytes;
+                    $peso   = '';
+
+                    if ($tamano !== null) {
+                        if ($tamano < 1024) {
+                            $peso = $tamano . ' B';
+                        } elseif ($tamano < 1048576) {
+                            $peso = number_format($tamano / 1024, 0, ',', '.') . ' KB';
+                        } else {
+                            $peso = number_format($tamano / 1048576, 1, ',', '.') . ' MB';
+                        }
+                    }
+
+                    $detalle = implode(' · ', array_filter([$medida, $peso]));
+
+                    /* `fecha_hora_captura` es el momento de la toma en el
+                       dispositivo, con los mismos formateadores que el resto de
+                       la página. */
+                    $marca        = trim((string) ($fotografia->fecha_hora_captura ?? ''));
+                    $capturaIso   = '';
+                    $capturaTexto = '';
+
+                    if ($marca !== '') {
+                        $partes       = preg_split('/[ T]/', $marca) ?: [];
+                        $capturaIso   = implode('T', array_slice($partes, 0, 2));
+                        $capturaTexto = trim(
+                            (PlazoObra::formatearFecha($partes[0] ?? '') ?? '')
+                            . (isset($partes[1]) ? ' ' . HoraInspeccion::texto($partes[1]) : '')
+                        );
+                    }
+
+                    $uuidFoto = (string) $fotografia->uuid;
+                    ?>
+
+                    <figure class="iid-foto">
+                        <a class="iid-foto-enlace"
+                           href="<?= site_url('/inspector/fotografias/ver/' . rawurlencode($uuidFoto)) ?>">
+                            <img class="iid-foto-imagen"
+                                 src="<?= site_url('/inspector/fotografias/mini/' . rawurlencode($uuidFoto)) ?>"
+                                 alt="Fotografía <?= (int) $indice + 1 ?> de la inspección del <?= esc($fechaTexto) ?>"
+                                 loading="lazy"
+                                 decoding="async">
+                            <span class="iid-foto-accion">
+                                <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
+                                Ver original
+                            </span>
+                        </a>
+
+                        <figcaption class="iid-foto-cap">
+                            <?php if ($detalle !== ''): ?>
+                                <span class="iid-foto-dato"><?= esc($detalle) ?></span>
+                            <?php endif; ?>
+
+                            <?php if ($capturaTexto !== ''): ?>
+                                <time class="iid-foto-dato" datetime="<?= esc($capturaIso) ?>"><?= esc($capturaTexto) ?></time>
+                            <?php endif; ?>
+                        </figcaption>
+                    </figure>
+
+                <?php endforeach; ?>
+
+            </div>
+
+            <p class="iid-fotografias-nota">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                Las fotografías se sirven desde el servidor y requieren conexión.
+            </p>
+
+        <?php endif; ?>
     </section>
 
 </div>
 
+<?= $this->endSection() ?>
+
+<?= $this->section('scripts') ?>
+    <script src="<?= base_url('assets/js/pages/inspeccion-detalle.js') ?>"></script>
 <?= $this->endSection() ?>
