@@ -1,5 +1,6 @@
 /* ===================================================================
-   Pruebas del aviso de sincronización de la página de obra (D.6.1)
+   Pruebas de la vista de obra: sincronización (D.6.1) y separación
+   de la cola (E.3)
    ===================================================================
    Ejecuta `public/assets/js/pages/obra-inspecciones.js` en un
    entorno Node simulado (módulo `vm`) con un DOM mínimo y verifica
@@ -9,6 +10,10 @@
    El caso "sin avances" es la regresión de D.6: la cola seguía
    pendiente (1 inspección + 4 fotografías en espera) y la interfaz
    mostraba nonetheless un aviso verde de "Sincronización finalizada".
+
+   Desde E.3 se verifica además que la vista muestre **solo la cola**:
+   una inspección ya sincronizada no aparece, salvo que conserve
+   fotografías pendientes.
 
    Uso:  node tests/js/obra-inspecciones.test.js
    =================================================================== */
@@ -69,6 +74,40 @@ function titulo(nombre) {
     console.log('· ' + nombre);
 }
 
+/**
+ * Todo el texto que cuelga de un nodo del DOM simulado.
+ */
+function textoDe(elemento) {
+    if (!elemento) {
+        return '';
+    }
+
+    let texto = elemento.textContent || '';
+
+    (elemento.hijos || []).forEach(function (hijo) {
+        texto += ' ' + textoDe(hijo);
+    });
+
+    return texto;
+}
+
+/**
+ * Descendientes con una clase dada, en orden de aparición.
+ */
+function conClase(elemento, clase, destino) {
+    const encontrados = destino || [];
+
+    (elemento && elemento.hijos ? elemento.hijos : []).forEach(function (hijo) {
+        if (hijo.className && (' ' + hijo.className + ' ').indexOf(' ' + clase + ' ') !== -1) {
+            encontrados.push(hijo);
+        }
+
+        conClase(hijo, clase, encontrados);
+    });
+
+    return encontrados;
+}
+
 /* ------------------------------------------------------------------ */
 /* DOM mínimo                                                          */
 /* ------------------------------------------------------------------ */
@@ -94,6 +133,9 @@ function crearElemento(atributos) {
         removeAttribute(nombre) {
             delete this.atributos[nombre];
         },
+        hasAttribute(nombre) {
+            return Object.prototype.hasOwnProperty.call(this.atributos, nombre);
+        },
         addEventListener(tipo, fn) {
             this.oyentes[tipo] = fn;
         },
@@ -110,13 +152,24 @@ function crearElemento(atributos) {
 /**
  * Carga la página con un `document` falso y devuelve un disparador que
  * ejecuta un ciclo de sincronización con el resumen indicado.
+ *
+ * `opciones` permite representar la cola local (E.3):
+ *
+ * * `inspecciones` — inspecciones de la obra en IndexedDB;
+ * * `fotografias`  — mapa `inspeccion_uuid` → fotografías;
+ * * `operaciones`  — cola local (`SIGOA.sincronizacion`);
+ * * `ciclar`       — si es `false`, no se pulsa "Sincronizar" (falsea el
+ *                    aviso y deja el render inicial intacto).
  */
-function cargarPagina(resumen) {
+function cargarPagina(resumen, opciones) {
+    const config = Object.assign({ inspecciones: [], fotografias: {}, operaciones: [], ciclar: true }, opciones || {});
+
     const elementos = {
         inspeccionesLocales: crearElemento(),
         inspeccionesLocalesLista: crearElemento(),
         btnSincronizar: crearElemento(),
-        sincronizacionEstado: crearElemento()
+        sincronizacionEstado: crearElemento(),
+        sincronizacionResumen: crearElemento()
     };
 
     elementos.inspeccionesLocales.dataset.obraId = '1';
@@ -140,13 +193,39 @@ function cargarPagina(resumen) {
                     return true;
                 },
                 ALMACENES: { inspecciones: 'inspecciones', fotografias: 'fotografias' },
-                buscarPorIndice() {
+                buscarPorIndice(store, indice, valor) {
+                    if (store === 'inspecciones' && indice === 'por_obra') {
+                        return Promise.resolve(config.inspecciones);
+                    }
+
+                    if (store === 'fotografias' && indice === 'por_inspeccion') {
+                        return Promise.resolve(config.fotografias[valor] || []);
+                    }
+
                     return Promise.resolve([]);
                 }
             },
             sincronizacion: {
+                TIPO_INSPECCION: 'inspeccion',
+                TIPO_FOTOGRAFIA: 'fotografia',
+                ESTADO_SINCRONIZADA: 'SINCRONIZADA',
+                OP_PENDIENTE: 'PENDIENTE',
+                OP_SINCRONIZANDO: 'SINCRONIZANDO',
+                OP_SINCRONIZADA: 'SINCRONIZADA',
+                OP_ERROR: 'ERROR',
                 obtenerOperaciones() {
-                    return Promise.resolve([]);
+                    return Promise.resolve(config.operaciones);
+                },
+                buscarOperacion(operaciones, tipo, uuid) {
+                    return (operaciones || []).find(function (operacion) {
+                        return operacion.tipo === tipo && operacion.entidad_uuid === uuid;
+                    }) || null;
+                },
+                requiereReintentoManual() {
+                    return false;
+                },
+                reintentar() {
+                    return Promise.resolve();
                 },
                 sincronizarTodo() {
                     return Promise.resolve(resumen);
@@ -174,22 +253,37 @@ function cargarPagina(resumen) {
 
     vm.runInContext(fs.readFileSync(archivo, 'utf8'), contexto, { filename: archivo });
 
-    /* El ciclo de la página es asíncrono (promesas). La promesa que
-       `sincronizar()` encadena no se expone, así que se espera un turno
-       completo de la cola de tareas antes de leer el aviso. */
-    elementos.btnSincronizar.click();
+    /* El render inicial es asíncrono (promesas), igual que el ciclo del
+       botón: se espera un turno completo de la cola de tareas antes de
+       leer la lista o el aviso. */
+    if (config.ciclar) {
+        elementos.btnSincronizar.click();
+    }
 
     return new Promise((resolver) => {
         setTimeout(() => {
             const alerta = elementos.sincronizacionEstado.hijos[0];
 
             resolver({
+                lista: elementos.inspeccionesLocalesLista,
+                resumen: elementos.sincronizacionResumen.textContent,
                 clase: alerta ? alerta.className : null,
                 texto: alerta && alerta.hijos.length > 1 ? alerta.hijos[1].textContent : '',
                 oculto: Object.prototype.hasOwnProperty.call(elementos.sincronizacionEstado.atributos, 'hidden')
             });
         }, 0);
     });
+}
+
+function inspeccion(extra) {
+    return Object.assign({
+        uuid: 'uuid-1',
+        obra_id: 1,
+        fecha_inspeccion: '2026-09-22',
+        hora_inspeccion: '10:30:00',
+        observacion: 'Sin observación.',
+        estado_local: 'PENDIENTE_SYNC'
+    }, extra || {});
 }
 
 function resumenBase(extra) {
@@ -283,6 +377,125 @@ async function casoError() {
 }
 
 /* ------------------------------------------------------------------ */
+/* E.3 — la vista muestra la cola, no el historial                      */
+/* ------------------------------------------------------------------ */
+
+async function casoOcultaInspeccionesSincronizadas() {
+    titulo('una inspección ya sincronizada sale de la vista');
+
+    const vista = await cargarPagina(resumenBase({ vacio: true }), {
+        ciclar: false,
+        inspecciones: [
+            inspeccion({ uuid: 'uuid-1', fecha_inspeccion: '2026-09-22' }),
+            inspeccion({ uuid: 'uuid-2', fecha_inspeccion: '2026-09-21', estado_local: 'SINCRONIZADA', servidor_id: 17 })
+        ]
+    });
+
+    const items = conClase(vista.lista, 'io-locales-item');
+
+    igual(1, items.length, 'solo se muestra la inspección pendiente');
+    contiene(textoDe(items[0]), '22/09/2026', 'es la inspección que sigue en cola');
+    noContiene(textoDe(vista.lista), '21/09/2026', 'la inspección sincronizada no aparece');
+    noContiene(textoDe(vista.lista), 'ID en servidor', 'no se informa el identificador del servidor de una inspección ya sincronizada');
+}
+
+async function casoConservaInspeccionConFotosPendientes() {
+    titulo('una inspección sincronizada con fotos en cola se conserva');
+
+    const vista = await cargarPagina(resumenBase({ vacio: true }), {
+        ciclar: false,
+        inspecciones: [
+            inspeccion({ uuid: 'uuid-2', estado_local: 'SINCRONIZADA', servidor_id: 17 })
+        ],
+        fotografias: {
+            'uuid-2': [
+                { uuid: 'foto-1', estado_local: 'PENDIENTE_SYNC' }
+            ]
+        },
+        operaciones: [
+            { tipo: 'fotografia', entidad_uuid: 'foto-1', dependencia_uuid: 'uuid-2', estado: 'PENDIENTE' }
+        ]
+    });
+
+    const items = conClase(vista.lista, 'io-locales-item');
+
+    igual(1, items.length, 'la inspección se mantiene visible por sus fotografías');
+    contiene(textoDe(items[0]), '1 fotografía pendiente de enviar', 'aclara que lo pendiente son las fotografías');
+}
+
+async function casoFiltraFotografiasSincronizadas() {
+    titulo('una fotografía ya sincronizada sale de la galería de la cola');
+
+    const vista = await cargarPagina(resumenBase({ vacio: true }), {
+        ciclar: false,
+        inspecciones: [inspeccion({ uuid: 'uuid-1' })],
+        fotografias: {
+            'uuid-1': [
+                { uuid: 'foto-pendiente', estado_local: 'PENDIENTE_SYNC' },
+                { uuid: 'foto-sincronizada', estado_local: 'SINCRONIZADA', ruta_thumbnail: 'OBR-000001/…' }
+            ]
+        },
+        operaciones: [
+            { tipo: 'fotografia', entidad_uuid: 'foto-pendiente', dependencia_uuid: 'uuid-1', estado: 'PENDIENTE' }
+        ]
+    });
+
+    const toggle = conClase(vista.lista, 'io-locales-fotos-toggle')[0];
+
+    ok(toggle, 'la inspección pendiente permite expandir sus fotografías');
+    toggle.click();
+
+    await new Promise((resolver) => setTimeout(resolver, 0));
+
+    const fotos = conClase(vista.lista, 'io-locales-foto');
+
+    igual(1, fotos.length, 'solo se muestra la fotografía pendiente');
+    noContiene(textoDe(vista.lista), 'Archivo liberado', 'la fotografía sincronizada no se lista');
+}
+
+async function casoResumenDeCola() {
+    titulo('el encabezado resume la cola pendiente');
+
+    const vista = await cargarPagina(resumenBase({ vacio: true }), {
+        ciclar: false,
+        inspecciones: [
+            inspeccion({ uuid: 'uuid-1' }),
+            inspeccion({ uuid: 'uuid-2', fecha_inspeccion: '2026-09-20' })
+        ],
+        operaciones: [
+            { tipo: 'fotografia', entidad_uuid: 'foto-1', dependencia_uuid: 'uuid-1', estado: 'PENDIENTE' },
+            { tipo: 'fotografia', entidad_uuid: 'foto-2', dependencia_uuid: 'uuid-1', estado: 'ERROR', error: 'HTTP 500' }
+        ]
+    });
+
+    igual(
+        '2 inspecciones pendientes de sincronización · 2 fotografías pendientes de sincronización · 1 operación con error.',
+        vista.resumen,
+        'el encabezado informa inspecciones, fotografías y errores de la cola'
+    );
+}
+
+async function casoColaVacia() {
+    titulo('sin cola: el encabezado y la lista lo dicen explícitamente');
+
+    const vista = await cargarPagina(resumenBase({ vacio: true }), {
+        ciclar: false,
+        inspecciones: [
+            inspeccion({ uuid: 'uuid-2', estado_local: 'SINCRONIZADA', servidor_id: 17 })
+        ]
+    });
+
+    igual(
+        'No hay inspecciones ni fotografías pendientes de sincronización.',
+        vista.resumen,
+        'el encabezado no inventa pendientes'
+    );
+
+    igual(0, conClase(vista.lista, 'io-locales-item').length, 'no queda ninguna inspección en la lista');
+    igual(1, conClase(vista.lista, 'io-locales-vacio').length, 'la lista informa el estado vacío de la cola');
+}
+
+/* ------------------------------------------------------------------ */
 /* Ejecución                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -293,6 +506,11 @@ async function casoError() {
     await casoSinPendientes();
     await casoRechazos();
     await casoError();
+    await casoOcultaInspeccionesSincronizadas();
+    await casoConservaInspeccionConFotosPendientes();
+    await casoFiltraFotografiasSincronizadas();
+    await casoResumenDeCola();
+    await casoColaVacia();
 
     console.log('');
     console.log('  ' + pruebas + ' pruebas, ' + fallos + ' fallos');

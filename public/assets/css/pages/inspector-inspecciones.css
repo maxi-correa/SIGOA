@@ -1,0 +1,129 @@
+/* ===================================================================
+   SIGOA — Página: Inspecciones de una obra (inspector, Fase E.3)
+   ===================================================================
+   Página de solo lectura. En E.3 únicamente informa si la obra tiene
+   inspecciones registradas; la navegación Obra → Fecha → Inspección es
+   E.4. Reutiliza los componentes globales (`btn`, `alert`,
+   `estado-badge`) y los tokens vigentes: sin colores, iconos ni
+   tipografías nuevos.
+   =================================================================== */
+
+.iis-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+}
+
+/* --- Barra de acciones superior --- */
+.iis-barra-acciones {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.iis-barra-acciones .btn {
+    width: auto;
+}
+
+/* --- Encabezado: obra consultada + sección --- */
+.iis-encabezado {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.iis-contexto {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+}
+
+.iis-obra {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--color-text);
+    margin: 0;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.iis-titulo {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1.25;
+    margin: 0;
+}
+
+/* --- Estado vacío / estado informativo --- */
+.iis-vacio,
+.iis-estado {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl) var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: var(--space-sm);
+}
+
+.iis-vacio-icono,
+.iis-estado-icono {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: var(--radius-sm);
+    background-color: var(--color-background);
+    color: var(--color-text-secondary);
+    font-size: 1.5rem;
+}
+
+.iis-vacio-titulo,
+.iis-estado-titulo {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text);
+    margin: 0;
+}
+
+.iis-vacio-texto,
+.iis-estado-texto {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin: 0;
+    line-height: 1.5;
+    max-width: 32rem;
+}
+
+/* --- Responsive --- */
+@media (max-width: 580px) {
+    .iis-encabezado,
+    .iis-vacio,
+    .iis-estado {
+        padding: var(--space-md);
+    }
+
+    .iis-titulo {
+        font-size: 1.1rem;
+    }
+
+    .iis-barra-acciones {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .iis-barra-acciones .btn {
+        width: 100%;
+    }
+}

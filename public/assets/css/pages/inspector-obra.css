@@ -39,6 +39,28 @@
     width: auto;
 }
 
+/* --- Bloque "Inspecciones": consulta histórica (Fase E.3) ---
+   Acción independiente de "Nueva inspección": su propia sección, con
+   botón secundario y una línea de contexto en lugar de una tarjeta. */
+.io-consulta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    min-width: 0;
+}
+
+.io-consulta .io-btn-consulta {
+    width: auto;
+}
+
+.io-consulta-descripcion {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin: 0;
+    line-height: 1.5;
+}
+
 /* --- Encabezado de identificación --- */
 .io-identidad {
     background: var(--color-surface);
@@ -141,7 +163,10 @@
     line-height: 1.5;
 }
 
-/* --- Inspecciones guardadas en el dispositivo --- */
+/* --- Sincronización: cola de este dispositivo (Fase E.3) ---
+   Los nombres `.io-locales*` son los históricos de D.2–D.4 y se
+   conservan: desde E.3 la sección describe la cola pendiente, no el
+   historial de la obra (que vive en su propia vista). */
 .io-locales {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
@@ -413,7 +438,8 @@
         padding: var(--space-md);
     }
 
-    .io-nueva .btn {
+    .io-nueva .btn,
+    .io-consulta .btn {
         width: 100%;
     }
 

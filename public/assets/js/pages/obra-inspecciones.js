@@ -1,10 +1,10 @@
 /**
- * SIGOA — Inspecciones locales de una obra (Fase D.2 / D.3 / D.4)
+ * SIGOA — Sincronización de la obra (Fase D.2 / D.3 / D.4 / E.3)
  *
  * Recupera de IndexedDB (base `SIGOA`, store `inspecciones` por índice
- * `por_obra`) las inspecciones creadas en este dispositivo para la obra
- * actual, y permite ver sus fotografías (store `fotografias` por índice
- * `por_inspeccion`).
+ * `por_obra`) las inspecciones de la obra actual que **todavía no**
+ * llegaron al servidor, y permite ver sus fotografías pendientes (store
+ * `fotografias` por índice `por_inspeccion`).
  *
  * Desde Fase D.3 coordina la **sincronización manual** con el servidor
  * (botón "Sincronizar", SIGOA.sincronizacion, docs/SIGOA.md §55/§56):
@@ -15,6 +15,12 @@
  * (`PENDIENTE`, `SINCRONIZANDO`, `SINCRONIZADA`, `ERROR`) y ofrece el
  * reintento manual de las operaciones en `ERROR`. Los datos locales nunca
  * se eliminan.
+ *
+ * Desde Fase E.3 este archivo representa **solo la cola de
+ * sincronización**: lo ya confirmado por el servidor sale de la vista
+ * (esa información pasa a la consulta histórica de §62). Se conserva una
+ * inspección ya sincronizada únicamente cuando todavía tiene fotografías
+ * en cola: sin ellas no habría forma de verlas ni de reintentarlas.
  */
 (function () {
     'use strict';
@@ -26,6 +32,7 @@
     var lista   = document.getElementById('inspeccionesLocalesLista');
     var btnSincronizar = document.getElementById('btnSincronizar');
     var alertaEstado   = document.getElementById('sincronizacionEstado');
+    var resumenCola    = document.getElementById('sincronizacionResumen');
     var obraId         = seccion ? parseInt(seccion.dataset.obraId, 10) : NaN;
     var urlsActivas    = [];
 
@@ -72,9 +79,100 @@
         var item = document.createElement('li');
         item.className = 'io-locales-vacio';
 
-        item.textContent = 'No hay inspecciones guardadas en este dispositivo para esta obra.';
+        item.textContent = 'No hay elementos pendientes de sincronización en este dispositivo.';
 
         lista.appendChild(item);
+    }
+
+    /**
+     * Operaciones de fotografía de una inspección que el servidor todavía
+     * no confirmó.
+     *
+     * La cola es la única fuente que permite saberlo sin recorrer todas las
+     * fotografías de la obra: cada operación de fotografía declara en
+     * `dependencia_uuid` el UUID de su inspección (§56.6), de modo que la
+     * inspección se puede consultar por clave sin abrir los blobs.
+     */
+    function fotosPendientesDe(operaciones, inspeccionUuid) {
+        return (operaciones || []).filter(function (operacion) {
+            return operacion.tipo === SINCRONIZACION.TIPO_FOTOGRAFIA
+                && (operacion.dependencia_uuid || null) === inspeccionUuid
+                && operacion.estado !== SINCRONIZACION.OP_SINCRONIZADA;
+        });
+    }
+
+    /**
+     * Inspecciones que esta pantalla debe mostrar.
+     *
+     * Desde E.3 la vista es la cola, no el historial: una inspección ya
+     * `SINCRONIZADA` desaparece. La excepción es la que tiene fotografías
+     * todavía en cola —la inspección sin ellas no se puede sincronizar—: se
+     * conserva para que sus fotografías sigan siendo visibles y reintentables.
+     */
+    function inspeccionesPendientes(inspecciones, operaciones) {
+        return (inspecciones || []).filter(function (inspeccion) {
+            return inspeccion.estado_local !== SINCRONIZACION.ESTADO_SINCRONIZADA
+                || fotosPendientesDe(operaciones, inspeccion.uuid).length > 0;
+        });
+    }
+
+    function fotosPendientesTotales(operaciones, inspecciones) {
+        var total = 0;
+
+        inspecciones.forEach(function (inspeccion) {
+            total += fotosPendientesDe(operaciones, inspeccion.uuid).length;
+        });
+
+        return total;
+    }
+
+    function operacionesConError(operaciones, inspecciones) {
+        var visibles = inspecciones.map(function (inspeccion) {
+            return inspeccion.uuid;
+        });
+
+        return (operaciones || []).filter(function (operacion) {
+            if (operacion.estado !== SINCRONIZACION.OP_ERROR) {
+                return false;
+            }
+
+            var uuid = operacion.tipo === SINCRONIZACION.TIPO_FOTOGRAFIA
+                ? (operacion.dependencia_uuid || '')
+                : (operacion.entidad_uuid || '');
+
+            return visibles.indexOf(uuid) !== -1;
+        });
+    }
+
+    /**
+     * Resumen de la cola de esta obra: inspecciones y fotografías que
+     * faltan enviar, más las operaciones que requieren reintento manual.
+     *
+     * `pendientes` es exactamente lo que la lista va a mostrar, de modo que
+     * el encabezado y la lista nunca informan cantidades distintas.
+     */
+    function textoResumenCola(pendientes, operaciones) {
+        if (pendientes.length === 0) {
+            return 'No hay inspecciones ni fotografías pendientes de sincronización.';
+        }
+
+        var partes = [
+            plural(pendientes.length, 'inspección pendiente de sincronización', 'inspecciones pendientes de sincronización')
+        ];
+
+        var fotos = fotosPendientesTotales(operaciones, pendientes);
+
+        if (fotos > 0) {
+            partes.push(plural(fotos, 'fotografía pendiente de sincronización', 'fotografías pendientes de sincronización'));
+        }
+
+        var errores = operacionesConError(operaciones, pendientes);
+
+        if (errores.length > 0) {
+            partes.push(plural(errores.length, 'operación con error', 'operaciones con error'));
+        }
+
+        return partes.join(' · ') + '.';
     }
 
     function etiquetaOperacion(operacion) {
@@ -223,23 +321,28 @@
             .then(function (fotografias) {
                 contenedor.textContent = '';
 
-                if (!fotografias || fotografias.length === 0) {
-                    var vacio = document.createElement('p');
-                    vacio.className = 'io-locales-fotos-vacio';
-                    vacio.textContent = 'Esta inspección no tiene fotografías.';
-                    contenedor.appendChild(vacio);
-                    return;
-                }
-
-                return SINCRONIZACION.obtenerOperaciones()
-                    .then(function (operaciones) {
-                        fotografias.forEach(function (fotografia) {
-                            contenedor.appendChild(renderFotografia(fotografia, operaciones));
-                        });
-
-                        contenedor.removeAttribute('hidden');
-                        boton.setAttribute('aria-expanded', 'true');
+                return SINCRONIZACION.obtenerOperaciones().then(function (operaciones) {
+                    /* Desde E.3 la galería de esta pantalla es la de la cola:
+                       solo las fotografías que el servidor todavía no confirmó. */
+                    var pendientes = (fotografias || []).filter(function (fotografia) {
+                        return fotografia.estado_local !== SINCRONIZACION.ESTADO_SINCRONIZADA;
                     });
+
+                    if (pendientes.length === 0) {
+                        var vacio = document.createElement('p');
+                        vacio.className = 'io-locales-fotos-vacio';
+                        vacio.textContent = 'Esta inspección no tiene fotografías pendientes de sincronización.';
+                        contenedor.appendChild(vacio);
+                        return;
+                    }
+
+                    pendientes.forEach(function (fotografia) {
+                        contenedor.appendChild(renderFotografia(fotografia, operaciones));
+                    });
+
+                    contenedor.removeAttribute('hidden');
+                    boton.setAttribute('aria-expanded', 'true');
+                });
             })
             .catch(function (error) {
                 if (window.console && console.error) {
@@ -257,6 +360,8 @@
             SINCRONIZACION.TIPO_INSPECCION,
             inspeccion.uuid
         );
+
+        var fotosPendientes = fotosPendientesDe(operaciones, inspeccion.uuid);
 
         var encabezado = document.createElement('div');
         encabezado.className = 'io-locales-item-superior';
@@ -316,6 +421,17 @@
             item.appendChild(meta);
         }
 
+        /* La inspección se conserva en esta vista únicamente porque tiene
+           fotografías en cola: conviene decirlo para que no se lea como
+           una inspección pendiente de enviar. */
+        if (inspeccion.estado_local === SINCRONIZACION.ESTADO_SINCRONIZADA && fotosPendientes.length > 0) {
+            var aviso = document.createElement('p');
+            aviso.className = 'io-locales-item-obs';
+            aviso.textContent = plural(fotosPendientes.length, 'fotografía pendiente de enviar', 'fotografías pendientes de enviar') + '.';
+
+            item.appendChild(aviso);
+        }
+
         if (operacion && SINCRONIZACION.requiereReintentoManual(operacion)) {
             item.appendChild(botonReintentar(SINCRONIZACION.TIPO_INSPECCION, inspeccion.uuid));
         }
@@ -359,15 +475,19 @@
             ALMACEN.buscarPorIndice(ALMACEN.ALMACENES.inspecciones, 'por_obra', obraId),
             SINCRONIZACION.obtenerOperaciones()
         ]).then(function (resultados) {
-            var inspecciones = resultados[0] || [];
+            var pendientes = inspeccionesPendientes(resultados[0], resultados[1]);
             var operaciones = resultados[1] || [];
 
-            if (inspecciones.length === 0) {
+            if (resumenCola) {
+                resumenCola.textContent = textoResumenCola(pendientes, operaciones);
+            }
+
+            if (pendientes.length === 0) {
                 renderVacio();
                 return;
             }
 
-            inspecciones
+            pendientes
                 .slice()
                 .sort(function (a, b) {
                     var fa = a.fecha_inspeccion || '';

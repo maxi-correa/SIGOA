@@ -67,6 +67,25 @@ class InspeccionModel extends Model
     }
 
     /**
+     * Cantidad de inspecciones registradas en el servidor para una obra.
+     *
+     * La consulta histórica (E.3/E.4) parte de la base: una inspección creada
+     * en el dispositivo solo existe para el servidor después de sincronizarse,
+     * así que el histórico no puede construirse con el almacenamiento local
+     * sin perder lo que todavía no llegó.
+     *
+     * En E.3 se usa únicamente para distinguir el estado vacío de la consulta
+     * del caso en que la obra ya tiene inspecciones. No es un listado: la
+     * navegación por fecha/inspección corresponde a E.4.
+     */
+    public function contarParaObra(int $obraId): int
+    {
+        return (int) $this->builder()
+            ->where('obra_id', $obraId)
+            ->countAllResults();
+    }
+
+    /**
      * Sufijo ordinal de la carpeta física de una inspección (Fase E.2, §52.8).
      *
      * Devuelve `1 + COUNT` de inspecciones de la **misma obra**, **misma

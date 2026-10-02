@@ -2334,6 +2334,12 @@ herramienta real:
 * Estilos de página ampliados en `public/assets/css/pages/inspector-obra.css` (`.io-locales*`,
   `.io-badge-*`, `.io-btn-nueva`, `.io-aviso-bloqueado`).
 
+*Nota de E.3 (§62):* ese bloque ya no es "las inspecciones de la obra", sino **la cola de
+sincronización**: muestra lo pendiente de enviar y se vacía a medida que se sincroniza. En E.3 se
+renombró a "Sincronización" y se añadió una acción independiente "Inspecciones" (`.io-consulta`)
+para el futuro histórico del servidor. Los identificadores y clases del bloque (`#inspeccionesLocales`,
+`.io-locales*`) se conservan a propósito: son el contrato DOM del JS de la cola.
+
 ## 54.4 Flujo de nueva inspección local
 
 Vista: `app/Views/inspector/inspeccion_nueva.php` (`titulo` "Nueva inspección").
@@ -3096,6 +3102,10 @@ sección de inspecciones locales, de modo que quedaba enterrada entre fotos y es
   punto de corte ya existente. Sin colores, iconos ni tipografías nuevos: reutiliza `.io-boton` y
   los tokens vigentes.
 
+*Actualización de E.3 (§62):* el orden de esa pantalla pasó a ser volver, datos de la obra, alta
+(.io-nueva, condicional), acción "Inspecciones" (.io-consulta, siempre visible) y, por último, el
+bloque de sincronización.
+
 ### 59.2 La causa de la inspección que no llegaba: la cola se agotaba en silencio
 
 El hallazgo central de la fase. La operación no estaba "pendiente de red": estaba **agotada**.
@@ -3622,3 +3632,117 @@ describe lo que hizo D.6.2.
   no del componente de token.
 
 ---
+
+## 62. Fase E.3 implementada — la cola de sincronización deja de ser el historial de la obra
+
+La pantalla de obra tenía un bloque titulado "Inspecciones guardadas en este dispositivo" que en
+realidad era **la cola de sincronización**: elementos pendientes de enviar, que se vacían a medida
+que se suben. Ese bloque cumplía dos papeles incompatibles —informar de lo que queda por enviar y
+sustituir al historial de la obra—, y leerlo como historial es directamente incorrecto, porque
+precisamente lo que ya se sincronizó es lo que desaparece de él.
+
+E.3 separa ambos conceptos sin tocar la sincronización.
+
+### 62.1 La vista de obra: dos bloques, dos responsabilidades
+
+En `app/Views/inspector/obra.php` el orden queda así:
+
+1. volver a "Mis obras";
+2. datos de la obra;
+3. alta: "Nueva inspección" con su explicación (`.io-nueva`), condicional a `puede_inspeccionar`;
+4. **acción "Inspecciones"** (`.io-consulta`), siempre visible;
+5. **bloque "Sincronización"** (`#inspeccionesLocales`).
+
+La acción nueva es independiente del estado de la obra: se ofrece incluso cuando no se pueden generar
+inspecciones, porque el histórico de una obra finalizada también se consulta. Enlaza a
+`/inspector/inspecciones/ver/{obraId}`.
+
+El bloque existente solo cambia en su capa visible: título "Sincronización" (`bi-cloud-arrow-up`),
+explicación de que muestra lo pendiente de enviar y un resumen (`#sincronizacionResumen`) que
+informa de inspecciones, fotografías y operaciones con error pendientes. **Se conservan los
+identificadores y clases** (`#inspeccionesLocales`, `#inspeccionesLocalesLista`, `#btnSincronizar`,
+`#sincronizacionEstado`, `.io-locales*`) porque son el contrato DOM del JS de la cola: renombrarlos
+habría obligado a reescribir sincronización, que es justo lo que esta fase no toca.
+
+### 62.2 La cola muestra solo lo pendiente
+
+`public/assets/js/pages/obra-inspecciones.js` deja de listar elementos ya sincronizados:
+
+* una inspección `SINCRONIZADA` se oculta, **salvo** que tenga fotografías pendientes: en ese caso se
+  conserva y se indica cuántas le quedan, porque si no la operación pendiente quedaría sin ninguna
+  representación visible en la cola;
+* una fotografía `SINCRONIZADA` se oculta siempre;
+* el resumen informa de inspecciones pendientes, fotografías pendientes y operaciones con error;
+* sin nada pendiente, la lista muestra "No hay elementos pendientes de sincronización en este
+  dispositivo." y la sección de fotografías indica que no hay pendientes.
+
+No se toca la cola como estructura: persistencia, orden de operaciones, reintentos, errores, drenaje
+encadenado (§60) y CSRF (§61) siguen siendo los de siempre.
+
+### 62.3 La entrada a las inspecciones: consulta de solo lectura
+
+`app/Controllers/Inspector/Inspecciones.php` incorpora `ver(int $obraId)` y la ruta
+`inspecciones/ver/(:num)`, dentro del grupo del inspector y por tanto sujeta a `AuthFilter` y
+`role:INSPECTOR` como el resto del área.
+
+Precondiciones:
+
+* obra existente (`ObraModel::findDetalle`);
+* **asignación vigente** del inspector (`InspectoresObrasModel::esVigente`).
+
+Lo que **no** se comprueba es `permite_inspeccionar` (§54.2), que sí limita el alta. Esa asimetría es
+deliberada: el estado de la obra restringe crear inspecciones, no leerlas.
+
+`InspeccionModel::contarParaObra()` es la única consulta nueva: cuenta las inspecciones de la obra en
+el servidor. La vista (`app/Views/inspector/inspecciones.php` +
+`public/assets/css/pages/inspector-inspecciones.css`) muestra el contexto de la obra, el estado y el
+resultado de la consulta:
+
+* sin inspecciones: "No existen inspecciones aún" con la indicación de que se recomienda generar una
+  nueva inspección para comenzar a registrar el seguimiento de la obra;
+* con inspecciones: el total ("1 inspección registrada" / "N inspecciones registradas").
+
+Es una entrada, no un historial: no hay navegación por fecha, ni por inspección, ni fotografías. La
+página no carga JS de página, no toca IndexedDB y no altera la cola. El total es informativo: no
+filtra, no ordena y no pagina, porque eso es trabajo de E.4.
+
+### 62.4 El alta sigue siendo independiente
+
+`app/Views/inspector/inspeccion_nueva.php` no cambia: continúa siendo el alta local de una
+inspección, sin enlaces al histórico ni listado de inspecciones anteriores de la obra.
+
+### 62.5 Pruebas
+
+JS (`tests/js/obra-inspecciones.test.js`): 32 pruebas, antes 19. Las nuevas cubren que se oculten las
+inspecciones sincronizadas, que se conserve la inspección sincronizada con fotografías pendientes, que
+se filtren las fotografías ya sincronizadas, el resumen de cola y la cola vacía. Se mantienen los
+scripts JS tal cual, con `sincronizacion.test.js` en **236 aserciones** y `csrf.test.js` en **16**.
+
+PHP:
+
+* `tests/unit/InspectorInspeccionesConsultaTest.php` (15 pruebas, 59 aserciones): la ruta, la
+  separación de métodos en el controlador, que `ver()` no comprueba el estado de la obra, que la acción
+  de consulta está fuera del condicional del alta, que el bloque de sincronización conserva su JS y
+  sus llamadas a reintento, la vista, sus estilos, el precache y que sin rol de inspector se redirige.
+* `tests/database/InspectorInspeccionesConsultaRenderTest.php` (7 pruebas, 17 aserciones): render real
+  con base de datos. Una obra sin inspecciones muestra el estado vacío acordado; con inspecciones no lo
+  muestra e informa el total; en obra finalizada la consulta funciona; sin asignación vigente o con
+  obra inexistente redirige; y la consulta no escribe inspecciones.
+
+Suite completa: **290 pruebas y 972 aserciones en verde** (antes 268 y 895), excluyendo el grupo
+`mysql-real`. App shell a `sigoa-shell-v9` con el CSS nuevo en el precache.
+
+### 62.6 Fuera de alcance
+
+* Sin navegación Obra → Fecha → Inspección → Fotografías: es E.4.
+* Sin galería, miniaturas ni descarga de fotografías históricas.
+* Sin caché ni precarga de inspecciones: el histórico no se guarda en el dispositivo en esta fase.
+* Sin cambios de permisos: la consulta no amplía lo que el inspector puede hacer.
+* Sin migraciones, sin cambios en la cola, los reintentos ni el CSRF, y sin dependencias nuevas.
+
+### 62.7 Discrepancias
+
+* `#inspeccionesLocales` conserva su nombre aunque el bloque ya se titule "Sincronización": renombrarlo
+  exigiría tocar el JS de la cola, fuera de alcance. Es una deuda consciente, no un descuido.
+* El histórico real de la obra vive en el servidor; el bloque de la pantalla de obra nunca lo mostró.
+
