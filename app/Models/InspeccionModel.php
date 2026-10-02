@@ -67,22 +67,72 @@ class InspeccionModel extends Model
     }
 
     /**
-     * Cantidad de inspecciones registradas en el servidor para una obra.
+     * Inspecciones de una obra agrupadas por fecha, en orden histórico
+     * (Fase E.4).
      *
-     * La consulta histórica (E.3/E.4) parte de la base: una inspección creada
-     * en el dispositivo solo existe para el servidor después de sincronizarse,
-     * así que el histórico no puede construirse con el almacenamiento local
-     * sin perder lo que todavía no llegó.
+     * El orden lo resuelve **la base de datos** y nunca el nombre de la carpeta
+     * física: la carpeta `HH-mm-ss[-N]` es una consecuencia del almacenamiento
+     * físico (§52.8) y no una fuente de verdad —leer el histórico desde ella
+     * perdería las inspecciones sin hora y arrastraría los sufijos de colisión
+     * al orden.
      *
-     * En E.3 se usa únicamente para distinguir el estado vacío de la consulta
-     * del caso en que la obra ya tiene inspecciones. No es un listado: la
-     * navegación por fecha/inspección corresponde a E.4.
+     * Reglas de ordenación, de más reciente a más antigua:
+     *
+     * 1. `fecha_inspeccion DESC`;
+     * 2. dentro de la fecha, las que **tienen hora** antes que las que no la
+     *    tienen: una hora real siempre es más reciente que la ausencia de hora;
+     * 3. `hora_inspeccion DESC` — `00:00:00` es la hora válida más temprana del
+     *    día y por tanto la primera de ese grupo, no una "sin hora";
+     * 4. `id DESC` como desempate determinista entre inspecciones indistinguibles.
+     *
+     * La agrupación por fecha se arma sobre ese orden, de modo que la vista no
+     * necesita reordenar nada ni decidir reglas de presentación.
+     *
+     * @return list<array{fecha: string, total: int, inspecciones: list<object>}>
      */
-    public function contarParaObra(int $obraId): int
+    public function listarPorObraAgrupado(int $obraId): array
     {
-        return (int) $this->builder()
+        $filas = $this->select('id, uuid, obra_id, inspector_id, fecha_inspeccion, hora_inspeccion, observacion')
             ->where('obra_id', $obraId)
-            ->countAllResults();
+            ->orderBy('fecha_inspeccion', 'DESC')
+            ->orderBy('hora_inspeccion IS NULL', 'ASC', false)
+            ->orderBy('hora_inspeccion', 'DESC')
+            ->orderBy('id', 'DESC')
+            ->findAll();
+
+        $grupos = [];
+
+        foreach ($filas as $inspeccion) {
+            $fecha = (string) $inspeccion->fecha_inspeccion;
+
+            if (! isset($grupos[$fecha])) {
+                $grupos[$fecha] = [
+                    'fecha'        => $fecha,
+                    'total'        => 0,
+                    'inspecciones' => [],
+                ];
+            }
+
+            $grupos[$fecha]['inspecciones'][] = $inspeccion;
+            $grupos[$fecha]['total']++;
+        }
+
+        return array_values($grupos);
+    }
+
+    /**
+     * Detalle de una inspección con el nombre del inspector que la realizó.
+     *
+     * El `uuid` se conserva como identidad técnica (§52.3) y la navegación web
+     * usa el `id`, igual que el resto de rutas por entidad.
+     */
+    public function findDetalle(int $id): ?object
+    {
+        return $this->select('inspecciones.*')
+            ->select('usuarios.nombre AS inspector_nombre, usuarios.apellido AS inspector_apellido, usuarios.usuario AS inspector_usuario')
+            ->join('usuarios', 'usuarios.id = inspecciones.inspector_id', 'left')
+            ->where('inspecciones.id', $id)
+            ->first();
     }
 
     /**

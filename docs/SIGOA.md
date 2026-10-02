@@ -3693,8 +3693,8 @@ Precondiciones:
 Lo que **no** se comprueba es `permite_inspeccionar` (§54.2), que sí limita el alta. Esa asimetría es
 deliberada: el estado de la obra restringe crear inspecciones, no leerlas.
 
-`InspeccionModel::contarParaObra()` es la única consulta nueva: cuenta las inspecciones de la obra en
-el servidor. La vista (`app/Views/inspector/inspecciones.php` +
+`InspeccionModel::contarParaObra()` era la única consulta nueva de E.3: contaba las inspecciones de la obra
+en el servidor. La vista (`app/Views/inspector/inspecciones.php` +
 `public/assets/css/pages/inspector-inspecciones.css`) muestra el contexto de la obra, el estado y el
 resultado de la consulta:
 
@@ -3705,6 +3705,10 @@ resultado de la consulta:
 Es una entrada, no un historial: no hay navegación por fecha, ni por inspección, ni fotografías. La
 página no carga JS de página, no toca IndexedDB y no altera la cola. El total es informativo: no
 filtra, no ordena y no pagina, porque eso es trabajo de E.4.
+
+*Actualización de E.4 (§63):* el histórico se implementó y `contarParaObra()` quedó **retirada**: el total
+ahora se deriva de los propios datos agrupados que la vista necesita, de modo que no hay segunda
+consulta ni dos verdades que puedan discrepar.
 
 ### 62.4 El alta sigue siendo independiente
 
@@ -3734,7 +3738,8 @@ Suite completa: **290 pruebas y 972 aserciones en verde** (antes 268 y 895), exc
 
 ### 62.6 Fuera de alcance
 
-* Sin navegación Obra → Fecha → Inspección → Fotografías: es E.4.
+* Sin navegación Obra → Fecha → Inspección → Fotografías: era E.4 y quedó implementada en §63 (la galería
+  de fotografías sigue siendo E.5).
 * Sin galería, miniaturas ni descarga de fotografías históricas.
 * Sin caché ni precarga de inspecciones: el histórico no se guarda en el dispositivo en esta fase.
 * Sin cambios de permisos: la consulta no amplía lo que el inspector puede hacer.
@@ -3746,3 +3751,118 @@ Suite completa: **290 pruebas y 972 aserciones en verde** (antes 268 y 895), exc
   exigiría tocar el JS de la cola, fuera de alcance. Es una deuda consciente, no un descuido.
 * El histórico real de la obra vive en el servidor; el bloque de la pantalla de obra nunca lo mostró.
 
+
+## 63. Fase E.4 implementada — el histórico de la obra deja de ser una entrada y se vuelve navegable
+
+E.3 dio la puerta: una acción "Inspecciones" que llegaba a una página con un total. E.4 construye el
+recorrido real, **Obra → Inspecciones → Fecha → Inspección**, sin tocar la sincronización, los
+permisos ni el esquema.
+
+### 63.1 El listado agrupado: ordena la base de datos
+
+`InspeccionModel::listarPorObraAgrupado(int $obraId)` sustituye a `contarParaObra()`:
+
+```sql
+SELECT id, uuid, obra_id, inspector_id, fecha_inspeccion, hora_inspeccion, observacion
+  FROM inspecciones
+ WHERE obra_id = ?
+ ORDER BY fecha_inspeccion DESC,
+          (hora_inspeccion IS NULL) ASC,
+          hora_inspeccion DESC,
+          id DESC
+```
+
+* fechas de más reciente a más antigua;
+* dentro de cada fecha, de más reciente a más antigua por hora;
+* `hora_inspeccion IS NULL` al final del día: la ausencia de hora es el dato menos informativo, no el
+  más antiguo, y así una inspección sin hora no se confunde con una de madrugada;
+* `id DESC` desempata de forma estable cuando fecha y hora coinciden.
+
+El agrupamiento por fecha se hace en PHP sobre ese orden, sin agrupar en SQL y sin recalcular nada. El
+orden **no** se deduce del nombre de la carpeta física `HH-mm-ss[-N]` (§52.8): el nombre físico sigue
+siendo responsabilidad de la sincronización y su ordinal lo decide
+`InspeccionModel::sufijoCarpeta()`. El histórico lee datos, no nombres de archivo.
+
+### 63.2 La hora: una regla, un solo lugar
+
+`app/Libraries/HoraInspeccion.php` centraliza la presentación de la hora:
+
+* `texto()` devuelve `HH:MM`, o "Sin hora" cuando el valor es `NULL` o no es reconocible;
+* `esSinHora()` distingue ese caso explícitamente;
+* `00:00:00` es una hora **válida** y se muestra como `00:00`.
+
+Listado y detalle usan la misma librería, de modo que la misma inspección no puede mostrarse con dos
+horas distintas en dos pantallas.
+
+### 63.3 El detalle de una inspección
+
+Nueva ruta `inspecciones/detalle/(:num)` en el grupo del inspector, con la misma autorización que el
+resto del área (`AuthFilter` + `role:INSPECTOR`).
+
+`InspeccionModel::findDetalle(int $id)` devuelve la inspección con el nombre de su inspector
+(`LEFT JOIN usuarios`, porque `inspector_id` puede ser nulo en una inspección creada sin inspector).
+
+Precondiciones del detalle:
+
+1. la inspección existe;
+2. se resuelve **la obra real de esa inspección**, no una obra de la URL: no hay forma de pedir el
+   detalle de una inspección por su número dentro de otra obra;
+3. el inspector tiene **asignación vigente** sobre esa obra (`InspectoresObrasModel::esVigente`).
+
+No se consulta `permite_inspeccionar` (§54.2), igual que en el listado: el estado de la obra limita
+crear inspecciones, no leerlas, y el histórico de una obra finalizada también se consulta.
+
+La vista (`app/Views/inspector/inspeccion_detalle.php` +
+`public/assets/css/pages/inspector-inspeccion-detalle.css`) muestra lo mínimo imprescindible y
+registrado: fecha de la inspección, hora, inspector y observaciones, más el contexto de la obra y el
+enlace de vuelta al listado. Sin hora muestra "Sin hora"; sin observaciones muestra "Sin
+observaciones": un dato vacío se informa como tal y no como un fallo de carga.
+
+### 63.4 Las fotografías: zona señalada y vacía
+
+El detalle incluye una sección "Fotografías" que explica que las fotografías de esa inspección se
+incorporarán en una etapa posterior. No hay consulta a `fotografias`, ni `<img>`, ni miniatura, ni
+descarga, ni caché histórica, ni IndexedDB: la galería es E.5 y anticipar rutas o markup sería
+mostrar algo que el servidor todavía no entrega.
+
+### 63.5 Solo lectura
+
+Ni el listado ni el detalle escriben. El total se deriva del propio listado, de modo que no hay una
+segunda fuente de verdad que pueda discrepar, y no se recalcula `sufijoCarpeta()` ni ningún otro dato
+derivado: leer el histórico no puede cambiar el almacenamiento.
+
+### 63.6 Pruebas
+
+* `tests/unit/InspectorInspeccionesHistoricoTest.php` (nueva, 20 pruebas): el orden se resuelve en el
+  modelo y no con carpetas físicas, `hora_inspeccion IS NULL` al final del día, la regla de medianoche,
+  el detalle busca por identidad técnica, la autorización por obra y asignación vigente, ninguna de
+  las dos rutas escribe, las vistas no cargan JS ni tocan IndexedDB, y no se agregó ninguna migración.
+* `tests/unit/InspectorInspeccionesConsultaTest.php` (15 pruebas): actualizada al modelo agrupado y a
+  la vista con grupos.
+* `tests/database/InspectorInspeccionesConsultaRenderTest.php` (18 pruebas, antes 7): render real
+  sobre base de datos con orden de fechas, orden de horas dentro de una fecha, medianoche como hora
+  válida, inspección sin hora al final del día, enlace al detalle, detalle con sus datos y sin ellos,
+  obra finalizada, inspección de obra ajena rechazada, inspección inexistente y navegación completa sin
+  escrituras.
+
+Suite completa: **321 pruebas y 1129 aserciones en verde** (antes 290 y 972), excluyendo el grupo
+`mysql-real`. JS sin cambios en E.4: `obra-inspecciones.test.js` en 32 pruebas,
+`sincronizacion.test.js` en 236 aserciones y `csrf.test.js` en 16.
+
+App shell a `sigoa-shell-v10`, con los dos CSS de inspecciones en el precache.
+
+### 63.7 Fuera de alcance
+
+* Sin galería, miniaturas, descarga ni visualización de fotografías históricas: es E.5.
+* Sin caché ni precarga del histórico en el dispositivo, y sin volver consultable el histórico sin
+  conexión.
+* Sin cambios de permisos: E.4 no amplía lo que el inspector puede hacer.
+* Sin migraciones, sin cambios en la cola, los reintentos ni el CSRF, y sin dependencias nuevas.
+* Sin filtros, búsqueda ni paginación del histórico.
+
+### 63.8 Discrepancias
+
+* Las dos rutas usan `id` y no `uuid`. La URL es navegación humana; el `uuid` sigue siendo la identidad
+  técnica de la inspección (§52.3) y no aparece en las rutas web.
+* El total que mostraba E.3 como consulta independiente dejó de existir como método: ahora es una
+  propiedad de los datos agrupados. Es una deuda a favor, no una pérdida de información.

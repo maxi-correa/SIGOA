@@ -233,7 +233,7 @@ final class InspectorInspeccionesConsultaTest extends CIUnitTestCase
         $this->assertStringContainsString('assets/css/pages/inspector-inspecciones.css', $vista);
     }
 
-    public function testLaVistaDeConsultaNoNavegaPorHistorialNiPorAlta(): void
+    public function testLaVistaDeConsultaNoOfreceElAltaNiUsaJavaScript(): void
     {
         $vista = $this->leerApp('Views/inspector/inspecciones.php');
 
@@ -245,9 +245,13 @@ final class InspectorInspeccionesConsultaTest extends CIUnitTestCase
         $this->assertStringNotContainsString(
             'assets/js/',
             $vista,
-            'E.3 no implementa navegación, galería ni caché histórico: la vista es estática.'
+            'El histórico se entrega desde el servidor: la vista no necesita JavaScript.'
         );
-        $this->assertStringContainsString('total_inspecciones', $vista, 'El estado vacío depende de los datos del servidor.');
+        $this->assertStringContainsString(
+            'grupos',
+            $vista,
+            'El histórico se presenta con los datos que entrega el servidor.'
+        );
     }
 
     public function testLaNuevaInspeccionNoOfreceHistorial(): void
@@ -281,15 +285,18 @@ final class InspectorInspeccionesConsultaTest extends CIUnitTestCase
         );
     }
 
-    public function testModeloCuentaLasInspeccionesDeLaObra(): void
+    public function testElModeloAgrupaLasInspeccionesDeLaObra(): void
     {
         $modelo = $this->leerApp('Models/InspeccionModel.php');
 
-        $this->assertStringContainsString('function contarParaObra(int $obraId): int', $modelo);
         $this->assertMatchesRegularExpression(
-            '/contarParaObra[\s\S]{0,400}where\(\'obra_id\'/',
+            '/function\s+listarPorObraAgrupado\s*\(\s*int\s+\$obraId/',
+            $modelo
+        );
+        $this->assertMatchesRegularExpression(
+            '/listarPorObraAgrupado[\s\S]{0,600}where\(\'obra_id\',\s*\$obraId\)/',
             $modelo,
-            'El conteo debe filtrar por obra.'
+            'El listado debe filtrar por obra.'
         );
     }
 

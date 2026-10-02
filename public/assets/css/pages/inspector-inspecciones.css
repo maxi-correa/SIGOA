@@ -1,12 +1,13 @@
 /* ===================================================================
-   SIGOA — Página: Inspecciones de una obra (inspector, Fase E.3)
+   SIGOA — Página: Inspecciones de una obra (inspector, Fases E.3/E.4)
    ===================================================================
-   Página de solo lectura. En E.3 únicamente informa si la obra tiene
-   inspecciones registradas; la navegación Obra → Fecha → Inspección es
-   E.4. Reutiliza los componentes globales (`btn`, `alert`,
-   `estado-badge`) y los tokens vigentes: sin colores, iconos ni
-   tipografías nuevos.
+   Página de solo lectura. Desde E.4 muestra el histórico agrupado por
+   fecha (más reciente primero) y enlaza al detalle de cada inspección;
+   la galería de fotografías corresponde a E.5. Reutiliza los componentes
+   globales (`btn`, `alert`, `badge`, `estado-badge`) y los tokens
+   vigentes: sin colores, iconos ni tipografías nuevos.
    =================================================================== */
+
 
 .iis-page {
     display: flex;
@@ -126,4 +127,128 @@
     .iis-barra-acciones .btn {
         width: 100%;
     }
+
+    /* En móvil la hora y la observación van en columna: la hora deja de
+       competir por el ancho con el texto libre de la observación. */
+    .iis-item-enlace {
+        flex-direction: column;
+        gap: var(--space-sm);
+    }
+}
+
+/* --- Resumen del total de inspecciones --- */
+.iis-resumen {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin: 0;
+}
+
+/* --- Histórico agrupado por fecha (E.4) --- */
+.iis-grupo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.iis-grupo + .iis-grupo {
+    margin-top: var(--space-lg);
+}
+
+.iis-grupo-fecha {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--color-primary);
+    margin: 0;
+    padding-bottom: var(--space-xs);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.iis-grupo-total {
+    background-color: var(--color-background);
+    color: var(--color-text-secondary);
+    font-weight: 600;
+}
+
+/* --- Lista de inspecciones del día --- */
+.iis-lista {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.iis-item-enlace {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-md);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md);
+    color: var(--color-text);
+    text-decoration: none;
+    min-height: 2.75rem;
+}
+
+.iis-item-enlace:hover {
+    background-color: var(--color-background);
+}
+
+.iis-item-enlace:focus-visible {
+    outline: 2px solid var(--color-border-focus);
+    outline-offset: 2px;
+}
+
+/* La hora es el dato que distingue una inspección de otra del mismo día,
+   por eso lleva el color institucional; "sin hora" usa el tono secundario
+   para leerse como ausencia de dato, no como una hora más. */
+.iis-item-hora {
+    background-color: var(--color-primary);
+    color: var(--color-text-on-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.iis-item-hora-sin {
+    background-color: var(--color-background);
+    color: var(--color-text-secondary);
+}
+
+.iis-item-cuerpo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    min-width: 0;
+    flex: 1;
+}
+
+.iis-item-observacion {
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.iis-item-observacion-vacia {
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+.iis-item-ver {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-primary);
 }

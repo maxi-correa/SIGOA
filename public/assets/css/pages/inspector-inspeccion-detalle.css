@@ -1,0 +1,174 @@
+/* ===================================================================
+   SIGOA — Página: Detalle de inspección (inspector, Fase E.4)
+   ===================================================================
+   Muestra los datos registrados de una inspección: fecha, hora,
+   observaciones e inspector. Es de solo lectura y no resuelve archivos:
+   la galería de fotografías es E.5. Reutiliza los componentes globales
+   (`btn`, `estado-badge`) y los tokens vigentes: sin colores, iconos ni
+   tipografías nuevos.
+   =================================================================== */
+
+.iid-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+}
+
+/* --- Barra de acciones superior --- */
+.iid-barra-acciones {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.iid-barra-acciones .btn {
+    width: auto;
+}
+
+/* --- Encabezado: obra, fecha y hora --- */
+.iid-encabezado {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.iid-contexto {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+}
+
+.iid-obra {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--color-text);
+    margin: 0;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.iid-titulo {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1.25;
+    margin: 0;
+}
+
+.iid-hora {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-primary);
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+/* "Sin hora" es ausencia de dato: no se presenta con el énfasis de la
+   hora, para que no se lea como una hora más. */
+.iid-hora-sin {
+    color: var(--color-text-secondary);
+    font-weight: 400;
+    font-style: italic;
+}
+
+/* --- Datos registrados --- */
+.iid-datos {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+}
+
+.iid-seccion-titulo {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--color-primary);
+    margin: 0 0 var(--space-md);
+}
+
+.iid-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: var(--space-md) var(--space-lg);
+    margin: 0;
+}
+
+.iid-dato {
+    min-width: 0;
+}
+
+.iid-dato-ancho {
+    grid-column: 1 / -1;
+}
+
+.iid-dato dt {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: var(--space-xs);
+}
+
+.iid-dato dd {
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    margin: 0;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.iid-dato-sin-hora {
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+/* --- Fotografías: zona declarada y vacía hasta E.5 --- */
+.iid-fotografias-aviso {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    background-color: var(--color-background);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    color: var(--color-text-secondary);
+}
+
+.iid-fotografias-texto {
+    font-size: var(--font-size-sm);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* --- Responsive --- */
+@media (max-width: 580px) {
+    .iid-encabezado,
+    .iid-datos {
+        padding: var(--space-md);
+    }
+
+    .iid-titulo {
+        font-size: 1.1rem;
+    }
+
+    .iid-barra-acciones {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .iid-barra-acciones .btn {
+        width: 100%;
+    }
+
+    .iid-grid {
+        grid-template-columns: 1fr;
+    }
+}
