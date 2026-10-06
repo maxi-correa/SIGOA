@@ -25,10 +25,10 @@ $puedeInspeccionar = (bool) ($puede_inspeccionar ?? false);
     <!-- ============================================================
          Orden de la pantalla (Fase D.6.2, ajustado en E.3):
          1. volver a "Mis obras";
-         2. detalles de la obra;
-         3. acción "Nueva inspección";
-         4. explicación asociada a esa acción;
-         5. acción "Inspecciones" (consulta histórica, E.3);
+         2. historial de inspecciones de la obra, debajo de esa acción;
+         3. detalles de la obra;
+         4. acción "Nueva inspección";
+         5. explicación asociada a esa acción;
          6. sincronización: cola pendiente de este dispositivo.
          ============================================================ -->
     <div class="io-barra-acciones">
@@ -37,6 +37,24 @@ $puedeInspeccionar = (bool) ($puede_inspeccionar ?? false);
             Mis obras
         </a>
     </div>
+
+    <!-- ============================================================
+         Acción "Historial de inspecciones": punto de entrada a la
+         consulta histórica de la obra.
+
+         Va inmediatamente debajo de "Mis obras" porque es la segunda
+         acción de navegación de la pantalla, y así se lee como parte de
+         la misma barra. Es independiente de "Nueva inspección", que solo
+         crea: se muestra en cualquier estado de obra, porque consultar
+         el historial no depende de poder iniciar inspecciones.
+         ============================================================ -->
+    <section class="io-consulta">
+        <a href="<?= site_url('/inspector/inspecciones/ver/' . (int) $obra->id) ?>"
+           class="btn btn-secondary io-btn-consulta">
+            <i class="bi bi-journal-text" aria-hidden="true"></i>
+            Historial de inspecciones
+        </a>
+    </section>
 
     <?php if (session()->getFlashdata('warning')): ?>
         <div class="alert alert-warning" role="alert">
@@ -96,29 +114,26 @@ $puedeInspeccionar = (bool) ($puede_inspeccionar ?? false);
         <!-- ============================================================
              Herramienta de inspección: la acción y su explicación
              forman un único bloque, inmediatamente debajo de los
-             datos de la obra.
+             datos de la obra. El botón es el encabezado del bloque;
+             no lleva título repetido.
              ============================================================ -->
-        <div class="io-nueva">
-            <a href="<?= site_url('/inspector/inspecciones/nueva/' . (int) $obra->id) ?>"
-               class="btn btn-primary io-btn-nueva">
-                <i class="bi bi-plus-circle" aria-hidden="true"></i>
-                Nueva inspección
-            </a>
-
-            <section class="io-aviso">
-                <div class="io-aviso-icono" aria-hidden="true">
-                    <i class="bi bi-camera"></i>
-                </div>
-                <div class="io-aviso-texto">
-                    <h2 class="io-aviso-titulo">Nueva inspección</h2>
-                    <p>
-                        Puede iniciar una inspección para esta obra. La inspección y las
-                        fotografías se guardan en este dispositivo y quedan pendientes de
-                        la futura sincronización con el servidor.
-                    </p>
-                </div>
-            </section>
-        </div>
+        <section class="io-aviso io-aviso-nueva">
+            <div class="io-aviso-icono" aria-hidden="true">
+                <i class="bi bi-camera"></i>
+            </div>
+            <div class="io-aviso-texto">
+                <a href="<?= site_url('/inspector/inspecciones/nueva/' . (int) $obra->id) ?>"
+                   class="btn btn-primary io-btn-nueva io-aviso-accion">
+                    <i class="bi bi-plus-circle" aria-hidden="true"></i>
+                    Nueva inspección
+                </a>
+                <p>
+                    Puede iniciar una inspección para esta obra. La inspección y las
+                    fotografías se guardan en este dispositivo y quedan pendientes de
+                    la futura sincronización con el servidor.
+                </p>
+            </div>
+        </section>
 
     <?php else: ?>
 
@@ -140,28 +155,6 @@ $puedeInspeccionar = (bool) ($puede_inspeccionar ?? false);
         </section>
 
     <?php endif; ?>
-
-    <!-- ============================================================
-         Acción "Inspecciones": punto de entrada a la consulta
-         histórica de la obra.
-
-         Es independiente de "Nueva inspección", que solo crea. La
-         navegación por fechas, inspecciones y fotografías todavía no
-         existe (§62): la vista de destino únicamente informa el estado
-         actual. Se muestra en cualquier estado de obra, porque consultar
-         el historial no depende de poder iniciar inspecciones.
-         ============================================================ -->
-    <section class="io-consulta">
-        <a href="<?= site_url('/inspector/inspecciones/ver/' . (int) $obra->id) ?>"
-           class="btn btn-secondary io-btn-consulta">
-            <i class="bi bi-journal-text" aria-hidden="true"></i>
-            Inspecciones
-        </a>
-
-        <p class="io-consulta-descripcion">
-            Inspecciones registradas para esta obra.
-        </p>
-    </section>
 
     <!-- ============================================================
          Sincronización: cola de este dispositivo.

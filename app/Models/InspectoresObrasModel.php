@@ -95,7 +95,9 @@ class InspectoresObrasModel extends Model
      * Verifica si un inspector es la asignación vigente de una obra.
      *
      * Se usa para validar la pertenencia del inspector a la obra antes de
-     * permitirle acceder al detalle operativo.
+     * permitirle acceder al detalle operativo, y es lo que exige
+     * `AccesoInspecciones::puedeInspeccionar()`: solo se inspecciona lo que
+     * se tiene a cargo **hoy**.
      */
     public function esVigente(int $obraId, int $usuarioId): bool
     {
@@ -103,6 +105,24 @@ class InspectoresObrasModel extends Model
             ->where('obra_id', $obraId)
             ->where('usuario_id', $usuarioId)
             ->where('fecha_fin', null)
+            ->countAllResults() > 0;
+    }
+
+    /**
+     * Verifica si el inspector tuvo alguna asignación en la obra, vigente o
+     * ya cerrada (Fase E.6).
+     *
+     * Es la condición de **consulta** del historial y no la de inspección:
+     * `inspectores_obras` conserva el historial de asignaciones, así que
+     * "tuvo la obra a su cargo" sigue siendo verificable aunque el período se
+     * haya cerrado. Sin esto, cambiar la asignación de un inspector le
+     * quitaría el acceso a las inspecciones que él mismo registró.
+     */
+    public function haTenidoAsignacion(int $obraId, int $usuarioId): bool
+    {
+        return $this
+            ->where('obra_id', $obraId)
+            ->where('usuario_id', $usuarioId)
             ->countAllResults() > 0;
     }
 

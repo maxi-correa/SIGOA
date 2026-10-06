@@ -642,8 +642,12 @@ final class InspectorInspeccionesGaleriaRenderTest extends CIUnitTestCase
 
         $resultado = $this->verDetalle();
 
+        /* El estado de la obra no se muestra en el detalle: lo que
+           demuestra que la galería sigue consultable es que la página se
+           sirve y la imagen real se entrega. */
         $resultado->assertStatus(200);
-        $resultado->assertSee('FINALIZADA');
+        $resultado->assertDontSee('FINALIZADA');
+        $resultado->assertSee('Fotografías');
         $resultado->assertSee('/inspector/fotografias/mini/' . $foto['uuid']);
 
         $this->withSession($this->sesionInspector())

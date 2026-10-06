@@ -2,44 +2,39 @@
 
 namespace App\Controllers\Inspector;
 
-use App\Controllers\BaseController;
+use App\Controllers\Inspecciones as InspeccionesConsulta;
 use App\Models\EstadoObraModel;
-use App\Models\FotografiaModel;
-use App\Models\InspeccionModel;
 use App\Models\InspectoresObrasModel;
 use App\Models\ObraModel;
+use App\Services\AccesoInspecciones;
 
 /**
- * Inspecciones del inspector sobre una obra.
+ * Inspecciones del inspector.
  *
- * Tres responsabilidades separadas:
+ * Divide las responsabilidades en dos caminos que no se mezclan:
  *
- * 1. `nueva()` — alta de una inspección. El servidor solo autoriza e
- *    inicializa la operación: verifica usuario autenticado con rol INSPECTOR
- *    (filtros de ruta), asignación vigente a la obra y estado de obra que
- *    permita nuevas inspecciones (F.7). La inspección en sí se crea en el
- *    dispositivo (IndexedDB) y queda pendiente de la sincronización: este flujo
- *    NO inserta nada en `inspecciones`; el envío al servidor lo realiza el
- *    sincronizador (§52.15).
+ * 1. **Alta** (`nueva()`, Fase D.2). Es la única acción que crea algo y
+ *    exige, además de rol INSPECTOR (filtro de ruta), **asignación vigente**
+ *    sobre la obra y un estado de obra que permita nuevas inspecciones (F.7).
+ *    El servidor solo autoriza e inicializa la operación: la inspección se
+ *    crea en el dispositivo (IndexedDB) y queda pendiente de la
+ *    sincronización; este flujo NO inserta nada en `inspecciones` (§52.15).
  *
- * 2. `ver()` — histórico de la obra (E.3/E.4): inspecciones agrupadas por
- *    fecha, de más reciente a más antigua. Es de **solo lectura** y no depende
- *    del estado de la obra: consultar el historial de una obra finalizada tiene
- *    que ser posible.
+ * 2. **Consulta histórica** (`index()`, `ver()`, `detalle()`, heredadas de
+ *    `App\Controllers\Inspecciones`). Es de **solo lectura**, es la misma
+ *    pantalla que ven CONSULTA, ADMINISTRADOR y SUPERADMINISTRADOR, y no
+ *    exige asignación vigente: el objetivo es poder consultar el historial
+ *    incluso cuando el inspector ya no tiene esa obra a cargo.
  *
- * 3. `detalle()` — identificación de una inspección concreta (E.4): fecha, hora
- *    y observaciones, tal como quedaron registradas. Desde E.5 incluye la
- *    galería de sus fotografías, que se sirven aparte desde
- *    `Inspector\Fotografias`.
+ * Esta clase solo declara lo que es propio del inspector —el alta y los
+ * prefijos de URL de su punto de entrada— y **no** reimplementa el agrupamiento
+ * por fecha, el detalle ni la galería: eso vive una sola vez, en el
+ * controlador compartido.
  *
- * El alta y la consulta histórica son caminos separados a propósito: el alta
- * restringe por estado de obra (F.7) y la consulta no, porque el registro ya
- * existente no depende de si hoy se puede inspeccionar.
- *
- * La autorización histórica del inspector (§52.4) y la validación de la
- * fecha local corresponden a la sincronización, no a la creación local.
+ * La autorización histórica del inspector (§52.4) y la validación de la fecha
+ * local corresponden a la sincronización, no a la creación local.
  */
-class Inspecciones extends BaseController
+class Inspecciones extends InspeccionesConsulta
 {
     /**
      * Formulario de nueva inspección para una obra.
@@ -60,7 +55,7 @@ class Inspecciones extends BaseController
                 ->with('error', 'La obra seleccionada no existe.');
         }
 
-        if (! (new InspectoresObrasModel())->esVigente($obraId, $usuarioId)) {
+        if (! (new AccesoInspecciones())->puedeInspeccionar($obraId, $usuarioId, $session->get('roles') ?? [])) {
             return redirect()->to('/inspector/obras/ver/' . $obraId)
                 ->with('warning', 'No puede iniciar una inspección en esa obra. Solo está habilitado para las obras que tiene asignadas como inspector.');
         }
@@ -84,114 +79,49 @@ class Inspecciones extends BaseController
     }
 
     /**
-     * Histórico de las inspecciones de una obra (Fases E.3 y E.4).
+     * Prefijo de la navegación histórica del inspector.
      *
-     * Verifica lo mismo que la vista de la obra: la obra debe existir y el
-     * inspector debe tener asignación vigente. A diferencia de `nueva()`, NO
-     * exige que el estado de la obra permita inspeccionar: el historial de una
-     * obra neutralizada o finalizada también se consulta, y restringirlo dejaría
-     * al inspector sin acceso a su propio registro.
-     *
-     * Entrega las inspecciones agrupadas por fecha y ordenadas por la base de
-     * datos. La autorización se resuelve **antes** de leer ninguna inspección:
-     * una obra ajena no devuelve ni el nombre ni el total.
+     * El inspector entra por `/inspector/inspecciones` (listado, ruta propia del
+     * grupo `inspector`) y por `/inspector/inspecciones/ver/(:num)` desde
+     * *Mis obras*. Ambas rutas siguen existiendo tal como estaban en E.3/E.4.
      */
-    public function ver(int $obraId)
+    protected function baseHistorico(): string
     {
-        $session   = session();
-        $usuarioId = (int) $session->get('user_id');
-
-        $obra = (new ObraModel())->findDetalle($obraId);
-
-        if ($obra === null) {
-            return redirect()->to('/inspector/dashboard')
-                ->with('error', 'La obra seleccionada no existe.');
-        }
-
-        if (! (new InspectoresObrasModel())->esVigente($obraId, $usuarioId)) {
-            return redirect()->to('/inspector/dashboard')
-                ->with('warning', 'No puede consultar las inspecciones de esa obra. Solo está habilitado para las obras que tiene asignadas como inspector.');
-        }
-
-        $grupos = (new InspeccionModel())->listarPorObraAgrupado($obraId);
-
-        return view('inspector/inspecciones', [
-            'titulo'    => 'Inspecciones',
-            'user_name' => $session->get('user_name'),
-            'username'  => $session->get('username'),
-            'roles'     => $session->get('roles') ?? [],
-            'obra'      => $obra,
-            'grupos'    => $grupos,
-            'total'     => $this->totalDe($grupos),
-        ]);
+        return '/inspector/inspecciones';
     }
 
     /**
-     * Detalle de una inspección registrada (Fases E.4 y E.5).
-     *
-     * La autorización es la misma que la del histórico y se resuelve sobre la
-     * obra **de la inspección**, no sobre un identificador recibido del
-     * cliente: pedir el detalle de una inspección de otra obra recibe el mismo
-     * rechazo que pedir el histórico de una obra ajena.
-     *
-     * Entrega además las fotografías no anuladas de la inspección, en orden de
-     * registro, para que la galería muestre exactamente lo que el servidor tiene
-     * de esa inspección. Es de solo lectura: no se modifica ni recalcula ningún
-     * dato histórico. Los archivos se sirven desde `Inspector\Fotografias`, que
-     * repite esta misma autorización para cada imagen.
+     * El servicio de fotografías del inspector es el de E.5, sin cambios de URL.
      */
-    public function detalle(int $inspeccionId)
+    protected function baseFotografias(): string
     {
-        $session   = session();
-        $usuarioId = (int) $session->get('user_id');
-
-        $inspeccion = (new InspeccionModel())->findDetalle($inspeccionId);
-
-        if ($inspeccion === null) {
-            return redirect()->to('/inspector/dashboard')
-                ->with('error', 'La inspección solicitada no existe.');
-        }
-
-        $obraId = (int) $inspeccion->obra_id;
-        $obra   = (new ObraModel())->findDetalle($obraId);
-
-        if ($obra === null) {
-            return redirect()->to('/inspector/dashboard')
-                ->with('error', 'La obra de la inspección no existe.');
-        }
-
-        if (! (new InspectoresObrasModel())->esVigente($obraId, $usuarioId)) {
-            return redirect()->to('/inspector/dashboard')
-                ->with('warning', 'No puede consultar esa inspección. Solo está habilitado para las obras que tiene asignadas como inspector.');
-        }
-
-        return view('inspector/inspeccion_detalle', [
-            'titulo'      => 'Detalle de inspección',
-            'user_name'   => $session->get('user_name'),
-            'username'    => $session->get('username'),
-            'roles'       => $session->get('roles') ?? [],
-            'obra'        => $obra,
-            'inspeccion'  => $inspeccion,
-            'fotografias' => (new FotografiaModel())->listarPorInspeccion((int) $inspeccion->id),
-        ]);
+        return '/inspector/fotografias';
     }
 
     /**
-     * Total de inspecciones de los grupos ya consultados.
-     *
-     * No se cuenta en una segunda consulta: sale de la misma lista que la vista
-     * muestra, de modo que el encabezado y el listado no pueden discrepar.
-     *
-     * @param list<array{fecha: string, total: int, inspecciones: list<object>}> $grupos
+     * El listado de obras consultables del inspector vive en su propio grupo.
      */
-    private function totalDe(array $grupos): int
+    protected function baseListado(array $roles): string
     {
-        $total = 0;
+        return '/inspector/inspecciones';
+    }
 
-        foreach ($grupos as $grupo) {
-            $total += $grupo['total'];
+    /**
+     * Destino del botón "volver" del histórico del inspector.
+     *
+     * Si la obra sigue a su cargo, se vuelve a la vista operativa —de donde se
+     * llega normalmente—. Si ya no está asignado, volver a ella sería un
+     * rebote con aviso, así que se vuelve al listado de obras consultables,
+     * que es el punto de entrada real en ese caso.
+     *
+     * @param list<string> $roles
+     */
+    protected function urlVolver(array $roles, int $obraId): string
+    {
+        if ((new InspectoresObrasModel())->esVigente($obraId, (int) session('user_id'))) {
+            return '/inspector/obras/ver/' . $obraId;
         }
 
-        return $total;
+        return parent::urlVolver($roles, $obraId);
     }
 }

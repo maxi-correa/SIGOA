@@ -177,9 +177,9 @@ final class InspectorInspeccionesGaleriaTest extends CIUnitTestCase
             'De la fotografía se resuelve su inspección.'
         );
         $this->assertStringContainsString(
-            'esVigente',
+            'puedeConsultarObra',
             $metodo,
-            'La autorización es la asignación vigente del inspector sobre la obra.'
+            'Desde E.6 la imagen se autoriza con la misma consulta que la pantalla que la muestra.'
         );
 
         foreach (['getPost', 'getQuery', 'getVar', 'ruta_relativa', 'ruta_thumbnail'] as $prohibido) {

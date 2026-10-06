@@ -87,6 +87,65 @@ class ObraModel extends Model
     }
 
     /**
+     * Listado de obras a las que el usuario puede consultar el historial de
+     * inspecciones (Fase E.6).
+     *
+     * Es una consulta de **solo lectura** que resuelve en un único SQL lo que
+     * la tarjeta del listado muestra: estado, inspector vigente y representante
+     * técnico vigente. Las dos asignaciones se resuelven con `LEFT JOIN` sobre
+     * la fila abierta (`fecha_fin IS NULL`) porque ambas pueden faltar y el
+     * listado no debe descartar la obra por eso.
+     *
+     * El filtro por inspector es una subconsulta y no un `JOIN` directo: un
+     * inspector puede tener varios períodos de asignación en la misma obra y
+     * un `JOIN` multiplicaría las filas y duplicaría tarjetas.
+     *
+     * @param int|null $inspectorUsuarioId `usuario_id` de un inspector: limita
+     *                                    a las obras que tuvo asignadas
+     *                                    (vigentes o históricas). `null`
+     *                                    devuelve todas las obras.
+     *
+     * @return list<object>
+     */
+    public function listarParaConsulta(?int $inspectorUsuarioId = null): array
+    {
+        return $this->select('obras.id, obras.codigo, obras.expediente_municipal, obras.nombre')
+            ->select('estados_obra.estado AS estado_nombre')
+            ->select('usuarios.nombre AS inspector_nombre, usuarios.apellido AS inspector_apellido')
+            ->select(
+                'representantes_tecnicos.nombre AS representante_nombre, '
+                . 'representantes_tecnicos.apellido AS representante_apellido'
+            )
+            ->join('estados_obra', 'estados_obra.id = obras.estado_obra_id', 'inner')
+            ->join('inspectores_obras', 'inspectores_obras.obra_id = obras.id AND inspectores_obras.fecha_fin IS NULL', 'left')
+            ->join('usuarios', 'usuarios.id = inspectores_obras.usuario_id', 'left')
+            ->join(
+                'obras_representantes_tecnicos',
+                'obras_representantes_tecnicos.obra_id = obras.id AND obras_representantes_tecnicos.fecha_fin IS NULL',
+                'left'
+            )
+            ->join(
+                'representantes_tecnicos',
+                'representantes_tecnicos.id = obras_representantes_tecnicos.representante_tecnico_id',
+                'left'
+            )
+            ->when(
+                $inspectorUsuarioId !== null,
+                static function ($builder) use ($inspectorUsuarioId): void {
+                    $builder->whereIn('obras.id', static function ($query) use ($inspectorUsuarioId): void {
+                        $query
+                            ->select('obra_id')
+                            ->from('inspectores_obras')
+                            ->where('usuario_id', $inspectorUsuarioId);
+                    });
+                }
+            )
+            ->orderBy('obras.nombre', 'ASC')
+            ->orderBy('obras.id', 'ASC')
+            ->findAll();
+    }
+
+    /**
      * Verifica si ya existe una obra con el expediente municipal indicado.
      *
      * El expediente se compara en mayúsculas, igual que como se almacena.

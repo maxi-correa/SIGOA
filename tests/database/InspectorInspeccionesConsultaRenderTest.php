@@ -1,5 +1,6 @@
 <?php
 
+use CodeIgniter\Config\Factories;
 use CodeIgniter\Database\BaseConnection;
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\FeatureTestTrait;
@@ -39,6 +40,9 @@ final class InspectorInspeccionesConsultaRenderTest extends CIUnitTestCase
 
     /** @var list<int> Usuarios creados por esta prueba (para su limpieza). */
     private array $usuariosIds = [];
+
+    /** Raíz temporal que aísla el almacenamiento físico de las pruebas. */
+    private string $raizAlmacenamiento = '';
 
     protected function setUp(): void
     {
@@ -153,6 +157,31 @@ final class InspectorInspeccionesConsultaRenderTest extends CIUnitTestCase
             observacion TEXT NULL,
             created_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL
+        )');
+
+        /* El detalle resuelve siempre las fotografías de la inspección (E.5),
+           así que esta prueba necesita su tabla para poder renderizarlo sin
+           depender del orden de ejecución de los archivos de prueba. */
+        $this->conn->query('CREATE TABLE IF NOT EXISTS ' . $this->tabla('fotografias') . ' (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid VARCHAR(36) NOT NULL UNIQUE,
+            inspeccion_id INTEGER NOT NULL,
+            nombre_archivo VARCHAR(255) NULL,
+            ruta_relativa VARCHAR(500) NULL,
+            ruta_thumbnail VARCHAR(500) NULL,
+            extension VARCHAR(10) NULL,
+            mime_type VARCHAR(100) NULL,
+            tamano_bytes BIGINT NULL,
+            ancho INTEGER NULL,
+            alto INTEGER NULL,
+            fecha_hora_captura DATETIME NULL,
+            fecha_hora_carga DATETIME NULL,
+            latitud DECIMAL(10,7) NULL,
+            longitud DECIMAL(10,7) NULL,
+            dispositivo VARCHAR(255) NULL,
+            anulada TINYINT NOT NULL DEFAULT 0,
+            created_at DATETIME NULL,
+            updated_at DATETIME NULL
         )');
 
         $this->conn->query('CREATE TABLE IF NOT EXISTS ' . $this->tabla('barrios') . ' (
@@ -449,6 +478,151 @@ final class InspectorInspeccionesConsultaRenderTest extends CIUnitTestCase
         $resultado->assertSee('inspector/inspecciones/detalle/' . $id);
     }
 
+    public function testLaTarjetaSeparaLaHoraDelDetalleDeLaInspeccion(): void
+    {
+        $this->asignarVigente($this->obraId, $this->inspectorId);
+
+        $this->registrarInspeccion(
+            'e2222222-2222-4222-8222-222222222222',
+            '2026-09-22',
+            '10:30:00',
+            'Vanos y dinteles conformes.'
+        );
+        $this->registrarInspeccion(
+            'e3333333-3333-4333-8333-333333333333',
+            '2026-09-22',
+            null,
+            'Cerramiento revisado.'
+        );
+
+        $cuerpo = $this->cuerpoDe($this->verHistorico());
+
+        /* La hora es un dato sobrio de la columna izquierda: no se muestra
+           como distintivo ni con el modificador de «Sin hora». */
+        $this->assertMatchesRegularExpression(
+            '/class="iis-item-hora">\s*10:30\s*<\/span>/',
+            $cuerpo,
+            'La hora se renderiza en la columna izquierda de la tarjeta.'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/class="iis-item-hora iis-item-hora-sin">\s*Sin hora\s*<\/span>/',
+            $cuerpo,
+            'La ausencia de hora conserva su modificador propio.'
+        );
+
+        /* La hora precede a la observación y al enlace de detalle, que forman
+           la columna derecha de la tarjeta. */
+        $posiciones = [
+            'hora'        => (int) strpos($cuerpo, 'class="iis-item-hora"'),
+            'observación' => (int) strpos($cuerpo, 'class="iis-item-observacion"'),
+            'detalle'     => (int) strpos($cuerpo, 'class="iis-item-ver"'),
+        ];
+
+        foreach ($posiciones as $dato => $posicion) {
+            $this->assertNotSame(0, $posicion, "La tarjeta debe mostrar el dato «{$dato}».");
+        }
+
+        $this->assertTrue(
+            $posiciones['hora'] < $posiciones['observación']
+            && $posiciones['observación'] < $posiciones['detalle'],
+            'La tarjeta va de la hora a la observación y, en la columna derecha, al detalle.'
+        );
+    }
+
+    public function testLaObraDelInspectorOfreceElHistorialDebajoDeMisObras(): void
+    {
+        $this->raizAlmacenamiento = sys_get_temp_dir() . DIRECTORY_SEPARATOR
+            . 'sigoa_consulta_render_' . bin2hex(random_bytes(4));
+
+        $configo = new \Config\SigoaStorage();
+        $configo->storagePath = $this->raizAlmacenamiento;
+
+        Factories::injectMock('config', 'SigoaStorage', $configo);
+
+        /* La vista operativa exige un código de obra con la forma real que
+           valida `ObraAlmacenamiento`, para preparar su carpeta. */
+        $this->conn->table('obras')->insert([
+            'codigo'         => 'OBR-' . (string) random_int(100000, 999999),
+            'nombre'         => 'OBRA CONSULTA HISTORIAL',
+            'estado_obra_id' => $this->estadoEjecucion,
+        ]);
+
+        $obraId = (int) $this->conn->insertID();
+
+        try {
+            $this->asignarVigente($obraId, $this->inspectorId);
+
+            $resultado = $this->withSession($this->sesionInspector())
+                ->get('/inspector/obras/ver/' . $obraId);
+
+            $resultado->assertStatus(200);
+            $resultado->assertSee('Historial de inspecciones');
+            $resultado->assertSee('inspector/inspecciones/ver/' . $obraId);
+
+            $cuerpo = $this->cuerpoDe($resultado);
+
+            $posiciones = [
+                'mis obras' => (int) strpos($cuerpo, 'io-btn-volver'),
+                'historial' => (int) strpos($cuerpo, 'io-btn-consulta'),
+                'obra'      => (int) strpos($cuerpo, 'io-identidad'),
+            ];
+
+            foreach ($posiciones as $seccion => $posicion) {
+                $this->assertNotSame(0, $posicion, "La pantalla debe mostrar la sección «{$seccion}».");
+            }
+
+            $this->assertTrue(
+                $posiciones['mis obras'] < $posiciones['historial']
+                && $posiciones['historial'] < $posiciones['obra'],
+                'El historial va inmediatamente debajo de «Mis obras» y antes de los datos de la obra.'
+            );
+
+            /* «Mis obras» conserva su barra propia: el historial se renderiza
+               como bloque independiente, sin quedar dentro de ella. */
+            $inicioBarra = (int) strpos($cuerpo, 'io-barra-acciones');
+            $inicioConsulta = (int) strpos($cuerpo, 'io-consulta');
+
+            $this->assertStringNotContainsString(
+                'io-btn-consulta',
+                substr($cuerpo, $inicioBarra, $inicioConsulta - $inicioBarra),
+                'La acción de historial no forma parte de la barra de «Mis obras».'
+            );
+        } finally {
+            $this->eliminarArbol($this->raizAlmacenamiento);
+
+            $this->conn->table('inspectores_obras')->where('obra_id', $obraId)->delete();
+            $this->conn->table('obras')->where('id', $obraId)->delete();
+        }
+    }
+
+    private function eliminarArbol(string $directorio): void
+    {
+        if (! is_dir($directorio)) {
+            return;
+        }
+
+        $items = scandir($directorio);
+
+        if ($items === false) {
+            return;
+        }
+
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+
+            $ruta = $directorio . DIRECTORY_SEPARATOR . $item;
+
+            is_dir($ruta)
+                ? $this->eliminarArbol($ruta)
+                : @unlink($ruta);
+        }
+
+        @rmdir($directorio);
+    }
+
     public function testElDetalleMuestraLosDatosRegistradosDeLaInspeccion(): void
     {
         $this->asignarVigente($this->obraId, $this->inspectorId);
@@ -464,12 +638,59 @@ final class InspectorInspeccionesConsultaRenderTest extends CIUnitTestCase
             ->get('/inspector/inspecciones/detalle/' . $id);
 
         $resultado->assertStatus(200);
-        $resultado->assertSee('Inspección del 22/09/2026');
+        /* La fecha es el título del encabezado y no lo precede ninguna
+           palabra: «Inspección del …» era una etiqueta redundante. */
+        $resultado->assertSee('22/09/2026');
+        $resultado->assertDontSee('Inspección del');
+        $resultado->assertSee('Hora:');
         $resultado->assertSee('14:45');
-        $resultado->assertSee('Observaciones');
+        $resultado->assertSee('Inspector:');
+        $resultado->assertSee('Observación:');
         $resultado->assertSee('Fisuras visibles en el sector norte.');
         $resultado->assertDontSee('Sin observaciones');
         $resultado->assertSee('inspector/inspecciones/ver/' . $this->obraId);
+    }
+
+    /**
+     * Los datos registrados aparecen una sola vez: el bloque que los repetía
+     * debajo del encabezado se eliminó y el estado de la obra, que es un dato
+     * de la obra y no de la inspección, ya no se muestra aquí.
+     */
+    public function testElDetalleNoRepiteLosDatosNiMuestraElEstadoDeLaObra(): void
+    {
+        $this->asignarVigente($this->obraId, $this->inspectorId);
+        $this->ponerObraEnEstado($this->estadoFinalizada);
+
+        $id = $this->registrarInspeccion(
+            'f5555555-1111-4111-8111-111111111111',
+            '2026-09-22',
+            '14:45:00',
+            'Fisuras visibles en el sector norte.'
+        );
+
+        $cuerpo = (string) $this->withSession($this->sesionInspector())
+            ->get('/inspector/inspecciones/detalle/' . $id)
+            ->getBody();
+
+        foreach (['14:45', 'Fisuras visibles en el sector norte.'] as $dato) {
+            $this->assertSame(
+                1,
+                substr_count($cuerpo, $dato),
+                "«{$dato}» debe aparecer una sola vez en el detalle."
+            );
+        }
+
+        $this->assertStringNotContainsString(
+            'iid-datos',
+            $cuerpo,
+            'El bloque que repetía fecha, hora, inspector y observación se eliminó.'
+        );
+
+        $this->assertStringNotContainsString(
+            'FINALIZADA',
+            $cuerpo,
+            'El detalle no muestra el estado de la obra.'
+        );
     }
 
     public function testElDetalleDeUnaInspeccionSinHoraLoDice(): void
@@ -491,13 +712,15 @@ final class InspectorInspeccionesConsultaRenderTest extends CIUnitTestCase
         $this->asignarVigente($this->obraId, $this->inspectorId);
         $this->ponerObraEnEstado($this->estadoFinalizada);
 
-        $id = $this->registrarInspeccion('f3333333-3333-4333-8333-333333333333', '2026-09-22', '10:30:00');
+        $id = $this->registrarInspeccion('f3333333-1111-4333-8333-333333333333', '2026-09-22', '10:30:00');
 
         $resultado = $this->withSession($this->sesionInspector())
             ->get('/inspector/inspecciones/detalle/' . $id);
 
+        /* El estado no se muestra en el detalle, pero la obra finalizada se
+           sigue consultando: el acceso no depende de ella. */
         $resultado->assertStatus(200);
-        $resultado->assertSee('FINALIZADA');
+        $resultado->assertSee('22/09/2026');
         $resultado->assertSee('10:30');
     }
 

@@ -118,27 +118,57 @@ final class InspectorInspeccionesConsultaTest extends CIUnitTestCase
         $this->assertStringContainsString('Inspector\Inspecciones::ver/$1', $rutas);
     }
 
-    public function testControladorExponeLaConsultaComoMetodoSeparado(): void
+    public function testLaConsultaViveEnElControladorCompartido(): void
     {
-        $contenido = $this->leerApp('Controllers/Inspector/Inspecciones.php');
+        $compartido = $this->leerApp('Controllers/Inspecciones.php');
+        $inspector  = $this->leerApp('Controllers/Inspector/Inspecciones.php');
 
-        $this->assertMatchesRegularExpression('/function\s+ver\s*\(\s*int\s+\$obraId/', $contenido);
-        $this->assertMatchesRegularExpression('/function\s+nueva\s*\(\s*int\s+\$obraId/', $contenido, 'El alta de inspección se conserva.');
-        $this->assertStringContainsString("view('inspector/inspecciones'", $contenido);
+        $this->assertMatchesRegularExpression('/function\s+ver\s*\(\s*int\s+\$obraId/', $compartido);
+        $this->assertStringContainsString("view('inspector/inspecciones'", $compartido);
+
+        /* El inspector hereda la consulta: no puede existir una segunda
+           implementación que se desincronice de la compartida. */
+        $this->assertStringContainsString('extends InspeccionesConsulta', $inspector);
+        $this->assertStringNotContainsString('public function ver(', $inspector);
+        $this->assertStringNotContainsString('public function detalle(', $inspector);
+
+        /* El alta sí es suya y se conserva. */
+        $this->assertMatchesRegularExpression('/function\s+nueva\s*\(\s*int\s+\$obraId/', $inspector);
     }
 
     public function testLaConsultaNoExigeEstadoDeObraQuePermitaInspeccionar(): void
     {
         $metodo = $this->metodo(
-            $this->leerApp('Controllers/Inspector/Inspecciones.php'),
+            $this->leerApp('Controllers/Inspecciones.php'),
             'public function ver('
         );
 
-        $this->assertStringContainsString('esVigente', $metodo, 'La autorización vigente se mantiene.');
+        $this->assertStringContainsString(
+            'puedeConsultarObra',
+            $metodo,
+            'La autorización de la consulta se resuelve en el servicio de acceso.'
+        );
+
         $this->assertStringNotContainsString(
-            'permiteInspeccionar',
+            'puedeInspeccionar',
             $metodo,
             'Consultar el historial no debe depender del estado de la obra: una obra finalizada también se consulta.'
+        );
+
+        /* Y el servicio que decide tampoco introduce el estado de la obra, que
+           es un criterio de *inspección*. Para el inspector, la asignación
+           vigente es solo una vía: también habilita la histórica. */
+        $servicio = $this->metodo(
+            $this->leerApp('Services/AccesoInspecciones.php'),
+            'public function puedeConsultarObra('
+        );
+
+        $this->assertStringNotContainsString('puedeInspeccionar', $servicio);
+        $this->assertStringNotContainsString('permiteInspeccionar', $servicio);
+        $this->assertStringContainsString(
+            'haTenidoAsignacion',
+            $servicio,
+            'El inspector consulta también las obras cuya asignación ya se cerró.'
         );
     }
 
@@ -148,7 +178,7 @@ final class InspectorInspeccionesConsultaTest extends CIUnitTestCase
         $bloque = $this->bloque($obra, 'class="io-consulta"', '</section>');
 
         $this->assertStringContainsString('inspector/inspecciones/ver/', $bloque, 'La acción apunta a la consulta.');
-        $this->assertStringContainsString('Inspecciones', $bloque);
+        $this->assertStringContainsString('Historial de inspecciones', $bloque);
         $this->assertStringContainsString('io-btn-consulta', $bloque);
         $this->assertStringNotContainsString(
             'inspecciones/nueva/',
@@ -157,14 +187,59 @@ final class InspectorInspeccionesConsultaTest extends CIUnitTestCase
         );
     }
 
+    /**
+     * El historial se nombra por lo que es y no "Inspecciones", que es el
+     * nombre del ítem global del sidebar y de la propia pantalla de listado.
+     */
+    public function testLaAccionSeLlamaHistorialDeInspecciones(): void
+    {
+        $obra = $this->leerApp('Views/inspector/obra.php');
+        $texto = $this->textoPlano($obra);
+
+        $this->assertMatchesRegularExpression(
+            '/>\s*Historial de inspecciones\s*</',
+            $texto,
+            'La acción de la obra se distingue del ítem global del menú.'
+        );
+    }
+
+    /**
+     * El historial es la segunda acción de navegación de la pantalla: se
+     * presenta inmediatamente debajo de "Mis obras", no al final del cuerpo.
+     */
+    public function testElHistorialQuedaDebajoDeMisObras(): void
+    {
+        $obra = $this->leerApp('Views/inspector/obra.php');
+
+        $volver = strpos($obra, 'io-btn-volver');
+        $historial = strpos($obra, 'class="io-consulta"');
+        $identidad = strpos($obra, 'class="io-identidad"');
+
+        $this->assertNotFalse($volver, 'La pantalla conserva la acción de volver a "Mis obras".');
+        $this->assertNotFalse($historial, 'La pantalla ofrece el historial de la obra.');
+        $this->assertLessThan(
+            $historial,
+            $volver,
+            'El historial se declara después de "Mis obras".'
+        );
+        $this->assertLessThan(
+            $identidad,
+            $historial,
+            'El historial se declara antes de los datos de la obra: queda debajo, no al final.'
+        );
+    }
+
     public function testLaAccionInspeccionesEsIndependienteDeLaBajaPorEstadoDeObra(): void
     {
         $obra = $this->leerApp('Views/inspector/obra.php');
 
+        /* Declarada antes del condicional de «puede_inspeccionar»: existe
+           también en obras que no permiten iniciar inspecciones, porque
+           consultar el historial no depende del estado de la obra. */
         $this->assertLessThan(
+            strpos($obra, '<?php if ($puedeInspeccionar): ?>'),
             strpos($obra, 'class="io-consulta"'),
-            strrpos($obra, '<?php endif; ?>'),
-            'La consulta se declara después del endif de «puede_inspeccionar», para existir también en obras que no permiten inspeccionar.'
+            'La consulta se declara fuera del condicional de «puede_inspeccionar».'
         );
     }
 

@@ -6,7 +6,7 @@ use App\Controllers\BaseController;
 use App\Libraries\Uuid;
 use App\Models\FotografiaModel;
 use App\Models\InspeccionModel;
-use App\Models\InspectoresObrasModel;
+use App\Services\AccesoInspecciones;
 use App\Services\ObraAlmacenamiento;
 
 /**
@@ -29,15 +29,24 @@ use App\Services\ObraAlmacenamiento;
  *    `path traversal`: `ruta_relativa` y `ruta_thumbnail` se toman del registro
  *    ya registrado y se resuelven contra la raíz con
  *     `ObraAlmacenamiento::absolutoDesdeRelativa()`.
- * 3. **URL de servicio.** Estas dos rutas. Ambas pasan por los filtros
- *    `auth` + `role:INSPECTOR` del grupo del inspector: no hay endpoint
- *    público de imágenes.
+ * 3. **URL de servicio.** Estas dos rutas, con la misma resolución en los dos
+ *    puntos de entrada: las del grupo `inspector` (E.5) y las del grupo
+ *    `inspecciones` compartido (E.6). Todas pasan por el filtro `auth` y por un
+ *    filtro de rol: no hay endpoint público de imágenes.
  *
  * La autorización no se recibe del cliente: se resuelve encadenando
- * fotografía → inspección → obra, igual que en `Inspecciones::detalle()`. Sin
- * asignación vigente del inspector sobre la obra de esa fotografía no hay
- * imagen, y la respuesta es 404 en todos los casos no servibles, para que el
- * endpoint no sirva de oráculo sobre la existencia de fotografías ajenas.
+ * fotografía → inspección → obra, igual que en `Inspecciones::detalle()`, y la
+ * decisión de la obra es la de `AccesoInspecciones::puedeConsultarObra()`, la
+ * misma que autoriza la pantalla que muestra la imagen. Una fotografía solo es
+ * visible para quien puede consultar la inspección a la que pertenece, y la
+ * respuesta es 404 en todos los casos no servibles, para que el endpoint no
+ * sirva de oráculo sobre la existencia de fotografías ajenas.
+ *
+ * Desde la Fase E.6 esa decisión no exige asignación vigente del inspector: el
+ * acceso es el de **consulta** del historial, que es el mismo que permite ver
+ * la lista de inspecciones de la obra. Lo que sigue exigiendo asignación
+ * vigente es *crear* inspecciones, y eso vive en
+ * `AccesoInspecciones::puedeInspeccionar()`, no aquí.
  *
  * Es de **solo lectura**: no escribe en la base, no toca el disco y no altera
  * la sincronización (§52.15). La caché histórica de fotografías no se
@@ -109,9 +118,11 @@ class Fotografias extends BaseController
             return null;
         }
 
-        $usuarioId = (int) session()->get('user_id');
+        $session   = session();
+        $usuarioId = (int) $session->get('user_id');
+        $roles     = $session->get('roles') ?? [];
 
-        if (! (new InspectoresObrasModel())->esVigente((int) $inspeccion->obra_id, $usuarioId)) {
+        if (! (new AccesoInspecciones())->puedeConsultarObra((int) $inspeccion->obra_id, $usuarioId, $roles)) {
             return null;
         }
 

@@ -12,6 +12,7 @@ use App\Models\ObrasRepresentantesTecnicosModel;
 use App\Models\RepresentanteTecnicoModel;
 use App\Models\TipoLicitacionModel;
 use App\Models\UsuarioModel;
+use App\Services\AccesoInspecciones;
 
 /**
  * Alta inicial y edición de datos básicos de obras.
@@ -174,6 +175,14 @@ class Obras extends BaseController
             'plazo_dias'        => $plazoDias,
             'fecha_fin'         => $fechaFin,
             'puede_editar'      => array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $roles) !== [],
+            /* Entrada a la navegación histórica de la obra (Fase E.6). Los
+               roles administrativos llegan por aquí; la decisión se toma en
+               backend, no en la vista. */
+            'puede_consultar_inspecciones' => (new AccesoInspecciones())->puedeConsultarObra(
+                $id,
+                $session->get('user_id'),
+                $roles,
+            ),
         ]);
     }
 

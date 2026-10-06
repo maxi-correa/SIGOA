@@ -68,7 +68,27 @@ final class InspectorInspeccionesHistoricoTest extends CIUnitTestCase
         return (string) preg_replace('/<!--.*?-->/s', '', $contenido);
     }
 
-    /**
+/**
+     * Declaraciones CSS de un selector, en todas sus variantes.
+     *
+     * Un mismo selector puede aparecer en la regla base y dentro de un
+     * `@media`: se recogen todas para que la afirmación valgue para el
+     * tratamiento completo del elemento y no para una de sus apariciones.
+     */
+    private function reglasCss(string $css, string $selector): string
+    {
+        $patron = '/' . preg_quote($selector, '/') . '\s*\{([^}]*)\}/';
+
+        $this->assertGreaterThan(
+            0,
+            preg_match_all($patron, $css, $coincidencias),
+            "No se encontró la regla «{$selector}»."
+        );
+
+        return implode("\n", $coincidencias[1]);
+    }
+
+/**
      * Cuerpo de un método PHP, desde su firma hasta la llave que lo cierra.
      */
     private function metodo(string $contenido, string $firma): string
@@ -117,7 +137,9 @@ final class InspectorInspeccionesHistoricoTest extends CIUnitTestCase
 
     public function testElDetalleSeExponeComoMetodoSeparado(): void
     {
-        $contenido = $this->leerApp('Controllers/Inspector/Inspecciones.php');
+        /* Desde E.6 el histórico y el detalle son una implementación
+           compartida (`App\Controllers\Inspecciones`), no dos por rol. */
+        $contenido = $this->leerApp('Controllers/Inspecciones.php');
 
         $this->assertMatchesRegularExpression('/function\s+detalle\s*\(\s*int\s+\$inspeccionId/', $contenido);
         $this->assertStringContainsString("view('inspector/inspeccion_detalle'", $contenido);
@@ -127,7 +149,7 @@ final class InspectorInspeccionesHistoricoTest extends CIUnitTestCase
     public function testElDetalleAutorizaSobreLaObraDeLaInspeccion(): void
     {
         $metodo = $this->metodo(
-            $this->leerApp('Controllers/Inspector/Inspecciones.php'),
+            $this->leerApp('Controllers/Inspecciones.php'),
             'public function detalle('
         );
 
@@ -136,22 +158,26 @@ final class InspectorInspeccionesHistoricoTest extends CIUnitTestCase
             $metodo,
             'La autorización debe resolverse sobre la obra de la inspección, no sobre un id recibido.'
         );
-        $this->assertStringContainsString('esVigente', $metodo, 'Se mantiene la asignación vigente de E.3.');
+        $this->assertStringContainsString(
+            'puedeConsultarObra',
+            $metodo,
+            'La consulta se autoriza en el servicio de acceso, sin exigir asignación vigente.'
+        );
+        $this->assertMatchesRegularExpression(
+            '/puedeConsultarObra\(\$obraId, \$usuarioId, \$roles\)/',
+            $metodo,
+            'La autorización se verifica contra la obra de la inspección y el usuario de la sesión.'
+        );
         $this->assertStringNotContainsString(
             'permiteInspeccionar',
             $metodo,
             'Consultar el detalle no depende del estado de la obra: una obra finalizada también se consulta.'
         );
-        $this->assertMatchesRegularExpression(
-            '/esVigente\([^)]*\$usuarioId/',
-            $metodo,
-            'La asignación vigente se verifica contra el usuario de la sesión.'
-        );
     }
 
     public function testElHistoricoYElDetalleNoEscribenDatos(): void
     {
-        $contenido = $this->leerApp('Controllers/Inspector/Inspecciones.php');
+        $contenido = $this->leerApp('Controllers/Inspecciones.php');
 
         foreach (['ver(', 'detalle('] as $firma) {
             $metodo = $this->metodo($contenido, 'public function ' . $firma);
@@ -279,7 +305,10 @@ final class InspectorInspeccionesHistoricoTest extends CIUnitTestCase
 
         $this->assertStringContainsString('foreach ($grupos as $grupo)', $vista, 'La vista recorre los grupos que entrega el modelo.');
         $this->assertStringContainsString('iis-grupo-fecha', $vista);
-        $this->assertStringContainsString('inspector/inspecciones/detalle/', $vista, 'Cada inspección enlaza a su detalle.');
+        /* Desde E.6 el enlace se compone con el prefijo que declara el punto de
+           entrada; por defecto es el del inspector. */
+        $this->assertStringContainsString("\$base ?? '/inspector/inspecciones'", $vista, 'Cada inspección enlaza a su detalle.');
+        $this->assertStringContainsString("\$base . '/detalle/'", $vista);
         $this->assertStringContainsString('PlazoObra::formatearFecha', $vista, 'Las fechas se muestran en el formato institucional.');
         $this->assertStringContainsString('No existen inspecciones aún', $texto, 'El estado vacío de E.3 se conserva.');
     }
@@ -289,10 +318,14 @@ final class InspectorInspeccionesHistoricoTest extends CIUnitTestCase
         $vista = $this->leerApp('Views/inspector/inspeccion_detalle.php');
         $texto = $this->textoPlano($vista);
 
-        $this->assertStringContainsString('Fecha', $texto);
-        $this->assertStringContainsString('Hora', $texto);
-        $this->assertStringContainsString('Observaciones', $texto);
-        $this->assertStringContainsString('inspector/inspecciones/ver/', $vista, 'Se vuelve al histórico de la obra.');
+        /* Los datos viven solo en el encabezado: la fecha es el
+           título y hora, inspector y observación quedan como datos de apoyo. */
+        $this->assertStringContainsString('<h1 class="iid-titulo"><?= esc($fechaTexto) ?></h1>', $vista);
+        $this->assertStringContainsString('Hora:', $texto);
+        $this->assertStringContainsString('Inspector:', $texto);
+        $this->assertStringContainsString('Observación:', $texto);
+        $this->assertStringNotContainsString('Inspección del', $vista, 'La etiqueta del título era redundante.');
+        $this->assertStringContainsString("\$base . '/ver/'", $vista, 'Se vuelve al histórico de la obra.');
         $this->assertStringContainsString('Sin observaciones', $texto, 'Una inspección sin observaciones lo dice, no lo omite.');
         $this->assertStringNotContainsString(
             'usarApp',
@@ -308,6 +341,104 @@ final class InspectorInspeccionesHistoricoTest extends CIUnitTestCase
             'El detalle carga un solo script: el estado sin conexión de la galería.'
         );
         $this->assertStringContainsString('assets/js/pages/inspeccion-detalle.js', $vista);
+    }
+
+    /**
+     * El encabezado ya no repite lo que el bloque de datos mostraba, ni el
+     * estado de la obra, que es un dato de la obra y no de la inspección.
+     */
+    public function testElDetalleNoRepiteLosDatosNiMuestraElEstadoDeLaObra(): void
+    {
+        $vista = $this->leerApp('Views/inspector/inspeccion_detalle.php');
+
+        $this->assertStringNotContainsString(
+            'iid-datos',
+            $vista,
+            'El bloque que repetía fecha, hora, inspector y observación se eliminó.'
+        );
+
+        $this->assertStringNotContainsString(
+            'estado-badge',
+            $vista,
+            'El detalle no muestra el estado de la obra.'
+        );
+
+        $this->assertStringNotContainsString(
+            'estado_nombre',
+            $vista,
+            'La vista ya no necesita el nombre del estado de la obra.'
+        );
+
+        /* Y el estilo de la página no conserva reglas huérfanas de ese bloque. */
+        $css = $this->leerPublic('assets/css/pages/inspector-inspeccion-detalle.css');
+
+        foreach (['.iid-datos', '.iid-grid', '.iid-dato ', '.iid-hora'] as $regla) {
+            $this->assertStringNotContainsString(
+                $regla,
+                $css,
+                "El estilo de la página no conserva la regla eliminada «{$regla}»."
+            );
+        }
+    }
+
+    /**
+     * La galería se conserva tal cual: sigue siendo la única sección que
+     * resuelve fotografías y la que el script de página vigila sin conexión.
+     */
+    public function testLaGaleriaDelDetalleSeConserva(): void
+    {
+        $vista = $this->leerApp('Views/inspector/inspeccion_detalle.php');
+
+        $this->assertStringContainsString('iid-fotografias', $vista);
+        $this->assertStringContainsString('iidGaleria', $vista, 'El contenedor que vigila el script se conserva.');
+        $this->assertStringContainsString('iidGaleriaSinConexion', $vista);
+        $this->assertStringContainsString("\$baseFotos . '/mini/'", $vista, 'Las miniaturas se siguen pidiendo por uuid.');
+        $this->assertStringContainsString("\$baseFotos . '/ver/'", $vista);
+        $this->assertStringContainsString(
+            'iid-seccion-titulo">Fotografías</h2>',
+            $vista,
+            'La galería conserva su encabezado de sección.'
+        );
+    }
+
+    /**
+     * La hora de cada tarjeta se presenta como texto a la izquierda y no como
+     * distintivo de color: la tarjeta se lee como un registro.
+     */
+    public function testLaHoraDeLaTarjetaNoEsUnDistintivo(): void
+    {
+        $vista = $this->leerApp('Views/inspector/inspecciones.php');
+        $css   = $this->leerPublic('assets/css/pages/inspector-inspecciones.css');
+
+        $this->assertStringContainsString('iis-item-hora', $vista);
+        $this->assertStringContainsString('iis-item-hora-sin', $vista, '"Sin hora" conserva su propio tratamiento.');
+
+        /* En el CSS la hora solo declara ancho, tipografía y color de texto:
+           ni fondo propio ni padding de distintivo. */
+        $regla = $this->reglasCss($css, '.iis-item-hora');
+
+        foreach (['background', 'padding', 'border-radius'] as $propiedad) {
+            $this->assertStringNotContainsString(
+                $propiedad,
+                $regla,
+                "La hora no se presenta como distintivo: «{$propiedad}» sobra."
+            );
+        }
+
+        $this->assertStringContainsString('flex: 0 0 auto', $regla, 'La hora es una columna propia a la izquierda.');
+
+        $this->assertStringContainsString(
+            'align-items: flex-end',
+            $this->reglasCss($css, '.iis-item-cuerpo'),
+            'El cuerpo de la tarjeta se alinea a la derecha.'
+        );
+
+        /* "Sin hora" con el mismo tratamiento sobrio: tono secundario y
+           cursiva, como ya se usaba en el detalle. */
+        $this->assertStringContainsString(
+            'font-style: italic',
+            $this->reglasCss($css, '.iis-item-hora-sin')
+        );
     }
 
     /* ----------------------------------------------------------------
@@ -373,7 +504,7 @@ final class InspectorInspeccionesHistoricoTest extends CIUnitTestCase
      */
     public function testElDetalleEntregaLasFotografiasYNoLosArchivos(): void
     {
-        $contenido = $this->leerApp('Controllers/Inspector/Inspecciones.php');
+        $contenido = $this->leerApp('Controllers/Inspecciones.php');
         $metodo    = $this->metodo($contenido, 'public function detalle(');
 
         $this->assertStringContainsString(

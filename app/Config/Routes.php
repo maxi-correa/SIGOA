@@ -147,6 +147,10 @@ $routes->group('inspector', [
     // VISTA OPERATIVA DE LA OBRA (preparada) — accesible solo con asignación vigente
     $routes->get('obras/ver/(:num)', 'Inspector\Obras::ver/$1');
 
+    // LISTADO DE OBRAS CONSULTABLES (Fase E.6) — sin asignación vigente: también
+    // sirve cuando el inspector no tiene ninguna obra a cargo
+    $routes->get('inspecciones', 'Inspector\Inspecciones::index');
+
     // NUEVA INSPECCIÓN LOCAL (Fase D.2) — autoriza e inicializa; se guarda en IndexedDB
     $routes->get('inspecciones/nueva/(:num)', 'Inspector\Inspecciones::nueva/$1');
 
@@ -168,10 +172,38 @@ $routes->group('inspector', [
 });
 
 // =============================================
+// HISTÓRICO DE INSPECCIONES — navegación compartida (Fase E.6)
+//
+// Es la MISMA navegación que la del inspector (Obra → Fechas → Inspecciones →
+// Fotografías), con la MISMA implementación: `App\Controllers\Inspecciones`.
+// Solo cambia la autorización, que es la de consulta del historial, y el punto
+// de entrada (Administrador → Ver obra → Inspecciones, Consulta → Inspecciones).
+//
+// El listado de obras vive en el grupo de cada rol (inspector/consulta) y
+// deliberadamente no existe aquí: los roles administrativos entran desde una
+// obra ya seleccionada en su dashboard.
+//
+// No hay ruta de alta ni de sincronización en este grupo: crear inspecciones
+// sigue siendo exclusivo del inspector y únicamente por su flujo propio.
+// =============================================
+$routes->group('inspecciones', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR,CONSULTA,INSPECTOR'],
+], static function ($routes) {
+    $routes->get('ver/(:num)', 'Inspecciones::ver/$1');
+    $routes->get('detalle/(:num)', 'Inspecciones::detalle/$1');
+
+    $routes->get('fotografias/ver/(:segment)', 'Inspector\Fotografias::ver/$1');
+    $routes->get('fotografias/mini/(:segment)', 'Inspector\Fotografias::miniatura/$1');
+});
+
+// =============================================
 // ÁREA CONSULTA
 // =============================================
 $routes->group('consulta', [
     'filter' => ['auth', 'role:CONSULTA'],
 ], static function ($routes) {
     $routes->get('dashboard', 'Consulta\Dashboard::index');
+
+    // LISTADO DE OBRAS CONSULTABLES (Fase E.6) — solo lectura, sin creación
+    $routes->get('inspecciones', 'Inspecciones::index');
 });

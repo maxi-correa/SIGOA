@@ -39,8 +39,18 @@ final class InspeccionNuevaEstructuraTest extends CIUnitTestCase
 
         $contenido = file_get_contents(APPPATH . 'Controllers/Inspector/Inspecciones.php');
         $this->assertNotFalse($contenido);
-        $this->assertStringContainsString('class Inspecciones extends BaseController', $contenido);
+
+        /* Desde E.6 el alta se apoya en el controlador compartido de consulta y
+           solo declara lo propio del inspector. */
+        $this->assertStringContainsString(
+            'class Inspecciones extends InspeccionesConsulta',
+            $contenido
+        );
         $this->assertMatchesRegularExpression('/function\s+nueva\s*\(\s*int\s+\$obraId/', $contenido);
+
+        /* El alta no debe relajar la asignación vigente: sigue siendo la única
+           operación que la exige. */
+        $this->assertStringContainsString('puedeInspeccionar', $contenido);
     }
 
     public function testRutaNuevaInspeccionRegistradaEnGrupoInspector(): void

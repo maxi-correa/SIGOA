@@ -127,13 +127,6 @@
     .iis-barra-acciones .btn {
         width: 100%;
     }
-
-    /* En móvil la hora y la observación van en columna: la hora deja de
-       competir por el ancho con el texto libre de la observación. */
-    .iis-item-enlace {
-        flex-direction: column;
-        gap: var(--space-sm);
-    }
 }
 
 /* --- Resumen del total de inspecciones --- */
@@ -174,31 +167,45 @@
     font-weight: 600;
 }
 
-/* --- Lista de inspecciones del día --- */
+/* --- Lista de inspecciones del día ---
+   La tarjeta completa es el área táctil, como en el resto de cards de SIGOA.
+   La composición es mobile-first: en teléfono la hora encabeza el registro y la
+   observación y la acción ocupan el ancho completo; la distribución en columnas
+   es la ampliación para pantallas anchas, no una compresión de esta. */
 .iis-lista {
     list-style: none;
     margin: 0;
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm);
+    gap: var(--space-md);
 }
 
 .iis-item-enlace {
     display: flex;
-    align-items: flex-start;
-    gap: var(--space-md);
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-xs);
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     padding: var(--space-md);
+    box-shadow: var(--shadow-sm);
     color: var(--color-text);
     text-decoration: none;
     min-height: 2.75rem;
+    transition: box-shadow 0.2s, border-color 0.2s;
 }
 
 .iis-item-enlace:hover {
-    background-color: var(--color-background);
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-md);
+    color: var(--color-text);
+    text-decoration: none;
+}
+
+.iis-item-enlace:active {
+    box-shadow: var(--shadow-sm);
 }
 
 .iis-item-enlace:focus-visible {
@@ -206,17 +213,25 @@
     outline-offset: 2px;
 }
 
-/* La hora es el dato que distingue una inspección de otra del mismo día,
-   por eso lleva el color institucional; "sin hora" usa el tono secundario
-   para leerse como ausencia de dato, no como una hora más. */
+/* La hora es el dato que distingue una inspección de otra del mismo día, por
+   eso encabeza el registro en móvil y ocupa columna propia en pantallas anchas.
+   Se presenta como texto institucional y no como distintivo de color: la tarjeta
+   se lee como un registro, no como una etiqueta. La jerarquía se construye con
+   peso y cifras tabulares; "Sin hora" mantiene el mismo tratamiento con el tono
+   secundario y en cursiva, para leerse como ausencia de dato y no como una hora
+   más. */
 .iis-item-hora {
-    background-color: var(--color-primary);
-    color: var(--color-text-on-primary);
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--color-text);
     font-variant-numeric: tabular-nums;
+    line-height: 1.4;
 }
 
 .iis-item-hora-sin {
-    background-color: var(--color-background);
+    font-size: var(--font-size-xs);
+    font-weight: 400;
+    font-style: italic;
     color: var(--color-text-secondary);
 }
 
@@ -225,7 +240,6 @@
     flex-direction: column;
     gap: var(--space-xs);
     min-width: 0;
-    flex: 1;
 }
 
 .iis-item-observacion {
@@ -247,8 +261,40 @@
 .iis-item-ver {
     display: inline-flex;
     align-items: center;
+    align-self: flex-end;
     gap: 0.25rem;
     font-size: var(--font-size-xs);
     font-weight: 600;
     color: var(--color-primary);
+}
+
+/* --- Ampliación para pantallas anchas --- */
+@media (min-width: 581px) {
+    .iis-item-enlace {
+        flex-direction: row;
+        align-items: flex-start;
+        gap: var(--space-md);
+        padding: var(--space-lg);
+    }
+
+    /* Columna fija con cifras tabulares alineadas a la derecha: las horas forman
+       una columna vertical legible en lugar de un bloque de ancho variable. */
+    .iis-item-hora {
+        flex: 0 0 auto;
+        min-width: 4.5rem;
+        text-align: right;
+    }
+
+    .iis-item-hora-sin {
+        text-align: left;
+    }
+
+    .iis-item-cuerpo {
+        align-items: flex-end;
+        flex: 1;
+    }
+
+    .iis-item-observacion {
+        align-self: stretch;
+    }
 }

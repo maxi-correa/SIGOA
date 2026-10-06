@@ -1650,8 +1650,8 @@ Primera vista para el rol INSPECTOR. Sustituye la pantalla de bienvenida previa 
 
 ## 51.1 Alcance
 
-* Dashboard "Mis obras" (encabezado DGEOA) con las obras cuya asignación vigente corresponde al usuario autenticado.
-* Navegación propia para INSPECTOR en el sidebar: "Mis obras" y "Otras obras" (deshabilitado, sin funcionalidad).
+* Dashboard "Mis obras" (encabezado "Dirección General de Ejecución de Obras de Arquitectura") con las obras cuya asignación vigente corresponde al usuario autenticado.
+* Navegación propia para INSPECTOR en el sidebar: "Mis obras" e "Inspecciones".
 * Ruta destino por obra (`/inspector/obras/ver/(:num)`) con validación de pertenencia; la vista operativa completa queda preparada para una etapa posterior.
 
 **Fuera de alcance:** vista operativa de inspección, inspecciones, fotografías, sincronización, búsqueda global de obras.
@@ -1689,7 +1689,7 @@ La pantalla `/inspector/obras/ver/:id` se prepara como página de destino (encab
 ## 51.5 Navegación del sidebar
 
 * Para el rol INSPECTOR, el ítem "Inicio" se reemplaza por "Mis obras" (activo cuando el segmento de URL es `inspector`).
-* "Otras obras" se muestra como ítem deshabilitado (`.sidebar-link.is-disabled`, sin `href`, sin acción) hasta que exista búsqueda global.
+* El ítem "Inspecciones" (historial del inspector) se muestra para INSPECTOR y CONSULTA.
 * Los ítems administrativos ("Gestión de usuarios", "Empresas", "Representantes") se mantienen para usuarios con rol administrativo adicional; "Mis datos" y "Cerrar sesión" no cambian.
 
 ## 51.6 Badges de estado como componente
@@ -3648,9 +3648,9 @@ E.3 separa ambos conceptos sin tocar la sincronización.
 En `app/Views/inspector/obra.php` el orden queda así:
 
 1. volver a "Mis obras";
-2. datos de la obra;
-3. alta: "Nueva inspección" con su explicación (`.io-nueva`), condicional a `puede_inspeccionar`;
-4. **acción "Inspecciones"** (`.io-consulta`), siempre visible;
+2. **acción "Historial de inspecciones"** (`.io-consulta`), siempre visible;
+3. datos de la obra;
+4. alta: "Nueva inspección" con su explicación (`.io-aviso-nueva`), condicional a `puede_inspeccionar`;
 5. **bloque "Sincronización"** (`#inspeccionesLocales`).
 
 La acción nueva es independiente del estado de la obra: se ofrece incluso cuando no se pueden generar
@@ -3994,3 +3994,215 @@ galería está cubierto por el test estructural, no por una prueba JS.
   el historial se cierre por una ventana de estado.
 * `findByUuid()` y `findVisiblePorUuid()` se parecen y no son intercambiables: la sincronización necesita
   la fotografía anulada; la galería, no.
+
+## 65. Fase E.6 implementada — el historial deja de ser un área del inspector y pasa a ser de quien consulta
+
+E.3–E.5 construyeron la navegación **Obra → Fechas → Inspecciones → Fotografías**, pero entera dentro
+del grupo de rutas `inspector` y con la asignación vigente del inspector como única llave. El resultado
+era un historial que solo podía ver quien estaba a cargo de la obra *hoy*: cambiar la asignación le
+quitaba al inspector el acceso a las inspecciones que él mismo había registrado, y los tres roles que sí
+ven cualquier obra en su ficha no tenían forma de llegar a él. E.6 convierte esa navegación en una
+navegación compartida, con una sola implementación y sin tocar el alta ni la sincronización.
+
+### 65.1 La causa no era la vista: era dónde vivía la decisión
+
+Había dos preguntas distintas en un mismo lugar:
+
+* **poder crear** una inspección en una obra;
+* **poder leer** el historial de esa obra.
+
+La segunda se resolvía con `InspectoresObrasModel::esVigente()`, la misma condición que la primera. No
+es un error de la condición: son dos preguntas. El registro ya existente no depende de que hoy se pueda
+inspeccionar la obra, y `inspectores_obras` conserva el historial de asignaciones (§52.4), de modo que
+"tuvo la obra a su cargo" sigue siendo verificable después de cerrar el período.
+
+### 65.2 Un servicio con las dos respuestas, separadas
+
+`app/Services/AccesoInspecciones.php` centraliza ambas y solo ellas:
+
+| Método | Pregunta | Regla |
+| --- | --- | --- |
+| `puedeInspeccionar($obraId, $usuarioId, $roles)` | ¿puedo **crear** una inspección? | Rol `INSPECTOR` **y** asignación vigente |
+| `puedeConsultarObra($obraId, $usuarioId, $roles)` | ¿puedo **leer** el historial? | `ROLES_CONSULTA_OBRA`, o rol `INSPECTOR` con asignación vigente **o** histórica |
+
+`ROLES_CONSULTA_OBRA = ['SUPERADMINISTRADOR', 'ADMINISTRADOR', 'CONSULTA']` son exactamente los roles
+para los que la ficha de obra es visible (`GET /obras/ver/(:num)`). La regla queda en una sola frase:
+**se consulta el historial de una obra que el usuario puede ver**. No hay un criterio de acceso al
+histórico distinto del acceso a la obra.
+
+Para el inspector el criterio es `esVigente() || haTenidoAsignacion()`: lo segundo es un método nuevo de
+`InspectoresObrasModel` que cuenta asignaciones sin filtrar `fecha_fin`. `permiteInspeccionar()` (estado
+de obra) no aparece en ninguna de las dos rutas de consulta: es una regla del ciclo de la obra, no de
+acceso.
+
+### 65.3 Una implementación, cuatro puntos de entrada
+
+`app/Controllers/Inspecciones.php` es la única implementación de `index()`, `ver()` y `detalle()`.
+`app/Controllers/Inspector/Inspecciones.php` pasa a extenderla y solo declara lo propio del inspector:
+`nueva()` (el alta) y los prefijos de URL de su punto de entrada.
+
+Las vistas no conocen roles. El controlador declara el prefijo con `baseHistorico()` y
+`baseFotografias()`, y las vistas componen sus enlaces con `$base` y `$baseFotos`:
+
+| Componente | Inspector | Navegación compartida |
+| --- | --- | --- |
+| `Views/inspector/inspecciones.php` | `/inspector/inspecciones` | `/inspecciones` |
+| `Views/inspector/inspeccion_detalle.php` (galería) | `/inspector/fotografias` | `/inspecciones/fotografias` |
+| Volver | Vista de obra si sigue vigente, si no el listado | Ficha de obra (administrativos) o listado |
+
+Las tres vistas son las mismas para todos los roles, pero el valor por defecto es el del inspector, de
+modo que las pruebas de render de E.3–E.5 siguen describiendo el flujo existente.
+
+### 65.4 Rutas
+
+El grupo `inspector` conserva sus URLs intactas (más el listado nuevo), y el grupo compartido expone solo
+lectura:
+
+| Ruta | Método | Roles |
+| --- | --- | --- |
+| `/inspector/inspecciones` | `Inspector\Inspecciones::index()` | INSPECTOR |
+| `/consulta/inspecciones` | `Inspecciones::index()` | CONSULTA |
+| `/inspecciones/ver/{id}` | `Inspecciones::ver()` | SUPERADMINISTRADOR, ADMINISTRADOR, CONSULTA, INSPECTOR |
+| `/inspecciones/detalle/{id}` | `Inspecciones::detalle()` | los cuatro |
+| `/inspecciones/fotografias/{ver,mini}/{uuid}` | `Inspector\Fotografias::*()` | los cuatro |
+
+El grupo compartido **no** declara `nueva/` ni `sincronizar/`, y tampoco un listado de obras: el alta y la
+sincronización son exclusivas del inspector por diseño, y los roles administrativos entran desde una obra
+ya seleccionada. `/inspecciones` (listado) no existe como ruta, y una prueba lo fija.
+
+### 65.5 El listado de obras, por rol
+
+`ObraModel::listarParaConsulta(?int $inspectorUsuarioId = null)` resuelve en un solo SQL lo que la tarjeta
+muestra: estado, inspector vigente y representante técnico vigente, con `LEFT JOIN` sobre la fila abierta
+(`fecha_fin IS NULL`) para que una obra sin asignaciones no desaparezca del listado. El filtro por
+inspector es una **subconsulta** sobre `inspectores_obras`, no un `JOIN`: un inspector puede tener varios
+períodos sobre la misma obra y un `JOIN` multiplicaría filas y duplicaría tarjetas.
+
+* INSPECTOR: las obras que **tuvo** asignadas, vigentes o cerradas. El listado existe aunque no tenga
+  ninguna obra a cargo.
+* CONSULTA: todas las obras, que es lo que el rol ya ve en su dashboard.
+* ADMINISTRADOR/SUPERADMINISTRADOR: sin listado. Entran por `Ver obra → Inspecciones`, un botón
+  secundario en la barra de la ficha.
+
+El listado es de solo lectura: no ofrece alta ni sincronización en ningún caso.
+
+### 65.6 La galería usa la misma consulta que la pantalla
+
+`Inspector\Fotografias::fotografiaAutorizada()` sigue encadenando fotografía → inspección → obra, pero la
+última decisión es `puedeConsultarObra()` en lugar de `esVigente()`. Una fotografía no puede estar
+visible para quien no puede ver la inspección a la que pertenece. El resto de §64 no cambia: `uuid`,
+404 único, `no-store`, contención de raíz y `finfo`.
+
+### 65.7 Interfaz
+
+* `app/Views/inspecciones/obras.php` + `public/assets/css/pages/inspecciones-obras.css`: tarjetas
+  mobile-first, grid con `auto-fill`/`minmax`, estado vacío por rol y sin JavaScript.
+* `Views/layouts/partials/sidebar.php`: ítem **Inspecciones** para INSPECTOR y CONSULTA. `Mis obras`
+  deja de quedar activo en `/inspector/inspecciones` y el nuevo ítem permanece activo en toda la
+  navegación compartida, para que no se marquen dos entradas a la vez.
+* El estado activo del menú se calculaba con `service('request')->getUri()->getPath()`, que devuelve
+  `/index.php/inspector/inspecciones` porque `Config\App::$indexPage` es `index.php`. El primer segmento
+  era por tanto `index.php` y **ninguna entrada quedaba activa en ninguna pantalla**. Se corrige usando
+  `SiteURI::getRoutePath()`, que devuelve la ruta real sin el archivo índice (`inspector/inspecciones`).
+  Es un defecto previo a E.6, no introducido por ella.
+* `Views/obras/ficha.php`: botón **Ver Inspecciones** junto a "Ver Certificados", condicionado por
+  `puede_consultar_inspecciones`, que resuelve el backend (`Obras::ver()`) y no la vista.
+* `public/sw.js` sube a `sigoa-shell-v13` con el CSS nuevo en el precache. Sigue siendo solo shell: las
+  rutas de fotografía nunca se cachean.
+
+### 65.8 Pruebas
+
+* `tests/unit/InspeccionesAccesoPorRolTest.php` (17 pruebas, 96 aserciones, nueva): una sola
+  implementación; el grupo compartido sin alta ni sincronización ni listado; URLs previas del inspector
+  intactas; servicio con las dos respuestas separadas; filtro del listado por subconsulta; vistas sin
+  rutas fijas; ítems de navegación; botón de la ficha; precache; sin migración nueva.
+* `tests/database/InspeccionesConsultaCompartidaTest.php` (16 pruebas, 43 aserciones, nueva): listado del
+  inspector con asignación cerrada y sin ninguna vigente, listado de CONSULTA con todas las obras, sin
+  duplicar obra con varios períodos, nombres resueltos, ruta compartida por inspector (obra propia sí,
+  ajena no), por CONSULTA y por ADMINISTRADOR con su destino de vuelta, detalle compartido, rechazo del
+  detalle de obra ajena, galería compartida (404 y sesión ausente) y ausencia de listado global para
+  SUPERADMINISTRADOR.
+* `tests/unit/InspeccionesSidebarActivoTest.php` (9 pruebas, 38 aserciones, nueva): el partial se renderiza
+  con la ruta de cada pantalla y se comprueba que queda **exactamente una** entrada activa. Cubre
+  `Mis obras` en el dashboard del inspector, `Inspecciones` en el listado, en el historial del inspector y
+  en las tres rutas compartidas para INSPECTOR y CONSULTA, `Inicio` en el dashboard de CONSULTA, la
+  ausencia de entrada activa para los roles administrativos en `/inspecciones/...` y la ausencia del ítem
+  de inspecciones para ADMINISTRADOR y SUPERADMINISTRADOR.
+* Pruebas de fases anteriores adaptadas al diseño compartido, sin perder su valor:
+  `InspectorInspeccionesConsultaTest` (17/76) afirma ahora que `ver()` vive en el controlador compartido y
+  que la consulta no introduce estado ni asignación vigente; `InspectorInspeccionesHistoricoTest` (24/156)
+  afirma que el detalle se expone una vez y autoriza sobre `$inspeccion->obra_id` con
+  `puedeConsultarObra`; `InspectorInspeccionesGaleriaTest` (15/84) afirma que la imagen se autoriza con
+  la consulta; `InspeccionNuevaEstructuraTest` (6/35) afirma que el alta hereda del compartido y sigue
+  exigiendo asignación vigente.
+
+Suite completa: **405 pruebas y 1566 aserciones en verde** (antes 355 y 1316), excluyendo el grupo
+`mysql-real`. JS sin cambios en E.6: `obra-inspecciones.test.js` en 32 pruebas, `sincronizacion.test.js`
+en 236 aserciones y `csrf.test.js` en 16.
+
+### 65.9 Fuera de alcance
+
+* Sin alta ni sincronización nuevas, sin cambios en la cola, los reintentos, el IndexedDB ni el CSRF.
+* Sin migraciones: E.6 reorganiza accesos y navegación, no el esquema.
+* Sin caché histórica de fotografías, sin consulta sin conexión del historial y sin descarga.
+* Sin listado global de inspecciones para roles administrativos, sin búsqueda, filtros ni paginación en el
+  listado de obras.
+* Sin búsqueda por texto ni por expediente en el historial.
+
+### 65.10 Discrepancias
+
+* El botón **Ver Inspecciones** de la ficha se muestra a quien puede abrir la ficha, es decir
+  SUPERADMINISTRADOR, ADMINISTRADOR **y CONSULTA**. Para CONSULTA es coherente con la regla de §65.2
+  (consultar es un derecho de quien ve la obra) y no otorga nada nuevo: `/inspecciones/ver/{id}` ya lo
+  autorizaba `puedeConsultarObra()`. Si se prefiera que el acceso administrativo sea exclusivo de la
+  ficha, la decisión a revisar es `ROLES_CONSULTA_OBRA`, no la vista.
+* El ítem **Otras obras** del sidebar del inspector se eliminó: quedó reemplazado funcionalmente por **Inspecciones**. Sigue siendo cierto que no hay acceso a las obras que el inspector no tuvo asignadas.
+* En `/inspecciones/...` los roles administrativos no ven ninguna entrada activa del menú: no tienen
+  listado de inspecciones al que volver. Es coherente con que llegan desde *Ver obra*, pero si se quiere
+  una señal visual en esa pantalla habría que decidir antes qué entrada corresponde a un historial sin
+  listado propio.
+
+### 65.11 Ajuste de interfaz de E.6 — entrada al historial, tarjeta y encabezado del detalle
+
+Es un ajuste de presentación de la pantalla consolidada en §65. **No es una fase nueva**: no cambia rutas,
+autorización, consultas, esquemas, sincronización, IndexedDB, almacenamiento ni los puntos de entrada de
+fotografías. El acceso global del inspector a todas las obras ya existente (`/inspector/inspecciones`) no se
+toca.
+
+* `Views/inspector/obra.php`: la acción pasa a llamarse **Historial de inspecciones** y se coloca
+  inmediatamente debajo de **Mis obras**, como bloque propio, para que se lea junto a la única acción de
+  navegación de la pantalla y antes de los datos de la obra. Sigue siendo **independiente de «Nueva
+  inspección» y del estado de la obra**: consultar el historial no depende de poder iniciar inspecciones, que
+  es lo que permite seguir consultando una obra finalizada o con asignación ya cerrada.
+* `public/assets/css/pages/inspector-inspecciones.css`: la hora de la tarjeta deja de ser un distintivo
+  (sin fondo, sin badge y sin padding propio) y pasa a ser texto institucional con jerarquía por peso y cifras
+  tabulares. La tarjeta es **mobile-first**: en teléfono la hora encabeza el registro y la observación y el
+  enlace **Ver detalle** ocupan el ancho completo en columna; en pantallas anchas (`min-width: 581px`) la
+  hora pasa a una columna fija a la izquierda con las cifras alineadas a la derecha y la observación y
+  **Ver detalle** a la derecha. La tarjeta adopta el tratamiento canónico de cards de SIGOA (superficie,
+  borde, `radius-lg`, `shadow-sm` y hover con borde primario y `shadow-md`).
+* `Views/inspector/inspeccion_detalle.php` y `public/assets/css/pages/inspector-inspeccion-detalle.css`:
+  los datos de la inspección viven una sola vez, en el encabezado —obra, fecha como título, hora, inspector y
+  observación—, y desaparece el bloque que los repetía. Con él se retira el **estado de la obra**: es un dato
+  de la obra, no de la inspección, y en el historial la obra ya se muestra en su propia cabecera. La galería,
+  que es de E.5, no se toca.
+* Ajustes de interfaz posteriores (sin cambios de lógica):
+  * `Views/layouts/partials/sidebar.php`: se elimina el ítem **Otras obras** del inspector, reemplazado
+    funcionalmente por **Inspecciones**. No existe para CONSULTA.
+  * `Views/inspector/obra.php`: se elimina la frase secundaria «Inspecciones registradas para esta obra.»;
+    el bloque queda solo con el botón, más limpio.
+  * El bloque **Nueva inspección** integra el botón dentro del aviso (`.io-aviso-nueva`) como encabezado,
+    reemplazando el `<h2>` repetido. Se mantiene la descripción y el estilo consolidado del aviso.
+  * `Views/inspector/dashboard.php`: el encabezado pasa de «DGEOA» a «Dirección General de Ejecución de
+    Obras de Arquitectura», con ajuste responsive de tamaño en móvil.
+* Pruebas: `InspectorInspeccionesConsultaTest` (17/76) afirma el texto del botón, que se renderiza fuera del
+  condicional de «Nueva inspección» y su orden respecto de **Mis obras** y de la identidad de la obra;
+  `InspectorInspeccionesHistoricoTest` (24/156) afirma que el detalle expone los datos una sola vez, no
+  muestra el estado, conserva la galería y que la hora de la tarjeta no tiene aspecto de distintivo;
+  `InspectorInspeccionesConsultaRenderTest` (21/72) y `InspectorInspeccionesGaleriaRenderTest` (18/102)
+  comprueban el HTML real. Este último archivo crea también la tabla de fotografías: el detalle resuelve
+  siempre las fotografías de la inspección y antes dependía de que otro archivo la hubiera creado, lo que
+  ataba la prueba al orden de ejecución de la suite.
+
+Suite completa tras el ajuste: **405 pruebas y 1566 aserciones en verde**, excluyendo el grupo
+`mysql-real`. Sin cambios en JavaScript.

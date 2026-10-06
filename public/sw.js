@@ -23,8 +23,8 @@
 
 'use strict';
 
-var CACHE_VERSION = 'sigoa-shell-v11';
-var SHELL_CACHE = 'sigoa-shell-v11';
+var CACHE_VERSION = 'sigoa-shell-v13';
+var SHELL_CACHE = 'sigoa-shell-v13';
 
 var PREFIJO_ESTATICO = '/assets/';
 
@@ -48,6 +48,7 @@ var SHELL_ASSETS = [
     '/assets/css/pages/inspector-inspecciones.css',
     '/assets/css/pages/inspector-obra.css',
     '/assets/css/pages/inspeccion-nueva.css',
+    '/assets/css/pages/inspecciones-obras.css',
     '/assets/fonts/inter/fonts.css',
     '/assets/fonts/inter/Inter-Regular.woff2',
     '/assets/fonts/inter/Inter-Medium.woff2',

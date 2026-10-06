@@ -1,4 +1,20 @@
-<?php use App\Libraries\HoraInspeccion; use App\Libraries\PlazoObra; ?>
+<?php
+
+use App\Libraries\HoraInspeccion;
+use App\Libraries\PlazoObra;
+
+/**
+ * Detalle de una inspección registrada (Fases E.4, E.5 y E.6).
+ *
+ * Pantalla compartida por todos los roles que consultan el historial: no
+ * conoce roles ni rutas fijas. El controlador declara el prefijo de la
+ * navegación (`$base`) y el del servicio de fotografías (`$base_fotos`), que
+ * es lo único que cambia entre puntos de entrada. Los valores por defecto
+ * corresponden al flujo del inspector, que es el existente desde E.4/E.5.
+ */
+$base      = $base ?? '/inspector/inspecciones';
+$baseFotos = $base_fotos ?? '/inspector/fotografias';
+?>
 <?= $this->extend('layouts/auth') ?>
 
 <?= $this->section('styles') ?>
@@ -8,18 +24,10 @@
 <?= $this->section('content') ?>
 
 <?php
-$estadoNombre = strtoupper((string) ($obra->estado_nombre ?? ''));
-
-$estadoClase = match ($estadoNombre) {
-    'EN EJECUCIÓN'             => 'estado-ejecucion',
-    'NEUTRALIZADA'             => 'estado-neutralizada',
-    'EN PLAZO DE CONSERVACIÓN' => 'estado-conservacion',
-    'FINALIZADA'               => 'estado-finalizada',
-    default                    => 'estado-previo',
-};
-
 /* Se muestran los datos tal como quedaron registrados: no se recalcula ni
-   se completa nada (Fase E.4). */
+   se completa nada (Fase E.4). Todo ello vive en el encabezado: el bloque de
+   datos que lo repetía debajo se eliminó, y con él la necesidad de mostrar el
+   estado de la obra, que es un dato de la obra y no de la inspección. */
 $fechaTexto    = PlazoObra::formatearFecha($inspeccion->fecha_inspeccion) ?? (string) $inspeccion->fecha_inspeccion;
 $horaBruta     = $inspeccion->hora_inspeccion === null ? null : (string) $inspeccion->hora_inspeccion;
 $horaTexto     = HoraInspeccion::texto($horaBruta);
@@ -44,56 +52,46 @@ $totalFotos  = count($fotografias);
 <div class="iid-page">
 
     <div class="iid-barra-acciones">
-        <a href="<?= site_url('/inspector/inspecciones/ver/' . (int) $obra->id) ?>" class="btn btn-secondary">
+        <a href="<?= site_url($base . '/ver/' . (int) $obra->id) ?>" class="btn btn-secondary">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
             Volver a inspecciones
         </a>
     </div>
 
     <!-- ============================================================
-         Identificación de la inspección: obra, fecha y hora registradas.
+         Datos registrados de la inspección: obra, fecha, hora, inspector
+         y observación.
+
+         La fecha es el título porque identifica la inspección dentro del
+         historial de la obra, y hora, inspector y observación quedan como
+         datos de apoyo. Cada dato aparece una sola vez en la pantalla.
          ============================================================ -->
     <header class="iid-encabezado">
-        <div class="iid-contexto">
-            <p class="iid-obra"><?= esc($obra->nombre) ?></p>
-            <span class="estado-badge <?= $estadoClase ?>"><?= esc($estadoNombre) ?></span>
+        <p class="iid-obra"><?= esc($obra->nombre) ?></p>
+
+        <h1 class="iid-titulo"><?= esc($fechaTexto) ?></h1>
+
+        <div class="iid-meta">
+            <p class="iid-meta-linea">
+                <span class="iid-meta-etiqueta">Hora:</span>
+                <span class="iid-meta-valor<?= $sinHora ? ' iid-meta-valor-sin' : '' ?>">
+                    <?= esc($horaTexto) ?>
+                </span>
+            </p>
+
+            <p class="iid-meta-linea">
+                <span class="iid-meta-etiqueta">Inspector:</span>
+                <span class="iid-meta-valor"><?= esc($inspectorNombre !== '' ? $inspectorNombre : '—') ?></span>
+            </p>
         </div>
 
-        <h1 class="iid-titulo">Inspección del <?= esc($fechaTexto) ?></h1>
-
-        <p class="iid-hora<?= $sinHora ? ' iid-hora-sin' : '' ?>">
-            <?= esc($horaTexto) ?>
-        </p>
+        <div class="iid-observacion">
+            <p class="iid-observacion-etiqueta">Observación:</p>
+            <p class="iid-observacion-texto">
+                <?= esc($observacion !== '' ? $observacion : 'Sin observaciones') ?>
+            </p>
+        </div>
     </header>
-
-    <!-- ============================================================
-         Datos registrados de la inspección
-         ============================================================ -->
-    <section class="iid-datos">
-        <h2 class="iid-seccion-titulo">Datos de la inspección</h2>
-
-        <dl class="iid-grid">
-            <div class="iid-dato">
-                <dt>Fecha</dt>
-                <dd><?= esc($fechaTexto) ?></dd>
-            </div>
-
-            <div class="iid-dato">
-                <dt>Hora</dt>
-                <dd class="<?= $sinHora ? 'iid-dato-sin-hora' : '' ?>"><?= esc($horaTexto) ?></dd>
-            </div>
-
-            <div class="iid-dato">
-                <dt>Inspector</dt>
-                <dd><?= esc($inspectorNombre !== '' ? $inspectorNombre : '—') ?></dd>
-            </div>
-
-            <div class="iid-dato iid-dato-ancho">
-                <dt>Observaciones</dt>
-                <dd><?= esc($observacion !== '' ? $observacion : 'Sin observaciones') ?></dd>
-            </div>
-        </dl>
-    </section>
 
     <!-- ============================================================
          Fotografías
@@ -183,9 +181,9 @@ $totalFotos  = count($fotografias);
 
                     <figure class="iid-foto">
                         <a class="iid-foto-enlace"
-                           href="<?= site_url('/inspector/fotografias/ver/' . rawurlencode($uuidFoto)) ?>">
+                           href="<?= site_url($baseFotos . '/ver/' . rawurlencode($uuidFoto)) ?>">
                             <img class="iid-foto-imagen"
-                                 src="<?= site_url('/inspector/fotografias/mini/' . rawurlencode($uuidFoto)) ?>"
+                                 src="<?= site_url($baseFotos . '/mini/' . rawurlencode($uuidFoto)) ?>"
                                  alt="Fotografía <?= (int) $indice + 1 ?> de la inspección del <?= esc($fechaTexto) ?>"
                                  loading="lazy"
                                  decoding="async">

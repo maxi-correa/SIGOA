@@ -21,6 +21,14 @@
     width: auto;
 }
 
+/* Acciones secundarias agrupadas a la derecha (E.6: Ver Inspecciones). */
+.ficha-barra-acciones-secundarias {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
 /* --- Encabezado de identificación --- */
 .ficha-identidad {
     background: var(--color-surface);
@@ -227,6 +235,11 @@
     }
 
     .ficha-barra-acciones {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .ficha-barra-acciones-secundarias {
         flex-direction: column;
         align-items: stretch;
     }

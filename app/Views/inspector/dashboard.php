@@ -9,7 +9,7 @@
 <div class="inspector-page">
 
     <header class="inspector-header">
-        <h1>DGEOA</h1>
+        <h1>Dirección General de Ejecución de Obras de Arquitectura</h1>
         <p class="inspector-subtitulo">Mis obras</p>
     </header>
 

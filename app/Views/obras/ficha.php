@@ -63,13 +63,26 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
             Volver a obras
         </a>
 
-        <button type="button"
-                class="btn btn-secondary ficha-btn-certificados"
-                disabled
-                title="Disponible próximamente">
-            <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
-            Ver Certificados
-        </button>
+        <div class="ficha-barra-acciones-secundarias">
+            <?php /* Entrada al historial de inspecciones de la obra (Fase E.6).
+                    Misma navegación que usa el inspector y el rol de consulta,
+                    con el mismo criterio de autorización resuelto en backend. */ ?>
+            <?php if ($puede_consultar_inspecciones ?? false): ?>
+                <a href="<?= site_url('/inspecciones/ver/' . (int) $obra->id) ?>"
+                   class="btn btn-secondary ficha-btn-inspecciones">
+                    <i class="bi bi-clipboard-check" aria-hidden="true"></i>
+                    Ver Inspecciones
+                </a>
+            <?php endif; ?>
+
+            <button type="button"
+                    class="btn btn-secondary ficha-btn-certificados"
+                    disabled
+                    title="Disponible próximamente">
+                <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+                Ver Certificados
+            </button>
+        </div>
     </div>
 
     <?php if (session()->getFlashdata('success')): ?>

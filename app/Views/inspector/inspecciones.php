@@ -1,4 +1,27 @@
-<?php use App\Libraries\HoraInspeccion; use App\Libraries\PlazoObra; ?>
+<?php
+
+use App\Libraries\HoraInspeccion;
+use App\Libraries\PlazoObra;
+
+/**
+ * Navegación histórica de las inspecciones de una obra (Fases E.3–E.6).
+ *
+ * Esta es la **única** pantalla de historial de inspecciones del sistema: la
+ * ven el inspector desde *Mis obras* o desde *Inspecciones*, y también
+ * CONSULTA, ADMINISTRADOR y SUPERADMINISTRADOR. Por eso vive aquí y no se
+ * duplica por rol.
+ *
+ * La vista es deliberadamente agnóstica: no conoce roles ni decide a dónde
+ * enlazar. El controlador declara el prefijo de las URL (`$base`) y el destino
+ * del botón "volver" (`$volver_url`, `$volver_texto`), que es lo único que
+ * cambia entre puntos de entrada. El valor por defecto es el del inspector, que
+ * es el flujo existente desde E.3.
+ */
+$base         = $base ?? '/inspector/inspecciones';
+$volverUrl    = $volver_url ?? '/inspector/obras/ver/' . (int) $obra->id;
+$volverTexto  = $volver_texto ?? 'Volver a la obra';
+$mensajeVacio = $mensaje_vacio ?? 'Se recomienda generar una nueva inspección para comenzar a registrar el seguimiento de la obra.';
+?>
 <?= $this->extend('layouts/auth') ?>
 
 <?= $this->section('styles') ?>
@@ -27,9 +50,9 @@ $total  = (int) ($total ?? 0);
 <div class="iis-page">
 
     <div class="iis-barra-acciones">
-        <a href="<?= site_url('/inspector/obras/ver/' . (int) $obra->id) ?>" class="btn btn-secondary">
+        <a href="<?= site_url($volverUrl) ?>" class="btn btn-secondary">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
-            Volver a la obra
+            <?= esc($volverTexto) ?>
         </a>
     </div>
 
@@ -81,8 +104,7 @@ $total  = (int) ($total ?? 0);
             <h2 class="iis-vacio-titulo">No existen inspecciones aún</h2>
 
             <p class="iis-vacio-texto">
-                Se recomienda generar una nueva inspección para comenzar a
-                registrar el seguimiento de la obra.
+                <?= esc($mensajeVacio) ?>
             </p>
         </section>
 
@@ -117,7 +139,7 @@ $total  = (int) ($total ?? 0);
 
                         <li class="iis-item">
                             <a class="iis-item-enlace"
-                               href="<?= site_url('/inspector/inspecciones/detalle/' . (int) $inspeccion->id) ?>">
+                               href="<?= site_url($base . '/detalle/' . (int) $inspeccion->id) ?>">
                                 <span class="iis-item-hora<?= HoraInspeccion::esSinHora(
                                     $inspeccion->hora_inspeccion === null ? null : (string) $inspeccion->hora_inspeccion
                                 ) ? ' iis-item-hora-sin' : '' ?>">
