@@ -20,8 +20,14 @@ class ObraModel extends Model
         'nombre',
         'barrio_id',
         'empresa_id',
+        'presupuesto_oficial',
         'monto_contrato',
         'monto_contractual_vigente',
+        'tiene_anticipo_financiero',
+        'porcentaje_anticipo_financiero',
+        'tiene_fondo_reparo',
+        'porcentaje_fondo_reparo',
+        'fondo_reparo_con_poliza',
         'expediente_contable',
         'fecha_inicio',
         'plazo_original_valor',
@@ -255,6 +261,76 @@ class ObraModel extends Model
     }
 
     /**
+     * Actualiza la configuración económica de certificación de una obra.
+     *
+     * No modifica `monto_contractual_vigente` ni los datos de alta/ficha.
+     * `created_at` se conserva; `updated_at` se refresca.
+     */
+    public function actualizarConfiguracionEconomica(int $id, array $datos): bool
+    {
+        return $this->update($id, [
+            'presupuesto_oficial'            => $datos['presupuesto_oficial'],
+            'monto_contrato'                 => $datos['monto_contrato'],
+            'tiene_anticipo_financiero'      => $datos['tiene_anticipo_financiero'],
+            'porcentaje_anticipo_financiero' => $datos['porcentaje_anticipo_financiero'],
+            'tiene_fondo_reparo'             => $datos['tiene_fondo_reparo'],
+            'porcentaje_fondo_reparo'        => $datos['porcentaje_fondo_reparo'],
+            'fondo_reparo_con_poliza'        => $datos['fondo_reparo_con_poliza'],
+            'updated_at'                     => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
+     * Valida la configuración de anticipo y fondo de reparo.
+     *
+     * No valida presupuesto oficial ni monto de contrato: esa obligatoriedad
+     * corresponde a la pantalla de certificados (fase posterior).
+     *
+     * @param mixed[] $datos
+     *
+     * @return list<string>
+     */
+    public function validarConfiguracionEconomica(array $datos): array
+    {
+        $errores = [];
+
+        $tieneAnticipo = $this->esBooleanoVerdadero($datos['tiene_anticipo_financiero'] ?? 0);
+        $porcentajeAnticipo = $datos['porcentaje_anticipo_financiero'] ?? null;
+
+        if (! $tieneAnticipo) {
+            if (! $this->estaVacio($porcentajeAnticipo)) {
+                $errores[] = 'El porcentaje de anticipo financiero debe quedar vacío cuando la obra no tiene anticipo.';
+            }
+        } elseif (! $this->esPorcentajeValido($porcentajeAnticipo)) {
+            $errores[] = 'El porcentaje de anticipo financiero es obligatorio y debe ser mayor a 0 y menor o igual a 100.';
+        }
+
+        $tieneFondo = $this->esBooleanoVerdadero($datos['tiene_fondo_reparo'] ?? 0);
+        $porcentajeFondo = $datos['porcentaje_fondo_reparo'] ?? null;
+        $conPoliza = $datos['fondo_reparo_con_poliza'] ?? null;
+
+        if (! $tieneFondo) {
+            if (! $this->estaVacio($porcentajeFondo)) {
+                $errores[] = 'El porcentaje de fondo de reparo debe quedar vacío cuando la obra no está alcanzada por fondo de reparo.';
+            }
+
+            if (! $this->estaVacio($conPoliza)) {
+                $errores[] = 'La póliza de fondo de reparo no corresponde cuando la obra no está alcanzada por fondo de reparo.';
+            }
+        } else {
+            if (! $this->esPorcentajeValido($porcentajeFondo)) {
+                $errores[] = 'El porcentaje de fondo de reparo es obligatorio y debe ser mayor a 0 y menor o igual a 100.';
+            }
+
+            if (! $this->esBooleanoDefinido($conPoliza)) {
+                $errores[] = 'Debe indicarse si el fondo de reparo se cubre con póliza.';
+            }
+        }
+
+        return $errores;
+    }
+
+    /**
      * Refresca únicamente `updated_at` de una obra.
      *
      * Se usa cuando una operación relacionada (por ejemplo un cambio de
@@ -263,5 +339,37 @@ class ObraModel extends Model
     public function touch(int $id): bool
     {
         return $this->update($id, ['updated_at' => date('Y-m-d H:i:s')]);
+    }
+
+    private function esBooleanoVerdadero(mixed $valor): bool
+    {
+        return $valor === true || $valor === 1 || $valor === '1';
+    }
+
+    private function esBooleanoDefinido(mixed $valor): bool
+    {
+        return $valor === true || $valor === false
+            || $valor === 1 || $valor === 0
+            || $valor === '1' || $valor === '0';
+    }
+
+    private function estaVacio(mixed $valor): bool
+    {
+        return $valor === null || $valor === '';
+    }
+
+    private function esPorcentajeValido(mixed $valor): bool
+    {
+        if ($valor === null || $valor === '') {
+            return false;
+        }
+
+        if (! is_numeric($valor)) {
+            return false;
+        }
+
+        $numero = (float) $valor;
+
+        return $numero > 0 && $numero <= 100;
     }
 }

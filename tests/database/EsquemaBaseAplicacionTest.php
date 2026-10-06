@@ -123,9 +123,75 @@ final class EsquemaBaseAplicacionTest extends CIUnitTestCase
         );
     }
 
+    public function testObrasTieneConfiguracionEconomicaDeCertificacion(): void
+    {
+        $this->assertColumna('obras', 'presupuesto_oficial', 'decimal(15,3)', true);
+        $this->assertColumna('obras', 'monto_contrato', 'decimal(15,3)', true);
+        $this->assertColumna('obras', 'monto_contractual_vigente', 'decimal(15,3)', true);
+        $this->assertColumnaBooleana('obras', 'tiene_anticipo_financiero', false, '0');
+        $this->assertColumna('obras', 'porcentaje_anticipo_financiero', 'decimal(6,3)', true);
+        $this->assertColumnaBooleana('obras', 'tiene_fondo_reparo', false, '0');
+        $this->assertColumna('obras', 'porcentaje_fondo_reparo', 'decimal(6,3)', true);
+        $this->assertColumnaBooleana('obras', 'fondo_reparo_con_poliza', true, null);
+    }
+
+    public function testCertificadosTieneEstadoAnticipoYRetencionFondoReparo(): void
+    {
+        $this->assertColumna('certificados', 'descuento_anticipo', 'decimal(15,3)', true);
+        $this->assertColumna('certificados', 'estado_anticipo', 'varchar(30)', true);
+        $this->assertColumna('certificados', 'retencion_fondo_reparo', 'decimal(15,3)', true);
+        $this->assertColumna('certificados', 'monto_neto', 'decimal(15,3)', true);
+        $this->assertNull(
+            $this->columna('certificados', 'fondo_reparo'),
+            'La columna `certificados.fondo_reparo` debe haberse renombrado a `retencion_fondo_reparo`.'
+        );
+    }
+
     private function nombreBase(): string
     {
         return (string) $this->db->getDatabase();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function columna(string $tabla, string $columna): ?array
+    {
+        $fila = $this->db->table('information_schema.COLUMNS')
+            ->select('IS_NULLABLE, COLUMN_TYPE, COLUMN_DEFAULT')
+            ->where('TABLE_SCHEMA', $this->nombreBase())
+            ->where('TABLE_NAME', $tabla)
+            ->where('COLUMN_NAME', $columna)
+            ->get()
+            ->getRowArray();
+
+        return is_array($fila) ? $fila : null;
+    }
+
+    private function assertColumna(string $tabla, string $columna, string $tipo, bool $nullable): void
+    {
+        $info = $this->columna($tabla, $columna);
+
+        $this->assertIsArray($info, "Falta `{$tabla}.{$columna}`.");
+        $this->assertSame($tipo, strtolower((string) $info['COLUMN_TYPE']), "`{$tabla}.{$columna}` debe ser {$tipo}.");
+        $this->assertSame($nullable ? 'YES' : 'NO', $info['IS_NULLABLE'], "`{$tabla}.{$columna}` nullability incorrecta.");
+    }
+
+    private function assertColumnaBooleana(string $tabla, string $columna, bool $nullable, ?string $default): void
+    {
+        $info = $this->columna($tabla, $columna);
+
+        $this->assertIsArray($info, "Falta `{$tabla}.{$columna}`.");
+        $this->assertSame('tinyint(1)', strtolower((string) $info['COLUMN_TYPE']), "`{$tabla}.{$columna}` debe ser BOOLEAN/TINYINT(1).");
+        $this->assertSame($nullable ? 'YES' : 'NO', $info['IS_NULLABLE'], "`{$tabla}.{$columna}` nullability incorrecta.");
+
+        $valorDefault = $info['COLUMN_DEFAULT'];
+
+        if ($default === null) {
+            $this->assertTrue($valorDefault === null || $valorDefault === 'NULL', "`{$tabla}.{$columna}` no debe tener default.");
+        } else {
+            $this->assertSame($default, (string) $valorDefault, "`{$tabla}.{$columna}` default incorrecto.");
+        }
     }
 
     private function indicesUnicosSobre(string $tabla, string $columna): int
