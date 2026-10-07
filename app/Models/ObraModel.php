@@ -260,17 +260,20 @@ class ObraModel extends Model
         ]);
     }
 
-    /**
-     * Actualiza la configuración económica de certificación de una obra.
-     *
-     * No modifica `monto_contractual_vigente` ni los datos de alta/ficha.
-     * `created_at` se conserva; `updated_at` se refresca.
-     */
+     /**
+      * Actualiza la configuración económica de certificación de una obra.
+      *
+      * Al cargar `monto_contrato` se inicializa `monto_contractual_vigente`
+      * con el mismo valor. El original se conserva; el vigente solo cambiará
+      * después por trámites posteriores, fuera de esta configuración.
+      * `created_at` se conserva; `updated_at` se refresca.
+      */
     public function actualizarConfiguracionEconomica(int $id, array $datos): bool
     {
         return $this->update($id, [
             'presupuesto_oficial'            => $datos['presupuesto_oficial'],
             'monto_contrato'                 => $datos['monto_contrato'],
+            'monto_contractual_vigente'      => $datos['monto_contrato'],
             'tiene_anticipo_financiero'      => $datos['tiene_anticipo_financiero'],
             'porcentaje_anticipo_financiero' => $datos['porcentaje_anticipo_financiero'],
             'tiene_fondo_reparo'             => $datos['tiene_fondo_reparo'],
@@ -284,7 +287,7 @@ class ObraModel extends Model
      * Valida la configuración de anticipo y fondo de reparo.
      *
      * No valida presupuesto oficial ni monto de contrato: esa obligatoriedad
-     * corresponde a la pantalla de certificados (fase posterior).
+     * corresponde a la pantalla de certificados.
      *
      * @param mixed[] $datos
      *

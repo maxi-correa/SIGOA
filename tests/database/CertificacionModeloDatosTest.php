@@ -116,7 +116,8 @@ final class CertificacionModeloDatosTest extends CIUnitTestCase
         $this->assertSame(1, (int) $obra->tiene_fondo_reparo);
         $this->assertSame(5.0, (float) $obra->porcentaje_fondo_reparo);
         $this->assertSame(0, (int) $obra->fondo_reparo_con_poliza);
-        $this->assertNull($obra->monto_contractual_vigente);
+        $this->assertSame(95000000.0, (float) $obra->monto_contractual_vigente);
+        $this->assertSame((float) $obra->monto_contrato, (float) $obra->monto_contractual_vigente);
         $this->assertSame($ahora, $obra->created_at);
         $this->assertNotSame('', (string) $obra->updated_at);
     }

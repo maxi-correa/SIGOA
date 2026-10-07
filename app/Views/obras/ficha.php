@@ -75,13 +75,11 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
                 </a>
             <?php endif; ?>
 
-            <button type="button"
-                    class="btn btn-secondary ficha-btn-certificados"
-                    disabled
-                    title="Disponible próximamente">
+            <a href="<?= site_url('/obras/certificados/' . (int) $obra->id) ?>"
+               class="btn btn-secondary ficha-btn-certificados">
                 <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
                 Ver Certificados
-            </button>
+            </a>
         </div>
     </div>
 

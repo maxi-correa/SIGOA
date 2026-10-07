@@ -118,6 +118,21 @@ $routes->post('/obras/representante/actualizar', 'Obras::actualizarRepresentante
     'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
 ]);
 
+// CERTIFICADOS DE OBRA — visualización (ADMIN, SUPERADMIN y CONSULTA)
+$routes->get('/obras/certificados/(:num)', 'Certificados::index/$1', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR,CONSULTA'],
+]);
+
+// CERTIFICADOS DE OBRA — confirmación de configuración económica (ADMIN y SUPERADMIN)
+$routes->post('/obras/certificados/configurar', 'Certificados::confirmarConfiguracion', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+
+// CERTIFICADOS DE OBRA — alta de certificado (ADMIN y SUPERADMIN)
+$routes->post('/obras/certificados/crear', 'Certificados::crear', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+
 // =============================================
 // ÁREA SUPERADMINISTRADOR
 // =============================================
