@@ -7,8 +7,10 @@ use App\Models\UsuarioModel;
 /**
  * Gestión de usuarios: listado, edición administrativa y alta.
  *
- * Accesible solo para SUPERADMINISTRADOR y ADMINISTRADOR. El alta de
- * usuarios queda restringido a SUPERADMINISTRADOR.
+ * Accesible para SUPERADMINISTRADOR y ADMINISTRADOR. El alta está
+ * disponible para ambos roles, pero el rol SUPERADMINISTRADOR solo puede
+ * ser asignado por un SUPERADMINISTRADOR: la lista de roles válidos se
+ * filtra según el usuario autenticado.
  *
  * La autorización principal se controla mediante el filtro RoleFilter en
  * las rutas; cada método repite la verificación de roles como defensa en
@@ -30,7 +32,7 @@ class Usuarios extends BaseController
 
         $roles = $session->get('roles') ?? [];
 
-        $puedeAgregar = in_array('SUPERADMINISTRADOR', $roles, true);
+        $puedeAgregar = $this->esGestor();
 
         $data = [
             'titulo'          => 'Gestión de usuarios',
@@ -120,15 +122,17 @@ class Usuarios extends BaseController
     /**
      * Alta de un usuario con un rol asignado.
      *
-     * Disponible únicamente para SUPERADMINISTRADOR (filtro de ruta +
-     * verificación aquí). La contraseña se almacena únicamente como hash
-     * y el usuario nace Activo.
+     * Disponible para SUPERADMINISTRADOR y ADMINISTRADOR (filtro de ruta +
+     * verificación aquí). La lista de roles admisibles proviene de
+     * findRolesActivos(), que excluye SUPERADMINISTRADOR cuando el usuario
+     * autenticado no lo tiene: el valor enviado desde el navegador se
+     * valida contra esa lista, por lo que el backend no confía en él.
+     * La contraseña se almacena únicamente como hash y el usuario nace
+     * Activo.
      */
     public function crear()
     {
-        $session = session();
-
-        if (! in_array('SUPERADMINISTRADOR', $session->get('roles') ?? [], true)) {
+        if (! $this->esGestor()) {
             return redirect()->to('/usuarios')
                 ->with('error', 'No tiene autorización para crear usuarios.');
         }

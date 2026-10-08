@@ -7,7 +7,8 @@ use CodeIgniter\Test\FeatureTestTrait;
 /**
  * Gestión de usuarios y edición de datos personales.
  *
- * Cubre el alta (solo SUPERADMINISTRADOR), la edición administrativa
+ * Cubre el alta (SUPERADMINISTRADOR y ADMINISTRADOR; este último no puede
+ * asignar el rol SUPERADMINISTRADOR), la edición administrativa
  * (SUPERADMINISTRADOR/ADMINISTRADOR), la autorización por rol en ambas
  * pantallas y la edición de nombre/apellido/email en Mis Datos
  * (SUPERADMINISTRADOR, ADMINISTRADOR e INSPECTOR; CONSULTA sin acceso).
@@ -34,6 +35,8 @@ final class UsuariosGestionTest extends CIUnitTestCase
     private int $objetivoId;
 
     private int $rolInspectorId;
+
+    private int $rolSuperadminId;
 
     protected function setUp(): void
     {
@@ -112,7 +115,8 @@ final class UsuariosGestionTest extends CIUnitTestCase
             $ids[$nombre] = (int) $this->conn->insertID();
         }
 
-        $this->rolInspectorId = $ids['INSPECTOR'];
+        $this->rolInspectorId  = $ids['INSPECTOR'];
+        $this->rolSuperadminId = $ids['SUPERADMINISTRADOR'];
     }
 
     private function sembrarUsuarios(): void
@@ -315,7 +319,7 @@ final class UsuariosGestionTest extends CIUnitTestCase
                 'nombre'      => 'modificado',
                 'apellido'    => 'tambien',
                 'email'       => 'nuevo@correo.com',
-                'activo'      => '0',
+                'activo'      => '1',
                 'csrf_test_name' => csrf_hash(),
             ]);
 
@@ -326,7 +330,7 @@ final class UsuariosGestionTest extends CIUnitTestCase
         $this->assertSame('MODIFICADO', $editado->nombre);
         $this->assertSame('TAMBIEN', $editado->apellido);
         $this->assertSame('nuevo@correo.com', $editado->email);
-        $this->assertSame(0, (int) $editado->activo);
+        $this->assertSame(1, (int) $editado->activo);
         $this->assertSame('objetivo', $editado->usuario);
         $this->assertSame($hashPrevio, $editado->password_hash);
 
@@ -358,6 +362,82 @@ final class UsuariosGestionTest extends CIUnitTestCase
 
         $this->assertSame($nombrePrevio, $sinCambios->nombre);
         $this->assertSame(1, (int) $sinCambios->activo);
+    }
+
+    public function testAdministradorNoPuedeInactivarUsuarios(): void
+    {
+        $resultado = $this->withSession($this->sesion('ADMINISTRADOR', $this->adminId))
+            ->post('/usuarios/actualizar', [
+                'usuario_id'     => $this->objetivoId,
+                'nombre'         => 'modificado',
+                'apellido'       => 'tambien',
+                'activo'         => '0',
+                'csrf_test_name' => csrf_hash(),
+            ]);
+
+        $resultado->assertRedirectTo('/usuarios');
+        $resultado->assertSessionHas('error', 'No tiene autorización para inactivar usuarios.');
+
+        $sinCambios = $this->usuarioPorLogin('objetivo');
+
+        $this->assertSame('NOMBRE', $sinCambios->nombre);
+        $this->assertSame(1, (int) $sinCambios->activo);
+    }
+
+    public function testAdministradorPuedeCrearUsuarioConRolPermitido(): void
+    {
+        $antes = $this->contarUsuarios();
+
+        $resultado = $this->withSession($this->sesion('ADMINISTRADOR', $this->adminId))
+            ->post('/usuarios/crear', [
+                'nombre'             => 'Laura',
+                'apellido'           => 'Gomez',
+                'usuario'            => 'lgomez',
+                'email'              => 'laura@correo.com',
+                'rol_id'             => $this->rolInspectorId,
+                'password'           => 'Secreta123',
+                'confirmar_password' => 'Secreta123',
+                'csrf_test_name'     => csrf_hash(),
+            ]);
+
+        $resultado->assertRedirectTo('/usuarios');
+        $this->assertSame($antes + 1, $this->contarUsuarios());
+
+        $creado = $this->usuarioPorLogin('lgomez');
+
+        $this->assertNotNull($creado);
+        $this->assertSame('LAURA', $creado->nombre);
+        $this->assertSame('GOMEZ', $creado->apellido);
+        $this->assertSame('laura@correo.com', $creado->email);
+        $this->assertSame(1, (int) $creado->activo);
+        $this->assertTrue(password_verify('Secreta123', $creado->password_hash));
+
+        $rolAsignado = $this->conn->table('usuarios_roles')
+            ->where('usuario_id', (int) $creado->id)
+            ->get()->getRow();
+
+        $this->assertNotNull($rolAsignado);
+        $this->assertSame($this->rolInspectorId, (int) $rolAsignado->rol_id);
+    }
+
+    public function testAdministradorNoPuedeCrearUsuarioConRolSuperadministrador(): void
+    {
+        $antes = $this->contarUsuarios();
+
+        $resultado = $this->withSession($this->sesion('ADMINISTRADOR', $this->adminId))
+            ->post('/usuarios/crear', [
+                'nombre'             => 'Intento',
+                'apellido'           => 'Fraude',
+                'usuario'            => 'intentofraude',
+                'rol_id'             => $this->rolSuperadminId,
+                'password'           => 'Secreta123',
+                'confirmar_password' => 'Secreta123',
+                'csrf_test_name'     => csrf_hash(),
+            ]);
+
+        $resultado->assertRedirectTo('/usuarios');
+        $this->assertSame($antes, $this->contarUsuarios());
+        $this->assertNull($this->usuarioPorLogin('intentofraude'));
     }
 
     /* ================================================================
@@ -393,22 +473,34 @@ final class UsuariosGestionTest extends CIUnitTestCase
         $resultado->assertRedirectTo('/dashboard');
     }
 
-    public function testSoloSuperadminVisualizaElBotonDeAlta(): void
+    public function testBotonDeAltaVisibleParaGestoresConRolesFiltrados(): void
     {
         $comoSuperadmin = $this->withSession($this->sesion('SUPERADMINISTRADOR', $this->superadminId))
             ->get('/usuarios');
 
         $comoSuperadmin->assertStatus(200);
-        $comoSuperadmin->assertSee('Agregar usuario');
+        $comoSuperadmin->assertSeeElement('button#btnAgregarUsuario');
         $comoSuperadmin->assertSee('data-accion="editar"');
         $comoSuperadmin->assertSee('Mis Datos');
+
+        $comoSuperadmin->assertSeeElement('select#alta_rol_id');
+        $comoSuperadmin->assertSee('SUPERADMINISTRADOR', 'select#alta_rol_id');
+        $comoSuperadmin->assertSee('ADMINISTRADOR', 'select#alta_rol_id');
+        $comoSuperadmin->assertSee('INSPECTOR', 'select#alta_rol_id');
+        $comoSuperadmin->assertSee('CONSULTA', 'select#alta_rol_id');
 
         $comoAdmin = $this->withSession($this->sesion('ADMINISTRADOR', $this->adminId))
             ->get('/usuarios');
 
         $comoAdmin->assertStatus(200);
-        $comoAdmin->assertDontSee('id="btnAgregarUsuario"');
+        $comoAdmin->assertSeeElement('button#btnAgregarUsuario');
         $comoAdmin->assertSee('data-accion="editar"');
+
+        $comoAdmin->assertSeeElement('select#alta_rol_id');
+        $comoAdmin->assertDontSee('SUPERADMINISTRADOR', 'select#alta_rol_id');
+        $comoAdmin->assertSee('ADMINISTRADOR', 'select#alta_rol_id');
+        $comoAdmin->assertSee('INSPECTOR', 'select#alta_rol_id');
+        $comoAdmin->assertSee('CONSULTA', 'select#alta_rol_id');
     }
 
     /* ================================================================

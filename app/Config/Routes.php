@@ -44,7 +44,7 @@ $routes->post('/usuarios/actualizar', 'Usuarios::actualizar', [
     'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
 ]);
 $routes->post('/usuarios/crear', 'Usuarios::crear', [
-    'filter' => ['auth', 'role:SUPERADMINISTRADOR'],
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
 ]);
 
 // =============================================

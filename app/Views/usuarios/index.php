@@ -232,7 +232,7 @@ $mensajeEdicion = $usuarioEdicion !== null
 </div>
 
 <!-- ================================================================
-     MODAL — Agregar usuario (solo SUPERADMINISTRADOR)
+     MODAL — Agregar usuario (SUPERADMINISTRADOR y ADMINISTRADOR)
      ================================================================ -->
 <?php if ($puede_agregar): ?>
 <div class="modal-overlay" id="modalAltaUsuario" hidden aria-hidden="true">

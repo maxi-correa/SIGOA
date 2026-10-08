@@ -110,7 +110,7 @@ Adicionalmente, se encuentra implementada la infraestructura de autenticación y
 * verificación de contraseña mediante modal (ojo), con estado "Verificada";
 * estructura de navegación autenticada con **sidebar** lateral (escritorio) y drawer/off-canvas responsive (móvil) — ver §46;
 * topbar de identidad: la navegación principal ya no vive en la barra superior; "Mis Datos" y "Cerrar sesión" se movieron a la zona inferior del sidebar;
-* página **Gestión de usuarios** (consulta/listado) para SUPERADMINISTRADOR y ADMINISTRADOR — ver §46;
+* página **Gestión de usuarios** (listado, edición de datos personales y alta de usuarios) para SUPERADMINISTRADOR y ADMINISTRADOR — ver §46;
 * refactor de `getDashboardPath()` y `getRolPrincipal()` a `BaseController`;
 * **dashboard administrativo** (SUPERADMINISTRADOR y ADMINISTRADOR) con la sección **Obras** como eje principal — listado, paginación y alta inicial de obras — ver §47;
 * **edición de datos básicos de obras** — modal reutilizable de alta/edición, estado libre en esta etapa, unicidad de expediente con exclusión — ver §48;
@@ -127,7 +127,7 @@ La existencia de una tabla o estructura de base de datos no implica que la funci
 Quedan pendientes, entre otras:
 
 * interfaz de gestión de obras;
-* gestión completa de usuarios (CRUD: creación, edición, eliminación, cambio de roles, activación/desactivación);
+* gestión completa de usuarios (faltan: eliminación de usuarios y cambio de rol de un usuario existente; la creación, la edición de datos personales y la activación/desactivación están implementadas — ver §46.7);
 * interfaces;
 * gestión de inspectores;
 * registro de inspecciones en servidor (en dispositivo, local, desde D.2 — §54);
@@ -1216,20 +1216,34 @@ La sidebar es **una única estructura lógica**; cambia únicamente su presentac
 
 El estado abierto/cerrado se refleja en `aria-expanded` y en `aria-label` del botón hamburguesa. La lógica vive en `public/assets/js/components/sidebar.js`.
 
-## 46.7 Página "Gestión de usuarios" (consulta/listado)
+## 46.7 Página "Gestión de usuarios" (listado, edición y alta)
 
-Primera funcionalidad administrativa accesible desde la sidebar. **Solo consulta**: no implementa CRUD.
+Primera funcionalidad administrativa accesible desde la sidebar. Implementa listado de usuarios, edición de datos personales y alta de usuarios con rol.
 
-* Ruta: `GET /usuarios` (protegida — ver §46.5).
-* Controlador: `app/Controllers/Usuarios.php` (`Usuarios::index`).
+Rutas y endpoints:
+
+* `GET /usuarios` — listado (protegida — ver §46.5).
+* `POST /usuarios/actualizar` — edición de datos personales de un usuario (`role:SUPERADMINISTRADOR,ADMINISTRADOR`).
+* `POST /usuarios/crear` — alta de usuario con rol asignado (`role:SUPERADMINISTRADOR,ADMINISTRADOR`).
+
+* Controlador: `app/Controllers/Usuarios.php` (`Usuarios::index`, `Usuarios::actualizar`, `Usuarios::crear`). La autorización principal se controla mediante `RoleFilter` en las rutas; cada método repite la verificación de roles como defensa en profundidad.
 * Dato: `UsuarioModel::findAllConRoles()` — obtiene todos los usuarios ordenados por apellido/nombre y agrega `roles` por usuario reutilizando `findRolesByUsuarioId()`. No se duplica lógica de acceso a datos.
-* Vista: `app/Views/usuarios/index.php`.
+* Vista: `app/Views/usuarios/index.php`. JavaScript: `public/assets/js/pages/usuarios.js`.
 
 Columnas de la tabla: Nombre · Apellido · Usuario · Email · Rol · Estado · Acciones. No se muestran `password_hash` ni campos técnicos.
 
 * **Rol**: se muestran todos los roles del usuario como badges (la relación `usuarios_roles` es muchos a muchos; no se fuerza un único rol).
 * **Estado**: indicador circular de color (verde = Activo, rojo = Inactivo) siempre acompañado por texto — no se depende exclusivamente del color (REQUERIMIENTOS §34).
-* **Acciones**: reservada para funcionalidad futura. Para usuarios distintos del autenticado se muestra un chip "En preparación"; para el propio usuario se muestra un guion ("—") sin acción especial (la acción específica para el propio usuario queda abierta a futura definición).
+* **Acciones**:
+    * Para el propio usuario autenticado: enlace a **Mis Datos**. Nadie puede editarse a sí mismo desde esta pantalla.
+    * Para los demás usuarios: botón **Editar**, que abre un modal con nombre, apellido, correo electrónico y estado. El formulario no expone usuario/login, rol ni contraseña: esos campos no se leen en el backend.
+* **Agregar usuario**: botón arriba a la derecha de la tabla, visible para SUPERADMINISTRADOR y ADMINISTRADOR (mismo diseño y modal para ambos). Abre un modal con nombre, apellido, usuario, correo electrónico (opcional), rol, contraseña y confirmación, y envía `POST /usuarios/crear`. El usuario nace Activo y la contraseña se almacena únicamente como hash.
+
+Reglas de autorización del alta y la edición:
+
+* **SUPERADMINISTRADOR**: crea usuarios con cualquier rol activo (incluido SUPERADMINISTRADOR) y puede inactivar usuarios.
+* **ADMINISTRADOR**: crea usuarios con rol ADMINISTRADOR, INSPECTOR o CONSULTA — **no puede crear usuarios con rol SUPERADMINISTRADOR**. Puede editar usuarios distintos de los SUPERADMINISTRADOR, pero no puede inactivar usuarios.
+* El selector de rol se renderiza en servidor desde `UsuarioModel::findRolesActivos()`, que excluye el rol SUPERADMINISTRADOR cuando el usuario autenticado no lo tiene. El backend valida el `rol_id` recibido contra esa misma lista: no se confía en el valor enviado desde el navegador.
 
 No se implementan búsqueda, filtros, paginación ni selección masiva (la cantidad actual de usuarios no lo justifica); la estructura queda preparada para incorporarlos.
 
@@ -1264,7 +1278,7 @@ Columnas (en este orden): **N° Expte. · Nombre de obra · Barrio · Empresa ·
 
 * Las columnas opcionales sin información se muestran como **S/D (Sin datos)**, con estilo secundario. No se utilizan valores ambiguos como `-`, `N/A` o `S/I`.
 * La columna **Estado** se implementa desde esta versión con los cinco estados documentados, respetando exactamente los colores oficiales de REQUERIMIENTOS §8/§9.
-* La columna **Acciones** queda reservada y muestra la etiqueta neutra "En preparación", consistente con la página de usuarios. No se implementan acciones en esta fase.
+* La columna **Acciones** queda reservada y muestra la etiqueta neutra "En preparación". No se implementan acciones en esta fase.
 * **Orden por defecto**: `created_at DESC` (las obras más recientes primero). No se implementa ordenamiento manual por columnas en esta fase.
 * **Paginación**: 10 obras por página, realizada por consulta backend (`ObraModel::listarPaginado()` usa `paginate()`). Permite avanzar/retroceder y acceder a páginas concretas, con información contextual "Mostrando X–Y de Z obras".
 * **Estado vacío**: si no existen obras se muestra "Aún no hay obras cargadas." con indicación de usar "Agregar obra". El botón de alta permanece visible.
