@@ -1,6 +1,7 @@
 /**
  * SIGOA — Mis Datos
- * Verificar contraseña, cambiar contraseña, editar email y gestión de modales.
+ * Verificar contraseña, cambiar contraseña, editar datos personales
+ * (nombre, apellido, email) y gestión de modales.
  */
 (function () {
     'use strict';
@@ -45,9 +46,11 @@
        ================================================================ */
     var datosLista      = document.getElementById('datosLista');
     var accionesCard    = document.getElementById('accionesCard');
-    var btnEditarEmail  = document.getElementById('btnEditarEmail');
-    var formEditarEmail = document.getElementById('formEditarEmail');
-    var btnCancelarEmail = document.getElementById('btnCancelarEmail');
+    var botonesEditarDato = document.querySelectorAll('.btn-editar-dato');
+    var formEditarDato  = document.getElementById('formEditarDato');
+    var btnCancelarDato = document.getElementById('btnCancelarDato');
+    var inputDatoEditado = document.getElementById('datoEditado');
+    var labelDatoEditado = document.getElementById('labelDatoEditado');
 
     var btnVerContrasena       = document.getElementById('btnVerContrasena');
     var iconoVerificar         = document.getElementById('iconoVerificar');
@@ -178,40 +181,104 @@
     }
 
     /* ================================================================
-       Edición de email — Toggle inline
+       Edición de datos personales — Toggle inline (nombre, apellido, email)
        ================================================================ */
-    function mostrarFormularioEmail() {
-        if (!datosLista || !formEditarEmail || !accionesCard) return;
+    var configDatos = {
+        nombre: {
+            label: 'Nuevo nombre',
+            type: 'text',
+            maxlength: 100,
+            autocomplete: 'off',
+            vacio: 'El nombre es obligatorio.'
+        },
+        apellido: {
+            label: 'Nuevo apellido',
+            type: 'text',
+            maxlength: 100,
+            autocomplete: 'off',
+            vacio: 'El apellido es obligatorio.'
+        },
+        email: {
+            label: 'Nuevo correo electrónico',
+            type: 'email',
+            maxlength: 150,
+            autocomplete: 'email',
+            vacio: 'Debe ingresar un correo electrónico.'
+        }
+    };
+
+    function mostrarFormularioDato(campo, valor) {
+        var config = configDatos[campo];
+        if (!datosLista || !formEditarDato || !accionesCard || !config) return;
+
+        formEditarDato.action = '/mis-datos/' + campo;
+        formEditarDato.dataset.campo = campo;
+
+        if (labelDatoEditado) {
+            labelDatoEditado.textContent = config.label;
+        }
+
+        if (inputDatoEditado) {
+            inputDatoEditado.type = config.type;
+            inputDatoEditado.maxLength = config.maxlength;
+            inputDatoEditado.autocomplete = config.autocomplete;
+            inputDatoEditado.value = valor || '';
+        }
+
+        var errorSpan = formEditarDato.querySelector('.field-error');
+        if (errorSpan) errorSpan.textContent = '';
+
         datosLista.style.display = 'none';
         accionesCard.style.display = 'none';
-        formEditarEmail.removeAttribute('hidden');
+        formEditarDato.removeAttribute('hidden');
 
-        var emailInput = document.getElementById('email');
-        if (emailInput) emailInput.focus();
+        if (inputDatoEditado) inputDatoEditado.focus();
     }
 
-    function ocultarFormularioEmail() {
-        if (!datosLista || !formEditarEmail || !accionesCard) return;
-        formEditarEmail.setAttribute('hidden', '');
+    function ocultarFormularioDato() {
+        if (!datosLista || !formEditarDato || !accionesCard) return;
+        formEditarDato.setAttribute('hidden', '');
         datosLista.style.display = '';
         accionesCard.style.display = '';
     }
 
-    if (btnEditarEmail) {
-        btnEditarEmail.addEventListener('click', function () {
-            mostrarFormularioEmail();
-        });
+    for (var d = 0; d < botonesEditarDato.length; d++) {
+        (function (btn) {
+            btn.addEventListener('click', function () {
+                mostrarFormularioDato(btn.getAttribute('data-campo'), btn.getAttribute('data-valor'));
+            });
+        })(botonesEditarDato[d]);
     }
 
-    if (btnCancelarEmail) {
-        btnCancelarEmail.addEventListener('click', function () {
-            ocultarFormularioEmail();
-        });
+    if (btnCancelarDato) {
+        btnCancelarDato.addEventListener('click', ocultarFormularioDato);
     }
 
-    if (formEditarEmail) {
-        formEditarEmail.addEventListener('submit', function () {
-            actualizarTokenCsrfFormulario(formEditarEmail, 'csrf_editar_email');
+    if (formEditarDato) {
+        formEditarDato.addEventListener('submit', function (e) {
+            var campo = formEditarDato.dataset.campo;
+            var config = configDatos[campo];
+            var errorSpan = formEditarDato.querySelector('.field-error');
+            var valor = inputDatoEditado ? inputDatoEditado.value.trim() : '';
+
+            if (errorSpan) errorSpan.textContent = '';
+
+            /* Validación frontend (el backend valida de forma independiente) */
+            if (config && valor === '') {
+                if (errorSpan) errorSpan.textContent = config.vacio;
+                if (inputDatoEditado) inputDatoEditado.focus();
+                e.preventDefault();
+                return;
+            }
+
+            if (campo === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valor)) {
+                if (errorSpan) errorSpan.textContent = 'El correo electrónico ingresado no es válido.';
+                if (inputDatoEditado) inputDatoEditado.focus();
+                e.preventDefault();
+                return;
+            }
+
+            actualizarTokenCsrfFormulario(formEditarDato, 'csrf_editar_dato');
         });
     }
 
@@ -404,8 +471,8 @@
     function revisarEstadoInicial() {
         if (!estado) return;
 
-        if (estado.reabrirEmail === '1') {
-            mostrarFormularioEmail();
+        if (estado.reabrirDato && configDatos[estado.reabrirDato]) {
+            mostrarFormularioDato(estado.reabrirDato, estado.valorOld || '');
         }
         if (estado.reabrirCambiar === '1') {
             abrirCambiar();

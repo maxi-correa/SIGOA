@@ -127,7 +127,7 @@
 }
 
 /* --- Filas que combinan valor + acciones --- */
-.dato-email-fila,
+.dato-editable-fila,
 .dato-password-fila {
     display: inline-flex;
     align-items: center;
@@ -245,7 +245,7 @@
         text-align: left;
     }
 
-    .dato-email-fila,
+    .dato-editable-fila,
     .dato-password-fila {
         justify-content: flex-start;
     }

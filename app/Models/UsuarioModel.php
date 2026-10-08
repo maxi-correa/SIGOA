@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use CodeIgniter\Model;
+use Throwable;
 
 class UsuarioModel extends Model
 {
@@ -103,6 +104,118 @@ class UsuarioModel extends Model
             ->orderBy('usuarios.nombre', 'ASC')
             ->get()
             ->getResultObject();
+    }
+
+    /**
+     * Actualiza datos personales de un usuario y su updated_at.
+     *
+     * Solo admite nombre, apellido, email y activo: usuario, rol y
+     * password_hash quedan excluidos por diseño y no pueden modificarse
+     * mediante este método.
+     *
+     * El modelo no utiliza timestamps automáticos (useTimestamps = false),
+     * por lo que updated_at se asigna explícitamente.
+     *
+     * @param array<string, mixed> $datos
+     */
+    public function actualizarDatosPersonales(int $usuarioId, array $datos): bool
+    {
+        $permitidos = array_intersect_key($datos, array_flip([
+            'nombre',
+            'apellido',
+            'email',
+            'activo',
+        ]));
+
+        if ($permitidos === []) {
+            return false;
+        }
+
+        $permitidos['updated_at'] = date('Y-m-d H:i:s');
+
+        return $this->update($usuarioId, $permitidos);
+    }
+
+    /**
+     * Indica si ya existe un usuario (login) registrado.
+     *
+     * La comparación final queda garantizada por la clave única de la
+     * tabla `usuarios`; esta verificación aporta el mensaje de validación.
+     */
+    public function existeUsuario(string $usuario, ?int $exceptoId = null): bool
+    {
+        $query = $this->where('usuario', $usuario);
+
+        if ($exceptoId !== null) {
+            $query = $query->where('id !=', $exceptoId);
+        }
+
+        return $query->first() !== null;
+    }
+
+    /**
+     * Crea un usuario con su rol asignado en una única transacción.
+     *
+     * Recibe el hash de contraseña ya generado. Nunca se almacena una
+     * contraseña en texto plano. Devuelve el ID del usuario creado o
+     * null si la operación fue revertida.
+     *
+     * @param array<string, mixed> $datosUsuario
+     */
+    public function crearConRol(array $datosUsuario, int $rolId): ?int
+    {
+        $this->db->transBegin();
+
+        try {
+            $this->insert($datosUsuario);
+
+            $usuarioId = (int) $this->getInsertID();
+
+            $this->db->table('usuarios_roles')->insert([
+                'usuario_id' => $usuarioId,
+                'rol_id'     => $rolId,
+                'created_at' => date('Y-m-d H:i:s'),
+            ]);
+
+            if (! $this->db->transStatus()) {
+                $this->db->transRollback();
+
+                return null;
+            }
+
+            $this->db->transCommit();
+
+            return $usuarioId;
+        } catch (Throwable $e) {
+            $this->db->transRollback();
+
+            return null;
+        }
+    }
+
+    /**
+     * Roles activos del sistema, ordenados alfabéticamente.
+     *
+     * Es la única fuente válida para asignar un rol al crear un usuario:
+     * no se admiten roles inventados ni inactivos.
+     *
+     * @return list<object>
+     */
+    public function findRolesActivos(): array
+    {
+        $roles = session()->get('roles') ?? [];
+        $esSuperadmin = in_array('SUPERADMINISTRADOR', $roles, true);
+
+        $builder = $this->db
+            ->table('roles')
+            ->select('id, nombre')
+            ->where('activo', 1);
+
+        if (! $esSuperadmin) {
+            $builder->where('nombre !=', 'SUPERADMINISTRADOR');
+        }
+
+        return $builder->orderBy('nombre', 'ASC')->get()->getResultObject();
     }
 
     /**

@@ -32,6 +32,7 @@ class MisDatos extends BaseController
         $roles = $session->get('roles') ?? [];
 
         $rolesEmail = ['ADMINISTRADOR', 'SUPERADMINISTRADOR'];
+        $rolesDatos = ['SUPERADMINISTRADOR', 'ADMINISTRADOR', 'INSPECTOR'];
 
         $data = [
             'titulo'                 => 'Mis Datos',
@@ -41,6 +42,7 @@ class MisDatos extends BaseController
             'rol_principal'          => $this->getRolPrincipal($roles),
             'dashboard_url'          => $this->getDashboardPath($roles),
             'usuario'                => $usuario,
+            'puede_modificar_datos'  => array_intersect($rolesDatos, $roles) !== [],
             'puede_modificar_email'  => array_intersect($rolesEmail, $roles) !== [],
         ];
 
@@ -48,11 +50,45 @@ class MisDatos extends BaseController
     }
 
     /**
+     * Modifica el nombre del usuario autenticado.
+     *
+     * SUPERADMINISTRADOR, ADMINISTRADOR e INSPECTOR. CONSULTA no tiene
+     * ruta disponible: el filtro de rol lo rechaza en backend.
+     */
+    public function updateNombre()
+    {
+        return $this->actualizarDatoPersonal('nombre');
+    }
+
+    /**
+     * Modifica el apellido del usuario autenticado.
+     *
+     * SUPERADMINISTRADOR, ADMINISTRADOR e INSPECTOR. CONSULTA no tiene
+     * ruta disponible: el filtro de rol lo rechaza en backend.
+     */
+    public function updateApellido()
+    {
+        return $this->actualizarDatoPersonal('apellido');
+    }
+
+    /**
      * Modifica el correo electrónico del usuario autenticado.
      *
-     * Solamente ADMINISTRADOR y SUPERADMINISTRADOR pueden modificar su email.
+     * SUPERADMINISTRADOR, ADMINISTRADOR e INSPECTOR.
      */
     public function updateEmail()
+    {
+        return $this->actualizarDatoPersonal('email');
+    }
+
+    /**
+     * Actualiza un dato personal propio (nombre, apellido o email).
+     *
+     * La columna a modificar se define internamente por cada endpoint:
+     * nunca se toma del formulario. El usuario se identifica únicamente
+     * mediante session('user_id').
+     */
+    private function actualizarDatoPersonal(string $campo)
     {
         $session = session();
 
@@ -66,36 +102,84 @@ class MisDatos extends BaseController
 
         $roles = $session->get('roles') ?? [];
 
-        $puedeModificar = array_intersect(['ADMINISTRADOR', 'SUPERADMINISTRADOR'], $roles) !== [];
-
-        if (! $puedeModificar) {
+        if (array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR', 'INSPECTOR'], $roles) === []) {
             return redirect()->to('/mis-datos')
-                ->with('error', 'No tiene autorización para modificar el correo electrónico.');
+                ->with('error', 'No tiene autorización para modificar sus datos personales.');
         }
 
-        $email = trim((string) $this->request->getPost('email'));
+        $valor = trim((string) $this->request->getPost('valor'));
 
-        if ($email === '') {
-            return redirect()->back()
+        $error = $this->validarDatoPersonal($campo, $valor);
+
+        if ($error !== null) {
+            return redirect()->to('/mis-datos')
                 ->withInput()
-                ->with('error', 'Debe ingresar un correo electrónico.')
-                ->with('reabrir_email', true);
+                ->with('error', $error)
+                ->with('reabrir_dato', $campo);
         }
 
-        if (strlen($email) > 150 || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return redirect()->back()
-                ->withInput()
-                ->with('error', 'El correo electrónico ingresado no es válido.')
-                ->with('reabrir_email', true);
+        $aGuardar = $valor;
+
+        if ($campo === 'email') {
+            $aGuardar = ($valor === '') ? null : $valor;
+        } else {
+            $aGuardar = mb_strtoupper($valor);
         }
 
-        if (! $this->usuarioModel->updateEmail((int) $usuario->id, $email)) {
+        if (! $this->usuarioModel->actualizarDatosPersonales((int) $usuario->id, [$campo => $aGuardar])) {
             return redirect()->to('/mis-datos')
                 ->with('error', 'No fue posible guardar la información.');
         }
 
+        /* El nombre visible en la topbar se deriva de nombre + apellido */
+        if ($campo === 'nombre' || $campo === 'apellido') {
+            $actualizado = $this->usuarioModel->find((int) $usuario->id);
+
+            if ($actualizado !== null) {
+                $session->set('user_name', $actualizado->nombre . ' ' . $actualizado->apellido);
+            }
+        }
+
+        $mensajes = [
+            'nombre'   => 'Su nombre fue actualizado correctamente.',
+            'apellido' => 'Su apellido fue actualizado correctamente.',
+            'email'    => 'El correo electrónico fue actualizado correctamente.',
+        ];
+
         return redirect()->to('/mis-datos')
-            ->with('success', 'El correo electrónico fue actualizado correctamente.');
+            ->with('success', $mensajes[$campo]);
+    }
+
+    /**
+     * Valida un dato personal enviado desde Mis Datos.
+     *
+     * Devuelve el mensaje de error o null si el valor es válido.
+     */
+    private function validarDatoPersonal(string $campo, string $valor): ?string
+    {
+        if ($campo === 'email') {
+            if ($valor === '') {
+                return 'Debe ingresar un correo electrónico.';
+            }
+
+            if (strlen($valor) > 150 || ! filter_var($valor, FILTER_VALIDATE_EMAIL)) {
+                return 'El correo electrónico ingresado no es válido.';
+            }
+
+            return null;
+        }
+
+        $etiqueta = $campo === 'apellido' ? 'El apellido' : 'El nombre';
+
+        if ($valor === '') {
+            return $etiqueta . ' es obligatorio.';
+        }
+
+        if (mb_strlen($valor) > 100) {
+            return $etiqueta . ' no puede superar los 100 caracteres.';
+        }
+
+        return null;
     }
 
     /**

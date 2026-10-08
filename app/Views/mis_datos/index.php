@@ -49,12 +49,40 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
 
             <div class="dato-fila">
                 <dt>Nombre</dt>
-                <dd><?= esc($usuario->nombre) ?></dd>
+                <dd>
+                    <div class="dato-editable-fila">
+                        <span class="dato-valor" id="nombreValor"><?= esc($usuario->nombre) ?></span>
+
+                        <?php if ($puede_modificar_datos): ?>
+                            <button type="button"
+                                    class="btn-accion-inline btn-editar-dato"
+                                    data-campo="nombre"
+                                    data-valor="<?= esc($usuario->nombre, 'attr') ?>"
+                                    aria-label="Modificar nombre">
+                                <i class="bi bi-pencil"></i> Modificar
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </dd>
             </div>
 
             <div class="dato-fila">
                 <dt>Apellido</dt>
-                <dd><?= esc($usuario->apellido) ?></dd>
+                <dd>
+                    <div class="dato-editable-fila">
+                        <span class="dato-valor" id="apellidoValor"><?= esc($usuario->apellido) ?></span>
+
+                        <?php if ($puede_modificar_datos): ?>
+                            <button type="button"
+                                    class="btn-accion-inline btn-editar-dato"
+                                    data-campo="apellido"
+                                    data-valor="<?= esc($usuario->apellido, 'attr') ?>"
+                                    aria-label="Modificar apellido">
+                                <i class="bi bi-pencil"></i> Modificar
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </dd>
             </div>
 
             <div class="dato-fila">
@@ -71,17 +99,18 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
             <div class="dato-fila">
                 <dt>Correo electrónico</dt>
                 <dd>
-                    <div class="dato-email-fila">
+                    <div class="dato-editable-fila">
                         <?php if ($usuarioEmail): ?>
                             <span class="dato-valor" id="emailValor"><?= esc($usuarioEmail) ?></span>
                         <?php else: ?>
                             <span class="dato-sin-valor" id="emailValor">No ingresado</span>
                         <?php endif; ?>
 
-                        <?php if ($puede_modificar_email): ?>
+                        <?php if ($puede_modificar_datos): ?>
                             <button type="button"
-                                    class="btn-accion-inline"
-                                    id="btnEditarEmail"
+                                    class="btn-accion-inline btn-editar-dato"
+                                    data-campo="email"
+                                    data-valor="<?= esc((string) ($usuarioEmail ?? ''), 'attr') ?>"
                                     aria-label="Modificar correo electrónico">
                                 <i class="bi bi-pencil"></i> Modificar
                             </button>
@@ -131,28 +160,27 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
         </div>
         <!-- /datos-lista -->
 
-        <!-- Formulario de edición de email (oculto inicialmente) -->
-        <form id="formEditarEmail"
+        <!-- Formulario de edición de datos personales (oculto inicialmente) -->
+        <form id="formEditarDato"
               method="post"
-              action="<?= site_url('/mis-datos/email') ?>"
+              action=""
               class="datos-form-editar"
               hidden
               novalidate>
-            <?= csrf_field('csrf_editar_email') ?>
+            <?= csrf_field('csrf_editar_dato') ?>
             <div class="form-group">
-                <label for="email">Nuevo correo electrónico</label>
-                <input type="email"
-                       id="email"
-                       name="email"
+                <label for="datoEditado" id="labelDatoEditado">Nuevo valor</label>
+                <input type="text"
+                       id="datoEditado"
+                       name="valor"
                        class="form-control"
-                       value="<?= esc((string) ($usuarioEmail ?? '')) ?>"
-                       maxlength="150"
-                       autocomplete="email"
-                       placeholder="correo@ejemplo.com">
+                       value="<?= esc(old('valor', '')) ?>"
+                       maxlength="100"
+                       autocomplete="off">
                 <span class="field-error" role="alert" aria-live="polite"></span>
             </div>
             <div class="datos-form-acciones">
-                <button type="button" class="btn btn-secondary" id="btnCancelarEmail">
+                <button type="button" class="btn btn-secondary" id="btnCancelarDato">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-success">
@@ -305,11 +333,12 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
 
 <!-- Dato de estado para JS: reabrir modales/formulario en caso de error POST -->
 <?php
-$reabrirEmail   = session()->getFlashdata('reabrir_email');
+$reabrirDato    = (string) (session()->getFlashdata('reabrir_dato') ?? '');
 $reabrirCambiar = session()->getFlashdata('reabrir_cambiar');
 ?>
 <div id="estadoMisDatos"
-     data-reabrir-email="<?= $reabrirEmail ? '1' : '0' ?>"
+     data-reabrir-dato="<?= esc($reabrirDato) ?>"
+     data-valor-old="<?= esc(old('valor', '')) ?>"
      data-reabrir-cambiar="<?= $reabrirCambiar ? '1' : '0' ?>"
      style="display:none"></div>
 
