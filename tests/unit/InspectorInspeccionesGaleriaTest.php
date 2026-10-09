@@ -362,7 +362,7 @@ final class InspectorInspeccionesGaleriaTest extends CIUnitTestCase
         sort($nombres);
 
         $this->assertSame(
-            '2026-09-23-122000_DropUniqueObraFechaInspeccion.php',
+            '2026-10-08-120000_AddPlazoInicialConfirmadoToObras.php',
             end($nombres),
             'E.5 no introduce cambios de esquema.'
         );

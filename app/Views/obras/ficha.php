@@ -10,6 +10,7 @@
 
 <?php
 $puedeEditar = $puede_editar ?? false;
+$plazoInicialConfirmado = $plazo_inicial_confirmado ?? false;
 
 $erroresFicha     = session()->getFlashdata('errores_ficha');
 $erroresInspector = session()->getFlashdata('errores_inspector');
@@ -109,7 +110,10 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
     <?php endif; ?>
 
     <?php if ($puedeEditar): ?>
-        <form method="post" action="<?= site_url('/obras/ficha/actualizar') ?>" novalidate>
+        <form method="post"
+              action="<?= site_url('/obras/ficha/actualizar') ?>"
+              id="formFichaObra"
+              novalidate>
             <?= csrf_field() ?>
             <input type="hidden" name="obra_id" value="<?= (int) $obra->id ?>">
     <?php endif; ?>
@@ -204,11 +208,24 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
     <section class="ficha-datos">
         <h2 class="ficha-seccion-titulo">Datos de la obra</h2>
 
+        <?php if ($plazoInicialConfirmado): ?>
+            <p class="ficha-aviso ficha-aviso-ok">
+                <i class="bi bi-lock-fill" aria-hidden="true"></i>
+                Fecha de inicio y plazo confirmados: no pueden modificarse.
+            </p>
+        <?php elseif ($puedeEditar): ?>
+            <p class="ficha-aviso">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                Complete la fecha de inicio y el plazo y confirme los datos
+                iniciales: quedarán definitivos y no podrán modificarse.
+            </p>
+        <?php endif; ?>
+
         <div class="ficha-campos-grid">
 
             <div class="form-group ficha-campo">
                 <label for="fecha_inicio">Fecha de inicio</label>
-                <?php if ($puedeEditar): ?>
+                <?php if ($puedeEditar && ! $plazoInicialConfirmado): ?>
                     <input type="text"
                            id="fecha_inicio"
                            name="fecha_inicio"
@@ -225,7 +242,7 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
 
             <div class="form-group ficha-campo">
                 <label for="plazo_valor">Plazo de obra</label>
-                <?php if ($puedeEditar): ?>
+                <?php if ($puedeEditar && ! $plazoInicialConfirmado): ?>
                     <div class="ficha-plazo">
                         <input type="text"
                                id="plazo_valor"
@@ -277,6 +294,17 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
                     <i class="bi bi-check-lg" aria-hidden="true"></i>
                     Guardar cambios
                 </button>
+
+                <?php if (! $plazoInicialConfirmado): ?>
+                    <button type="button"
+                            class="btn btn-secondary"
+                            id="btnConfirmarPlazoInicial"
+                            aria-haspopup="dialog"
+                            aria-controls="modalConfirmarPlazo">
+                        <i class="bi bi-check-circle" aria-hidden="true"></i>
+                        Confirmar datos iniciales
+                    </button>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
     </section>
@@ -532,6 +560,47 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
                 </button>
             </div>
         </form>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($puedeEditar && ! $plazoInicialConfirmado): ?>
+<!-- ================================================================
+     MODAL — Confirmación de los datos iniciales de plazo
+     ================================================================ -->
+<div class="modal-overlay"
+     id="modalConfirmarPlazo"
+     hidden
+     aria-hidden="true">
+    <div class="modal modal-ficha-resumen" role="dialog" aria-modal="true" aria-labelledby="modalConfirmarPlazoTitulo">
+        <h2 class="modal-title" id="modalConfirmarPlazoTitulo">
+            <i class="bi bi-check-circle" aria-hidden="true"></i>
+            Confirmar datos iniciales
+        </h2>
+        <p class="modal-message">
+            La fecha de inicio y el plazo de la obra quedarán confirmados y
+            ya no podrán modificarse. Revise los datos antes de confirmar.
+        </p>
+
+        <dl class="ficha-resumen">
+            <dt>Fecha de inicio</dt>
+            <dd id="resumenFechaInicio">—</dd>
+            <dt>Plazo de obra</dt>
+            <dd id="resumenPlazoObra">—</dd>
+        </dl>
+
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="btnCancelarConfirmarPlazo">
+                Cancelar
+            </button>
+            <button type="submit"
+                    class="btn btn-success"
+                    form="formFichaObra"
+                    formaction="<?= site_url('/obras/ficha/confirmar-plazo') ?>">
+                <i class="bi bi-check-lg" aria-hidden="true"></i>
+                Confirmar
+            </button>
+        </div>
     </div>
 </div>
 <?php endif; ?>

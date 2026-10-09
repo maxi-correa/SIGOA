@@ -53,6 +53,10 @@
         var campoFoco   = opciones.foco ? document.getElementById(opciones.foco) : null;
 
         function abrir() {
+            if (typeof opciones.antesDeAbrir === 'function' && opciones.antesDeAbrir() === false) {
+                return;
+            }
+
             overlay.removeAttribute('hidden');
             overlay.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
@@ -107,5 +111,57 @@
         cancelar: 'btnCancelarRepresentante',
         foco:     'fecha_cambio_representante'
     });
+
+    /* --- Confirmación de los datos iniciales de plazo --- */
+    var btnConfirmarPlazo = document.getElementById('btnConfirmarPlazoInicial');
+
+    if (btnConfirmarPlazo) {
+        var inputFechaInicio   = document.getElementById('fecha_inicio');
+        var inputPlazoValor    = document.getElementById('plazo_valor');
+        var selectPlazoUnidad  = document.getElementById('plazo_unidad');
+        var resumenFechaInicio = document.getElementById('resumenFechaInicio');
+        var resumenPlazoObra   = document.getElementById('resumenPlazoObra');
+
+        configurarModal({
+            overlay:  'modalConfirmarPlazo',
+            abrir:    'btnConfirmarPlazoInicial',
+            cancelar: 'btnCancelarConfirmarPlazo',
+            antesDeAbrir: function () {
+                var campos = [inputFechaInicio, inputPlazoValor];
+
+                campos.forEach(function (campo) {
+                    if (campo) {
+                        campo.classList.remove('is-invalid');
+                        campo.removeAttribute('aria-invalid');
+                    }
+                });
+
+                var pendientes = campos.filter(function (campo) {
+                    return campo && campo.value.trim() === '';
+                });
+
+                if (pendientes.length > 0) {
+                    pendientes.forEach(function (campo) {
+                        campo.classList.add('is-invalid');
+                        campo.setAttribute('aria-invalid', 'true');
+                    });
+                    pendientes[0].focus();
+
+                    return false;
+                }
+
+                resumenFechaInicio.textContent = inputFechaInicio.value.trim() || '—';
+
+                var unidadTexto = '';
+                if (selectPlazoUnidad && selectPlazoUnidad.selectedIndex >= 0) {
+                    unidadTexto = selectPlazoUnidad.options[selectPlazoUnidad.selectedIndex].textContent.trim();
+                }
+
+                resumenPlazoObra.textContent = inputPlazoValor.value.trim() + (unidadTexto ? ' ' + unidadTexto : '');
+
+                return true;
+            }
+        });
+    }
 
 })();

@@ -6,6 +6,19 @@ use CodeIgniter\Model;
 
 class ObraModel extends Model
 {
+    /**
+     * Campos que componen los datos iniciales de plazo de la obra.
+     *
+     * Una vez confirmados (`plazo_inicial_confirmado = 1`) no pueden
+     * volver a modificarse; la guardia vive en `update()`.
+     */
+    public const CAMPOS_PLAZO_INICIAL = [
+        'fecha_inicio',
+        'plazo_original_valor',
+        'plazo_original_unidad',
+        'plazo_original_dias',
+    ];
+
     protected $table = 'obras';
 
     protected $primaryKey = 'id';
@@ -33,6 +46,7 @@ class ObraModel extends Model
         'plazo_original_valor',
         'plazo_original_unidad',
         'plazo_original_dias',
+        'plazo_inicial_confirmado',
         'estado_obra_id',
         'observacion_general',
         'created_at',
@@ -246,18 +260,151 @@ class ObraModel extends Model
      * Actualiza los datos de la ficha: expediente contable, fecha de
      * inicio y plazo original.
      *
+     * Cuando los datos iniciales ya fueron confirmados, la fecha de
+     * inicio y el plazo original se conservan sin cambios y solo se
+     * actualiza el expediente contable.
+     *
      * `updated_at` se refresca y `created_at` se conserva.
      */
     public function actualizarFicha(int $id, array $datos): bool
     {
+        $registro = [
+            'expediente_contable' => $datos['expediente_contable'] ?? null,
+            'updated_at'          => date('Y-m-d H:i:s'),
+        ];
+
+        if (! $this->datosInicialesConfirmados($id)) {
+            $registro['fecha_inicio']          = $datos['fecha_inicio'] ?? null;
+            $registro['plazo_original_valor']  = $datos['plazo_original_valor'] ?? null;
+            $registro['plazo_original_unidad'] = $datos['plazo_original_unidad'] ?? null;
+            $registro['plazo_original_dias']   = $datos['plazo_original_dias'] ?? null;
+        }
+
+        return $this->update($id, $registro);
+    }
+
+    /**
+     * Actualiza únicamente el expediente contable de una obra.
+     *
+     * Se usa cuando los datos iniciales de plazo ya fueron confirmados:
+     * el expediente contable permanece editable.
+     */
+    public function actualizarExpedienteContable(int $id, ?string $expediente): bool
+    {
         return $this->update($id, [
-            'expediente_contable'   => $datos['expediente_contable'],
-            'fecha_inicio'          => $datos['fecha_inicio'],
-            'plazo_original_valor'  => $datos['plazo_original_valor'],
-            'plazo_original_unidad' => $datos['plazo_original_unidad'],
-            'plazo_original_dias'   => $datos['plazo_original_dias'],
-            'updated_at'            => date('Y-m-d H:i:s'),
+            'expediente_contable' => $expediente,
+            'updated_at'          => date('Y-m-d H:i:s'),
         ]);
+    }
+
+    /**
+     * Indica si la obra tiene confirmados sus datos iniciales de plazo.
+     */
+    public function datosInicialesConfirmados(int $id): bool
+    {
+        $obra = $this->find($id);
+
+        return $obra !== null && (int) ($obra->plazo_inicial_confirmado ?? 0) === 1;
+    }
+
+    /**
+     * Confirma los datos iniciales de plazo de una obra.
+     *
+     * Persiste los valores normalizados, guarda el expediente contable y
+     * marca `plazo_inicial_confirmado`. Rechaza la confirmación si la
+     * obra ya estaba confirmada o si faltan datos iniciales: la marca
+     * nunca puede quedar sin fecha de inicio ni sin plazo.
+     *
+     * @param array<string, mixed> $datos
+     */
+    public function confirmarDatosIniciales(int $id, array $datos): bool
+    {
+        $obra = $this->find($id);
+
+        if ($obra === null || (int) ($obra->plazo_inicial_confirmado ?? 0) === 1) {
+            return false;
+        }
+
+        if (($datos['fecha_inicio'] ?? null) === null
+            || ($datos['plazo_original_valor'] ?? null) === null
+            || ($datos['plazo_original_unidad'] ?? null) === null
+            || ($datos['plazo_original_dias'] ?? null) === null
+        ) {
+            return false;
+        }
+
+        return $this->update($id, [
+            'expediente_contable'      => $datos['expediente_contable'] ?? null,
+            'fecha_inicio'             => $datos['fecha_inicio'],
+            'plazo_original_valor'     => $datos['plazo_original_valor'],
+            'plazo_original_unidad'    => $datos['plazo_original_unidad'],
+            'plazo_original_dias'      => $datos['plazo_original_dias'],
+            'plazo_inicial_confirmado' => 1,
+            'updated_at'               => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
+     * Bloquea la modificación de los datos iniciales de plazo de una
+     * obra ya confirmada.
+     *
+     * Es la garantía final de inmutabilidad: cualquier `update()` que
+     * intente alterar fecha de inicio o plazo de una obra confirmada
+     * devuelve false sin escribir en la base. Si los valores enviados
+     * coinciden con los almacenados, la operación se permite (no hay
+     * modificación real).
+     *
+     * @param array<string, mixed> $row
+     */
+    public function update($id = null, $row = null): bool
+    {
+        if ($id !== null && is_array($row) && $this->modificaPlazoInicialConfirmado((int) $id, $row)) {
+            return false;
+        }
+
+        return parent::update($id, $row);
+    }
+
+    /**
+     * Determina si $row intenta alterar los datos iniciales de plazo
+     * de una obra que ya está confirmada.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function modificaPlazoInicialConfirmado(int $id, array $row): bool
+    {
+        $campos = array_intersect(self::CAMPOS_PLAZO_INICIAL, array_keys($row));
+
+        if ($campos === []) {
+            return false;
+        }
+
+        $obra = $this->find($id);
+
+        if ($obra === null || (int) ($obra->plazo_inicial_confirmado ?? 0) !== 1) {
+            return false;
+        }
+
+        foreach ($campos as $campo) {
+            if (! $this->valoresIguales($obra->{$campo} ?? null, $row[$campo])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Compara un valor almacenado con uno enviado normalizando nulos y
+     * tipos, para que 180 y '180' se consideren el mismo valor.
+     */
+    private function valoresIguales(mixed $almacenado, mixed $enviado): bool
+    {
+        $normalizar = static function ($valor): ?string {
+            return ($valor === null || $valor === '') ? null : (string) $valor;
+        };
+
+        return $normalizar($almacenado) === $normalizar($enviado);
     }
 
      /**

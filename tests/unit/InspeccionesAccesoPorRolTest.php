@@ -361,7 +361,7 @@ final class InspeccionesAccesoPorRolTest extends CIUnitTestCase
         $ultima = end($nombres);
 
         $this->assertSame(
-            '2026-09-23-122000_DropUniqueObraFechaInspeccion.php',
+            '2026-10-08-120000_AddPlazoInicialConfirmadoToObras.php',
             $ultima,
             'E.6 reorganiza accesos y navegación: no introduce cambios de esquema.'
         );

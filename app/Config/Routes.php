@@ -120,6 +120,11 @@ $routes->post('/obras/ficha/actualizar', 'Obras::actualizarFicha', [
     'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
 ]);
 
+// FICHA DE OBRA — confirmación de datos iniciales de plazo (ADMIN y SUPERADMIN)
+$routes->post('/obras/ficha/confirmar-plazo', 'Obras::confirmarPlazoInicial', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+
 // FICHA DE OBRA — cambio de inspector vigente (ADMIN y SUPERADMIN)
 $routes->post('/obras/inspector/actualizar', 'Obras::actualizarInspector', [
     'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],

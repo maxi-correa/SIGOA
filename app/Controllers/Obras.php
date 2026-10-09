@@ -174,6 +174,7 @@ class Obras extends BaseController
             'unidades'          => PlazoObra::unidades(),
             'plazo_dias'        => $plazoDias,
             'fecha_fin'         => $fechaFin,
+            'plazo_inicial_confirmado' => (int) ($obra->plazo_inicial_confirmado ?? 0) === 1,
             'puede_editar'      => array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $roles) !== [],
             /* Entrada a la navegación histórica de la obra (Fase E.6). Los
                roles administrativos llegan por aquí; la decisión se toma en
@@ -190,6 +191,10 @@ class Obras extends BaseController
      * Guarda los datos operativos de la ficha: Expte. contable, fecha de
      * inicio y plazo original (valor, unidad y días corridos calculados).
      *
+     * Si los datos iniciales de plazo ya fueron confirmados, la fecha de
+     * inicio y el plazo quedan inmutables y solo se admite el cambio del
+     * expediente contable.
+     *
      * Solo se actualiza `updated_at` si existe una modificación real.
      */
     public function actualizarFicha()
@@ -204,7 +209,12 @@ class Obras extends BaseController
                 ->with('error', 'La obra seleccionada no existe.');
         }
 
-        $datos   = $this->tomarDatosFicha();
+        $datos = $this->tomarDatosFicha();
+
+        if ((int) ($obra->plazo_inicial_confirmado ?? 0) === 1) {
+            return $this->actualizarExpedienteContableFicha($obraModel, $obraId, $obra, $datos);
+        }
+
         $errores = $this->validarDatosFicha($datos);
 
         if ($errores !== []) {
@@ -225,6 +235,80 @@ class Obras extends BaseController
 
         return redirect()->to('/obras/ver/' . $obraId)
             ->with('success', 'La ficha de la obra fue actualizada correctamente.');
+    }
+
+    /**
+     * Confirma los datos iniciales de plazo de la obra: fecha de inicio
+     * y plazo original quedan definitivos e inmutables.
+     *
+     * La confirmación no altera el estado de la obra ni ningún otro dato;
+     * solo bloquea la modificación de la fecha de inicio y del plazo.
+     */
+    public function confirmarPlazoInicial()
+    {
+        $roles     = session()->get('roles') ?? [];
+        $obraModel = new ObraModel();
+        $obraId    = (int) $this->request->getPost('obra_id');
+        $obra      = $obraModel->find($obraId);
+
+        if ($obra === null) {
+            return redirect()->to($this->getDashboardPath($roles))
+                ->with('error', 'La obra seleccionada no existe.');
+        }
+
+        $destino = '/obras/ver/' . $obraId;
+
+        if ((int) ($obra->plazo_inicial_confirmado ?? 0) === 1) {
+            return redirect()->to($destino)
+                ->with('error', 'Los datos iniciales de la obra ya fueron confirmados.');
+        }
+
+        $datos   = $this->tomarDatosFicha();
+        $errores = $this->validarDatosFicha($datos, true);
+
+        if ($errores !== []) {
+            return redirect()->to($destino)
+                ->withInput()
+                ->with('errores_ficha', $errores);
+        }
+
+        if (! $obraModel->confirmarDatosIniciales($obraId, $datos)) {
+            return redirect()->to($destino)
+                ->with('error', 'No se pudieron confirmar los datos iniciales de la obra.');
+        }
+
+        return redirect()->to($destino)
+            ->with('success', 'La fecha de inicio y el plazo de la obra fueron confirmados. Ya no pueden modificarse.');
+    }
+
+    /**
+     * Guarda el expediente contable de una obra con datos iniciales ya
+     * confirmados: es el único dato de la ficha que sigue editable.
+     *
+     * @param array<string, mixed> $datos
+     */
+    private function actualizarExpedienteContableFicha(ObraModel $obraModel, int $obraId, object $obra, array $datos)
+    {
+        $errores = $this->validarExpedienteContable($datos['expediente_contable_raw']);
+
+        if ($errores !== []) {
+            return redirect()->to('/obras/ver/' . $obraId)
+                ->withInput()
+                ->with('errores_ficha', $errores);
+        }
+
+        if ($this->expedienteContableSinCambios($datos, $obra)) {
+            return redirect()->to('/obras/ver/' . $obraId)
+                ->with('success', 'No se registraron cambios en la ficha de la obra.');
+        }
+
+        if (! $obraModel->actualizarExpedienteContable($obraId, $datos['expediente_contable'])) {
+            return redirect()->to('/obras/ver/' . $obraId)
+                ->with('error', 'No se pudieron guardar los cambios de la ficha.');
+        }
+
+        return redirect()->to('/obras/ver/' . $obraId)
+            ->with('success', 'El Expte. contable de la obra fue actualizado correctamente.');
     }
 
     /**
@@ -425,31 +509,67 @@ class Obras extends BaseController
     /**
      * Valida los datos operativos de la ficha.
      *
+     * Con `$datosInicialesRequeridos` la fecha de inicio y el plazo
+     * pasan a ser obligatorios, como ocurre al confirmar los datos
+     * iniciales de la obra.
+     *
      * @param array<string, mixed> $datos
      *
      * @return list<string>
      */
-    private function validarDatosFicha(array $datos): array
+    private function validarDatosFicha(array $datos, bool $datosInicialesRequeridos = false): array
     {
-        $errores = [];
+        $errores = $this->validarExpedienteContable($datos['expediente_contable_raw']);
 
-        if ($datos['expediente_contable_raw'] !== '' && mb_strlen($datos['expediente_contable_raw']) > 50) {
-            $errores[] = 'El Expte. contable no puede superar los 50 caracteres.';
-        }
-
-        if ($datos['fecha_inicio_raw'] !== '' && $datos['fecha_inicio'] === null) {
+        if ($datos['fecha_inicio_raw'] === '') {
+            if ($datosInicialesRequeridos) {
+                $errores[] = 'La fecha de inicio es obligatoria para confirmar los datos iniciales.';
+            }
+        } elseif ($datos['fecha_inicio'] === null) {
             $errores[] = 'La fecha de inicio no es válida. Utilice el formato dd/mm/aaaa.';
         }
 
-        if ($datos['plazo_valor_raw'] !== '') {
-            if (! ctype_digit($datos['plazo_valor_raw']) || (int) $datos['plazo_valor_raw'] < 1) {
-                $errores[] = 'El plazo debe ser un número entero mayor a cero.';
-            } elseif (! PlazoObra::esUnidadValida($datos['plazo_unidad'])) {
-                $errores[] = 'La unidad del plazo no es válida.';
+        if ($datos['plazo_valor_raw'] === '') {
+            if ($datosInicialesRequeridos) {
+                $errores[] = 'El plazo de obra es obligatorio para confirmar los datos iniciales.';
             }
+        } elseif (! ctype_digit($datos['plazo_valor_raw']) || (int) $datos['plazo_valor_raw'] < 1) {
+            $errores[] = 'El plazo debe ser un número entero mayor a cero.';
+        } elseif (! PlazoObra::esUnidadValida($datos['plazo_unidad'])) {
+            $errores[] = 'La unidad del plazo no es válida.';
         }
 
         return $errores;
+    }
+
+    /**
+     * Valida el expediente contable de la ficha.
+     *
+     * @return list<string>
+     */
+    private function validarExpedienteContable(string $expedienteRaw): array
+    {
+        if ($expedienteRaw !== '' && mb_strlen($expedienteRaw) > 50) {
+            return ['El Expte. contable no puede superar los 50 caracteres.'];
+        }
+
+        return [];
+    }
+
+    /**
+     * Determina si el expediente contable enviado coincide con el
+     * almacenado.
+     *
+     * @param array<string, mixed> $datos
+     */
+    private function expedienteContableSinCambios(array $datos, object $obra): bool
+    {
+        $normalizar = static function ($valor): ?string {
+            return ($valor === null || $valor === '') ? null : (string) $valor;
+        };
+
+        return $normalizar($datos['expediente_contable'] ?? null)
+            === $normalizar($obra->expediente_contable ?? null);
     }
 
     /**

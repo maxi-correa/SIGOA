@@ -135,6 +135,11 @@ final class EsquemaBaseAplicacionTest extends CIUnitTestCase
         $this->assertColumnaBooleana('obras', 'fondo_reparo_con_poliza', true, null);
     }
 
+    public function testObrasTieneConfirmacionDeDatosIniciales(): void
+    {
+        $this->assertColumnaBooleana('obras', 'plazo_inicial_confirmado', false, '0');
+    }
+
     public function testCertificadosTieneEstadoAnticipoYRetencionFondoReparo(): void
     {
         $this->assertColumna('certificados', 'descuento_anticipo', 'decimal(15,3)', true);
