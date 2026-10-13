@@ -81,6 +81,12 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
                 <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
                 Ver Certificados
             </a>
+
+            <a href="<?= site_url('/obras/resoluciones/' . (int) $obra->id) ?>"
+               class="btn btn-secondary ficha-btn-resoluciones">
+                <i class="bi bi-file-earmark-check" aria-hidden="true"></i>
+                Ver Resoluciones
+            </a>
         </div>
     </div>
 

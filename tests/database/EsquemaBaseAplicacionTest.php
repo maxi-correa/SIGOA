@@ -140,6 +140,25 @@ final class EsquemaBaseAplicacionTest extends CIUnitTestCase
         $this->assertColumnaBooleana('obras', 'plazo_inicial_confirmado', false, '0');
     }
 
+    public function testResolucionesAdmiteIdentificacionOpcionalYConfirmacion(): void
+    {
+        $this->assertColumnaAdmiteNulos('resoluciones', 'numero');
+        $this->assertColumnaAdmiteNulos('resoluciones', 'anio');
+        $this->assertColumnaAdmiteNulos('resoluciones', 'fecha_resolucion');
+        $this->assertColumnaBooleana('resoluciones', 'confirmada', false, '0');
+    }
+
+    public function testCatalogoTieneTipoCuadroComparativoConAmpliacion(): void
+    {
+        $fila = $this->db->table('tipos_resolucion')
+            ->where('tipo_resolucion', 'APROBACIÓN DE CUADRO COMPARATIVO Y AMPLIACIÓN DE PLAZO')
+            ->get()
+            ->getRowArray();
+
+        $this->assertIsArray($fila, 'Falta el tipo de resolución que combina cuadro comparativo y ampliación de plazo.');
+        $this->assertSame('1', (string) $fila['activo'], 'El tipo debe estar activo en el catálogo.');
+    }
+
     public function testCertificadosTieneEstadoAnticipoYRetencionFondoReparo(): void
     {
         $this->assertColumna('certificados', 'descuento_anticipo', 'decimal(15,3)', true);
@@ -180,6 +199,14 @@ final class EsquemaBaseAplicacionTest extends CIUnitTestCase
         $this->assertIsArray($info, "Falta `{$tabla}.{$columna}`.");
         $this->assertSame($tipo, strtolower((string) $info['COLUMN_TYPE']), "`{$tabla}.{$columna}` debe ser {$tipo}.");
         $this->assertSame($nullable ? 'YES' : 'NO', $info['IS_NULLABLE'], "`{$tabla}.{$columna}` nullability incorrecta.");
+    }
+
+    private function assertColumnaAdmiteNulos(string $tabla, string $columna): void
+    {
+        $info = $this->columna($tabla, $columna);
+
+        $this->assertIsArray($info, "Falta `{$tabla}.{$columna}`.");
+        $this->assertSame('YES', $info['IS_NULLABLE'], "`{$tabla}.{$columna}` debe admitir nulos.");
     }
 
     private function assertColumnaBooleana(string $tabla, string $columna, bool $nullable, ?string $default): void

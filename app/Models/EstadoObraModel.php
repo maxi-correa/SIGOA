@@ -19,6 +19,18 @@ class EstadoObraModel extends Model
         'EN PLAZO DE CONSERVACIÓN',
     ];
 
+    /**
+     * Estados de obra en los que se permite registrar resoluciones.
+     *
+     * Solo durante la ejecución de la obra (o su neutralización
+     * temporaria) tiene sentido aprobar cuadros comparativos o
+     * ampliaciones de plazo.
+     */
+    public const PERMITEN_REGISTRAR_RESOLUCIONES = [
+        'EN EJECUCIÓN',
+        'NEUTRALIZADA',
+    ];
+
     protected $table = 'estados_obra';
 
     protected $primaryKey = 'id';
@@ -70,6 +82,25 @@ class EstadoObraModel extends Model
         $estado = mb_strtoupper(trim($estadoNombre));
 
         foreach (self::PERMITEN_INSPECCIONAR as $permitido) {
+            if (mb_strtoupper($permitido) === $estado) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Indica si un estado de obra permite registrar resoluciones.
+     *
+     * La comparación es por nombre normalizado (mayúsculas), sin depender
+     * de los ids numéricos del catálogo.
+     */
+    public function permiteRegistrarResoluciones(string $estadoNombre): bool
+    {
+        $estado = mb_strtoupper(trim($estadoNombre));
+
+        foreach (self::PERMITEN_REGISTRAR_RESOLUCIONES as $permitido) {
             if (mb_strtoupper($permitido) === $estado) {
                 return true;
             }

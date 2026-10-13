@@ -22,6 +22,10 @@ class TiposResolucionSeeder extends Seeder
                 'activo'          => true,
             ],
             [
+                'tipo_resolucion' => 'APROBACIÓN DE CUADRO COMPARATIVO Y AMPLIACIÓN DE PLAZO',
+                'activo'          => true,
+            ],
+            [
                 'tipo_resolucion' => 'OTRO',
                 'activo'          => true,
             ],

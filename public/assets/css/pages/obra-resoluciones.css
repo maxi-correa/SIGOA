@@ -1,0 +1,159 @@
+/* ===================================================================
+   SIGOA — Página: Resoluciones de obra
+   =================================================================== */
+
+.resoluciones-requerido {
+    color: var(--color-danger);
+    font-weight: 700;
+}
+
+.resoluciones-aviso {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    margin: 0 0 var(--space-md);
+}
+
+.resoluciones-tabla-seccion {
+    margin-top: var(--space-lg);
+}
+
+.resoluciones-tabla-encabezado {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-md);
+}
+
+.resoluciones-tabla-encabezado .ficha-seccion-titulo {
+    margin: 0;
+}
+
+.resoluciones-tabla-encabezado .btn {
+    width: auto;
+}
+
+.resoluciones-tabla {
+    min-width: 58rem;
+}
+
+.resoluciones-col-importe {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.resoluciones-col-acciones {
+    text-align: right;
+    white-space: nowrap;
+    width: 1%;
+}
+
+.resoluciones-observaciones {
+    max-width: 20rem;
+    overflow-wrap: anywhere;
+}
+
+.resoluciones-tabla-vacia {
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+/* --- Estado de la resolución --- */
+.resolucion-estado {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.resolucion-estado-pendiente {
+    background-color: var(--color-warning-bg);
+    color: var(--color-warning);
+    border: 1px solid var(--color-warning-border);
+}
+
+.resolucion-estado-confirmada {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid var(--color-success-border);
+}
+
+/* --- Acciones de fila --- */
+.resoluciones-acciones {
+    display: inline-flex;
+    gap: 0.35rem;
+    justify-content: flex-end;
+}
+
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-primary);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.btn-icon:hover:not(:disabled) {
+    background-color: var(--color-primary);
+    color: var(--color-text-on-primary);
+    border-color: var(--color-primary);
+}
+
+.btn-icon:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-icon-danger {
+    color: var(--color-danger);
+    border-color: var(--color-danger-border);
+}
+
+.btn-icon-danger:hover:not(:disabled) {
+    background-color: var(--color-danger);
+    color: var(--color-text-on-primary);
+    border-color: var(--color-danger);
+}
+
+.resoluciones-bloqueada {
+    color: var(--color-text-secondary);
+}
+
+/* --- Formulario --- */
+.resoluciones-form-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-md);
+}
+
+#grupo-monto[hidden],
+#grupo-dias[hidden] {
+    display: none;
+}
+
+@media (max-width: 580px) {
+    .resoluciones-tabla-encabezado .btn {
+        width: 100%;
+    }
+
+    .resoluciones-form-grid {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+}

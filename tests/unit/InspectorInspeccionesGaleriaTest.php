@@ -362,9 +362,9 @@ final class InspectorInspeccionesGaleriaTest extends CIUnitTestCase
         sort($nombres);
 
         $this->assertSame(
-            '2026-10-08-120000_AddPlazoInicialConfirmadoToObras.php',
+            '2026-10-09-120200_AgregarTipoResolucionCuadroYAmpliacion.php',
             end($nombres),
-            'E.5 no introduce cambios de esquema.'
+            'E.5 no introduce cambios de esquema: el más reciente es el de resoluciones.'
         );
 
         $sincronizador = $this->leerApp('Controllers/Inspector/Sincronizar.php');

@@ -535,9 +535,9 @@ final class InspectorInspeccionesHistoricoTest extends CIUnitTestCase
         $ultima = end($nombres);
 
         $this->assertSame(
-            '2026-10-08-120000_AddPlazoInicialConfirmadoToObras.php',
+            '2026-10-09-120200_AgregarTipoResolucionCuadroYAmpliacion.php',
             $ultima,
-            'E.4 no introduce cambios de esquema: la última migración del proyecto no debe cambiar.'
+            'E.6 reorganiza accesos y navegación: su cambio de esquema más reciente es el de resoluciones.'
         );
     }
 
