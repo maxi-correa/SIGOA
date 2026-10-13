@@ -37,7 +37,16 @@ $valorPlazoValor    = old('plazo_valor', $obra->plazo_original_valor ?? '');
 $valorPlazoUnidad   = old('plazo_unidad', $obra->plazo_original_unidad ?? PlazoObra::UNIDAD_DIAS);
 
 $fechaFinTexto = PlazoObra::formatearFecha($fecha_fin);
-$plazoDiasTexto = ($plazo_dias !== null) ? $plazo_dias . ' días' : null;
+
+$plazoInicialDias   = $plazo_inicial_dias ?? null;
+$plazoVigenteDias   = $plazo_vigente_dias ?? null;
+$totalAmpliacionDias = (int) ($total_ampliacion_dias ?? 0);
+$ampliaciones          = $ampliaciones ?? [];
+$ampliacionesPendientes = $ampliaciones_pendientes ?? [];
+$neutralizacionAbierta  = $neutralizacion_abierta ?? false;
+
+$plazoInicialTexto = ($plazoInicialDias !== null) ? $plazoInicialDias . ' días' : null;
+$plazoVigenteTexto = ($plazoVigenteDias !== null) ? $plazoVigenteDias . ' días' : null;
 
 $plazoEtiqueta = null;
 
@@ -279,9 +288,19 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
             </div>
 
             <div class="form-group ficha-campo ficha-campo-calculado">
-                <label>Plazo en días corridos</label>
+                <label>Plazo inicial en días corridos</label>
                 <p class="ficha-valor ficha-valor-calculado">
-                    <?= $plazoDiasTexto !== null ? esc($plazoDiasTexto) : '—' ?>
+                    <?= $plazoInicialTexto !== null ? esc($plazoInicialTexto) : '—' ?>
+                </p>
+            </div>
+
+            <div class="form-group ficha-campo ficha-campo-calculado">
+                <label>Plazo contractual vigente</label>
+                <p class="ficha-valor ficha-valor-calculado">
+                    <?= $plazoVigenteTexto !== null ? esc($plazoVigenteTexto) : '—' ?>
+                    <?php if ($plazoVigenteDias !== null && $totalAmpliacionDias > 0): ?>
+                        <span class="ficha-valor-nota">(<?= (int) $plazoInicialDias ?> + <?= (int) $totalAmpliacionDias ?>)</span>
+                    <?php endif; ?>
                 </p>
             </div>
 
@@ -292,6 +311,117 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
                 </p>
             </div>
 
+        </div>
+
+        <div class="plazo-desglose">
+            <p class="ficha-etiqueta plazo-desglose-encabezado">Cálculo del plazo contractual vigente</p>
+
+            <?php if (! $plazoInicialConfirmado): ?>
+                <p class="ficha-aviso">
+                    <i class="bi bi-info-circle" aria-hidden="true"></i>
+                    Los datos iniciales de plazo aún no fueron confirmados:
+                    el plazo vigente y la fecha de finalización son provisorios.
+                </p>
+            <?php endif; ?>
+
+            <?php if ($neutralizacionAbierta): ?>
+                <p class="ficha-aviso ficha-aviso-alerta">
+                    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                    La obra tiene una neutralización abierta: la fecha de
+                    finalización no puede presentarse como vigente hasta que se
+                    registre el reinicio. No se computan días neutralizados.
+                </p>
+            <?php endif; ?>
+
+            <dl class="ficha-resumen plazo-desglose-resumen">
+                <dt>Fecha de inicio contractual</dt>
+                <dd><?= esc($fechaInicioTexto ?? '—') ?></dd>
+
+                <dt>Plazo inicial confirmado</dt>
+                <dd>
+                    <?= $plazoInicialTexto !== null ? esc($plazoInicialTexto) : '—' ?>
+                    <?php if (! $plazoInicialConfirmado && $plazoInicialTexto !== null): ?>
+                        <span class="plazo-desglose-provisorio">(provisorio)</span>
+                    <?php endif; ?>
+                </dd>
+
+                <dt>Ampliaciones confirmadas</dt>
+                <dd><?= $totalAmpliacionDias > 0 ? '+' . (int) $totalAmpliacionDias . ' días' : 'Sin ampliaciones' ?></dd>
+
+                <dt>Plazo contractual vigente</dt>
+                <dd><?= $plazoVigenteTexto !== null ? esc($plazoVigenteTexto) : '—' ?></dd>
+
+                <dt>Fecha de finalización</dt>
+                <dd><?= esc($fechaFinTexto ?? '—') ?></dd>
+            </dl>
+
+            <?php if ($ampliaciones === []): ?>
+                <p class="plazo-desglose-vacio">
+                    No hay ampliaciones de plazo confirmadas: el plazo vigente
+                    coincide con el plazo inicial.
+                </p>
+            <?php else: ?>
+                <p class="ficha-etiqueta plazo-desglose-tabla-titulo">Ampliaciones de plazo confirmadas</p>
+                <div class="sigoa-table-wrap">
+                    <table class="sigoa-table plazo-ampliaciones-tabla">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>N°</th>
+                                <th>Año</th>
+                                <th>Fecha</th>
+                                <th class="plazo-col-dias">Días</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($ampliaciones as $ampliacion): ?>
+                                <tr>
+                                    <td><?= esc($ampliacion->tipo_nombre ?? '—') ?></td>
+                                    <td><?= $ampliacion->numero === null ? '—' : (int) $ampliacion->numero ?></td>
+                                    <td><?= $ampliacion->anio === null ? '—' : (int) $ampliacion->anio ?></td>
+                                    <td><?= esc(PlazoObra::formatearFecha($ampliacion->fecha_resolucion) ?? '—') ?></td>
+                                    <td class="plazo-col-dias">+<?= (int) $ampliacion->dias ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            <tr class="plazo-ampliaciones-total">
+                                <td colspan="4">Total de días de ampliación aprobados</td>
+                                <td class="plazo-col-dias">+<?= (int) $totalAmpliacionDias ?></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($ampliacionesPendientes !== []): ?>
+                <p class="ficha-etiqueta plazo-desglose-tabla-titulo">Ampliaciones pendientes de confirmación</p>
+                <p class="plazo-desglose-nota">Trámites aún no confirmados: no se suman al plazo vigente.</p>
+                <div class="sigoa-table-wrap">
+                    <table class="sigoa-table plazo-ampliaciones-tabla">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>N°</th>
+                                <th>Año</th>
+                                <th>Fecha</th>
+                                <th class="plazo-col-dias">Días</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($ampliacionesPendientes as $pendiente): ?>
+                                <tr>
+                                    <td><?= esc($pendiente->tipo_nombre ?? '—') ?></td>
+                                    <td><?= $pendiente->numero === null ? '—' : (int) $pendiente->numero ?></td>
+                                    <td><?= $pendiente->anio === null ? '—' : (int) $pendiente->anio ?></td>
+                                    <td><?= esc(PlazoObra::formatearFecha($pendiente->fecha_resolucion) ?? '—') ?></td>
+                                    <td class="plazo-col-dias">
+                                        <?= ($pendiente->dias === null || (int) $pendiente->dias < 1) ? '—' : (int) $pendiente->dias ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
         </div>
 
         <?php if ($puedeEditar): ?>
@@ -328,7 +458,7 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
         <h2 class="ficha-seccion-titulo">Inspector</h2>
 
         <div class="ficha-inspector-vigente">
-            <p class="ficha-inspector-etiqueta">Inspector vigente</p>
+            <p class="ficha-etiqueta">Inspector vigente</p>
 
             <?php if ($inspector_vigente): ?>
                 <p class="ficha-valor ficha-valor-calculado">
@@ -361,7 +491,7 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
         <h2 class="ficha-seccion-titulo">Representante técnico</h2>
 
         <div class="ficha-inspector-vigente">
-            <p class="ficha-inspector-etiqueta">Representante técnico vigente</p>
+            <p class="ficha-etiqueta">Representante técnico vigente</p>
 
             <?php if ($representante_vigente): ?>
                 <p class="ficha-valor ficha-valor-calculado">

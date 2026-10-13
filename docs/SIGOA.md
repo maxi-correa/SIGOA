@@ -117,6 +117,9 @@ Adicionalmente, se encuentra implementada la infraestructura de autenticación y
 * **Fase D.1** — fundación PWA/offline: manifest, Service Worker de app shell, registro de SW, capa propia de IndexedDB (base `SIGOA`, stores `inspecciones`/`fotografias`/`operaciones`), UUID v4 en el cliente y estado online/offline en la topbar — ver §53;
 * **Fase D.2** — nueva inspección 100 % local del inspector móvil: autorización en servidor (estado F.7 + asignación vigente), guardado en IndexedDB (v2), captura/optimización/thumbnail de fotografías en el cliente y vista de inspecciones locales — ver §54;
 * **Fase D.3** — sincronización servidor de inspecciones capturadas offline: endpoint `POST /inspector/sincronizar/inspecciones` idempotente por uuid, autorización histórica del inspector (§52.4), validación del payload, trazabilidad en `operaciones_sincronizacion`, botón "Sincronizar" en la vista de obra y estados `SINCRONIZADA`/`ERROR` en las inspecciones locales — ver §55.
+* **Bloque 1 — datos iniciales de plazo** — confirmación explícita de la fecha de inicio y el plazo original de la obra: una vez confirmados (`obras.plazo_inicial_confirmado = 1`), la fecha de inicio y el plazo quedan inmutables y solo el Expte. contable permanece editable desde la ficha. No forma parte de una sección propia todavía; se describe donde es necesario para el cálculo del plazo (§49.5, §67).
+* **Bloque 2 — trámites administrativos (resoluciones)** — gestión de las resoluciones de una obra: registro de trámites que pueden quedar incompletos, confirmación explícita, inmutabilidad de las resoluciones confirmadas (no se editan ni eliminan), observaciones exigidas según el tipo y restricción de registro a obras EN EJECUCIÓN o NEUTRALIZADA — ver §66;
+* **Bloque 3 — plazo contractual vigente** — cálculo derivado del plazo vigente (plazo inicial confirmado más días de ampliaciones confirmadas) y de la fecha de finalización, con desglose en Ver Obra; la fecha de finalización queda sin calcular mientras exista una neutralización abierta — ver §67.
 
 ---
 
@@ -135,8 +138,7 @@ Quedan pendientes, entre otras:
 * funcionamiento offline completo;
 * sincronización;
 * gestión documental;
-* gestión de resoluciones;
-* neutralizaciones y reinicios;
+* neutralizaciones y reinicios (registro, edición y reinicio; la consulta de si una obra tiene una neutralización abierta está implementada — ver §67);
 * recepciones;
 * certificados;
 * auditoría;
@@ -355,7 +357,12 @@ Los tipos definidos son:
 1. ADJUDICACIÓN
 2. APROBACIÓN DE CUADRO COMPARATIVO
 3. APROBACIÓN DE AMPLIACIÓN DE PLAZO
-4. OTRO
+4. APROBACIÓN DE CUADRO COMPARATIVO Y AMPLIACIÓN DE PLAZO
+5. OTRO
+
+El tipo combinado (APROBACIÓN DE CUADRO COMPARATIVO Y AMPLIACIÓN DE PLAZO) aprueba el cuadro comparativo e incorpora días de ampliación en un mismo acto. Fue incorporado al catálogo por la migración `2026-10-09-120200_AgregarTipoResolucionCuadroYAmpliacion` (idempotente) y también quedó incorporado al seeder `TiposResolucionSeeder`.
+
+La forma en que cada tipo admite monto y días, y cuáles de ellos amplían el plazo contractual vigente, se describe en §23 y §67.
 
 ---
 
@@ -474,9 +481,17 @@ Actualmente se dispone de:
 * unidad;
 * cantidad de días calculada.
 
+El plazo original debe conservarse y, una vez confirmados los datos iniciales (Bloque 1), queda inmutable.
+
 Las ampliaciones de plazo posteriores no deben modificar el plazo original.
 
-La información de ampliaciones debe conservarse separadamente.
+La información de ampliaciones debe conservarse separadamente (en `resoluciones`).
+
+El **plazo contractual vigente** es un dato derivado que se calcula, no se almacena:
+
+**plazo vigente = plazo inicial confirmado + suma de los días de las ampliaciones de plazo confirmadas**
+
+Las resoluciones combinadas (APROBACIÓN DE CUADRO COMPARATIVO Y AMPLIACIÓN DE PLAZO) aportan sus días una sola vez. La fecha de finalización es también un dato derivado (`fecha_inicio + plazo vigente`) y se calcula server-side. El detalle del cálculo y las reglas de ampliación se documentan en §67.
 
 ---
 
@@ -626,6 +641,20 @@ Se contempla, entre otros casos:
 * ampliaciones de plazo;
 * otros actos administrativos.
 
+## 23.1 Gestión de resoluciones (Bloque 2)
+
+Las resoluciones se registran y gestionan desde la pantalla **Ver Resoluciones** de la obra (`GET /obras/resoluciones/(:num)`). Reglas principales:
+
+* Un trámite puede registrarse **incompleto**: `numero`, `anio` y `fecha_resolucion` admiten nulos y se completan antes de confirmar. La identificación es obligatoria para confirmar.
+* La **confirmación es explícita**: un trámite nace `confirmada = 0` (Pendiente) y solo pasa a confirmada por acción del usuario.
+* Una resolución confirmada es **inmutable**: no puede editarse ni eliminarse. El bloqueo se aplica en el controlador y en el modelo, no solo en la interfaz.
+* Según el tipo, el trámite admite o exige monto y/o días; los tipos informativos (ADJUDICACIÓN y OTRO) exigen **observaciones** al confirmarse.
+* Monto es opcional/requerido/oculto y días es opcional/requerido/oculto según el tipo (ver §66.2).
+* El registro, la modificación y la eliminación solo se permiten en obras **EN EJECUCIÓN** o **NEUTRALIZADA**.
+* La numeración no se repite: no puede haber dos resoluciones con el mismo número y año para una misma obra.
+
+El detalle completo se documenta en §66.
+
 ---
 
 # 24. NEUTRALIZACIONES Y REINICIOS
@@ -640,6 +669,8 @@ La neutralización debe conservar:
 * posterior reinicio.
 
 La neutralización no debe eliminar ni sobrescribir la historia de ejecución.
+
+**Estado implementado (Bloque 3):** solo se consulta si la obra tiene una **neutralización abierta** (una fila en `neutralizaciones` con `fecha_reinicio IS NULL`). Mientras exista una neutralización abierta, el cálculo del plazo no presenta una fecha de finalización como vigente. El **cómputo de días neutralizados** y el **registro del reinicio** no están implementados y quedan para un bloque posterior — ver §67.6.
 
 ---
 
@@ -823,11 +854,13 @@ Los catálogos actualmente consolidados son:
 | Estados de obra     |        5 |
 | Barrios             |       77 |
 | Tipos de licitación |        5 |
-| Tipos de resolución |        4 |
+| Tipos de resolución |        5 |
 | Tipos de documento  |       16 |
 | Roles               |        4 |
 
 Los seeders correspondientes ya fueron ejecutados y verificados.
+
+El catálogo de tipos de resolución pasó de 4 a 5: la migración `2026-10-09-120200_AgregarTipoResolucionCuadroYAmpliacion` incorporó APROBACIÓN DE CUADRO COMPARATIVO Y AMPLIACIÓN DE PLAZO (de forma idempotente) y el seeder `TiposResolucionSeeder` también lo incluye.
 
 ---
 
@@ -891,7 +924,7 @@ Para evitar interpretaciones incorrectas durante el desarrollo:
 * 77 barrios;
 * 5 estados de obra;
 * 5 tipos de licitación;
-* 4 tipos de resolución;
+* 5 tipos de resolución;
 * 16 tipos de documento;
 * 4 roles;
 * autenticación mediante usuario y contraseña;
@@ -902,6 +935,8 @@ Para evitar interpretaciones incorrectas durante el desarrollo:
 * redirección al dashboard correspondiente;
 * dashboards mínimos por rol;
 * logout con destrucción de sesión;
+* gestión de resoluciones de obra: registro de trámites, confirmación explícita e inmutabilidad de las resoluciones confirmadas — ver §66;
+* cálculo derivado del plazo contractual vigente y desglose en Ver Obra — ver §67;
 
 ### DECIDIDO
 
@@ -1041,11 +1076,13 @@ Ante cualquier duda, se debe priorizar:
 
 # 44. PRÓXIMA ETAPA
 
-Con la estructura de base de datos y los datos maestros consolidados, la siguiente etapa consiste en comenzar el desarrollo funcional de SIGOA.
+El desarrollo funcional ya está en curso sobre la estructura de base de datos y los datos maestros consolidados.
 
-El desarrollo debe comenzar sobre la estructura existente y avanzar incrementalmente.
+El principio de avance es el mismo: desarrollar incrementalmente, por bloques pequeños y verificables.
 
 No se debe reconstruir la base de datos desde cero para continuar el desarrollo.
+
+Las funcionalidades aún pendientes se enumeran en §4.2 y §37. Entre las previsiblemente próximas se encuentran las mencionadas allí (recepción de neutralizaciones y reinicios, certificados, recepciones, auditoría, alertas y el mecanismo de comunicación definitivo). Esta lista no es un compromiso de orden ni de alcance.
 
 ---
 
@@ -1516,9 +1553,9 @@ El rol CONSULTA accede al listado de obras (`obras/index`) en modo lectura.
 
 La ficha se compone de:
 
-1. barra superior con **Volver a obras** y **[ documento ] Ver Certificados** (deshabilitado, sin funcionalidad);
+1. barra superior con **Volver a obras** y las acciones secundarias **[ clip ] Ver Inspecciones** (según el rol), **[ documento ] Ver Certificados** y **[ check ] Ver Resoluciones**;
 2. encabezado de identificación: código, nombre, estado, N° de Expte. municipal, barrio, empresa, tipo y N° de licitación y **Expte. contable**;
-3. datos operativos: fecha de inicio y plazo de obra (valor + unidad), con **plazo en días corridos** y **fecha de finalización** calculados;
+3. datos operativos: fecha de inicio y plazo de obra (valor + unidad), con **plazo inicial en días corridos**, **plazo contractual vigente** y **fecha de finalización** calculados, más el desglose del cálculo del plazo (§49.5);
 4. inspector vigente y acción de cambio de inspector;
 5. representante técnico vigente y acción de cambio de representante técnico.
 
@@ -1532,8 +1569,12 @@ Se conserva la regla de conversión **1 mes = 30 días corridos**.
 
 * La unidad se almacena como código (`DIAS`, `MES`).
 * `plazo_original_dias` se calcula en el backend y se persiste.
-* La **fecha de finalización** es un dato derivado (`fecha_inicio + plazo_original_dias`), no se almacena y se calcula server-side.
-* Las ampliaciones de plazo posteriores no forman parte de esta fase.
+* Los datos iniciales de plazo (fecha de inicio y plazo original) pueden confirmarse explícitamente (`obras.plazo_inicial_confirmado`); una vez confirmados quedan inmutables.
+* El **plazo contractual vigente** es un dato derivado (**plazo inicial + ampliaciones de plazo confirmadas**), no se almacena y se calcula server-side.
+* La **fecha de finalización** también es derivada (`fecha_inicio + plazo vigente`), no se almacena y se calcula server-side. Queda sin calcular si existe una neutralización abierta.
+* Mientras los datos iniciales no estén confirmados, el plazo y la fecha se presentan como **provisorios**.
+
+La ficha muestra un **desglose del cálculo** (plazo inicial, ampliaciones confirmadas con su total, plazo vigente y fecha de finalización) y diferencia las ampliaciones **confirmadas** de los trámites **pendientes** (que no se suman). El detalle completo se documenta en §67.
 
 ## 49.6 Edición de datos operativos
 
@@ -1587,7 +1628,7 @@ La fecha del cambio debe ser válida, no posterior a la fecha actual y estrictam
 
 La asignación de representantes técnicos a obras se apoya en las tablas consolidadas `representantes_tecnicos` y `obras_representantes_tecnicos`. El alta y la edición del catálogo de representantes técnicos no forman parte de esta fase.
 
-**Fuera de alcance:** certificados (botón deshabilitado), inspecciones, fotografías, ampliaciones de plazo, historial visible de inspectores o representantes, auditoría, eliminación de obras.
+**Fuera de alcance:** certificados (botón deshabilitado), inspecciones, fotografías, historial visible de inspectores o representantes, auditoría, eliminación de obras. (Las ampliaciones de plazo dejaron de estar fuera de alcance con el Bloque 3 — ver §67.)
 
 ---
 
@@ -4220,3 +4261,216 @@ toca.
 
 Suite completa tras el ajuste: **405 pruebas y 1566 aserciones en verde**, excluyendo el grupo
 `mysql-real`. Sin cambios en JavaScript.
+
+---
+
+## 66. Trámites administrativos (Bloque 2) — resoluciones con confirmación explícita e inmutabilidad
+
+El Bloque 2 incorpora la gestión de las **resoluciones** (actos administrativos) de una obra. Antes de este
+bloque la tabla `resoluciones` existía, pero no había pantalla, reglas de validación ni forma de distinguir un
+trámite definitivo de un borrador. El bloque agrega una pantalla de gestión, reglas por tipo de resolución y
+un mecanismo de **confirmación explícita** que vuelve inmutable la resolución confirmada. No modifica
+migraciones ya ejecutadas: agrega tres migraciones nuevas y completa el catálogo de tipos.
+
+### 66.1 Pantalla y rutas
+
+`GET /obras/resoluciones/(:num)` (`Resoluciones::index`) muestra las resoluciones de una obra, con identidad
+de la obra, tabla de trámites y (para roles habilitados) el modal de registro/edición y los modales de
+confirmación y eliminación.
+
+| Método | Ruta | Controlador | Roles |
+| --- | --- | --- | --- |
+| GET | `/obras/resoluciones/(:num)` | `Resoluciones::index` | SUPERADMINISTRADOR, ADMINISTRADOR, CONSULTA |
+| POST | `/obras/resoluciones/crear` | `Resoluciones::crear` | SUPERADMINISTRADOR, ADMINISTRADOR |
+| POST | `/obras/resoluciones/actualizar` | `Resoluciones::actualizar` | SUPERADMINISTRADOR, ADMINISTRADOR |
+| POST | `/obras/resoluciones/confirmar` | `Resoluciones::confirmar` | SUPERADMINISTRADOR, ADMINISTRADOR |
+| POST | `/obras/resoluciones/eliminar` | `Resoluciones::eliminar` | SUPERADMINISTRADOR, ADMINISTRADOR |
+
+CONSULTA accede en modo lectura. La vista solo muestra las acciones de gestión cuando `puede_editar` (rol) **y**
+el estado de la obra lo permite; el controlador vuelve a verificar ambos (nunca confía en el cliente). La
+entrada a la pantalla es el botón **Ver Resoluciones** de la ficha de obra (`Views/obras/ficha.php`).
+
+### 66.2 Tipos de resolución y campos admitidos
+
+El catálogo `tipos_resolucion` pasó de 4 a 5 tipos (§11, §34). Los campos que admite cada tipo se resuelven en
+`App\Libraries\ResolucionObra::reglas()` por **nombre normalizado**, sin depender de los ids del catálogo:
+
+| Tipo | Monto | Días | Observaciones |
+| --- | --- | --- | --- |
+| ADJUDICACIÓN | oculto | oculto | requeridas al confirmar |
+| APROBACIÓN DE CUADRO COMPARATIVO | requerido | oculto | opcionales |
+| APROBACIÓN DE AMPLIACIÓN DE PLAZO | oculto | requerido | opcionales |
+| APROBACIÓN DE CUADRO COMPARATIVO Y AMPLIACIÓN DE PLAZO | requerido | requerido | opcionales |
+| OTRO | oculto | oculto | requeridas al confirmar |
+| tipo no contemplado | opcional | opcional | opcionales |
+
+* `requerido` exige un valor distinto de cero (días mayor a cero).
+* `oculto` prohíbe informar el campo: si llega un valor, la validación falla.
+* Para un tipo no contemplado, monto y días son opcionales pero debe informarse **al menos uno**.
+* Un monto o días iguales a cero se consideran "no informados" y se persisten como `NULL`.
+* `monto` es `DECIMAL(15,3)` (§6.3); admite separadores de miles y negativos (por ejemplo, una deductiva).
+* ADJUDICACIÓN y OTRO son antecedentes administrativos informativos: su contenido relevante son las
+  **observaciones**, que se exigen para poder confirmarlas.
+
+La misma tabla de reglas alimenta el backend (validación y normalización) y la vista (qué campos mostrar u
+ocultar), de modo que la decisión no se duplica en el JavaScript.
+
+### 66.3 Trámites pendientes de confirmación
+
+Un trámite nace **Pendiente** (`confirmada = 0`). El número, el año y la fecha de la resolución admiten nulos
+(migración `ResolucionesIdentificacionOpcional`), por lo que un trámite puede registrarse incompleto y
+completarse antes de confirmarse. La pantalla muestra cada fila con su estado **Pendiente** o **Confirmada** y
+la lista de resoluciones se ordena por año, número e id (`ResolucionModel::listarPorObra`).
+
+### 66.4 Confirmación explícita e inmutabilidad
+
+La confirmación es una **acción explícita** del usuario. Exige, en todos los casos, **número, año y fecha**;
+para ADJUDICACIÓN y OTRO exige además **observaciones** (`ResolucionObra::puedeConfirmarse`). El botón de
+confirmar permanece deshabilitado en la fila mientras falten esos datos.
+
+Una vez confirmada:
+
+* la resolución **no puede modificarse ni eliminarse**;
+* el bloqueo se aplica en el controlador (rechaza la operación) y en el modelo
+  (`ResolucionModel::actualizar`/`update`/`delete` devuelven `false`), no solo en la interfaz;
+* la interfaz muestra un candado en lugar de las acciones;
+* confirmar dos veces no tiene efecto (`ResolucionModel::confirmar` es idempotente).
+
+El modal de confirmación advierte expresamente: «Una vez confirmada, la resolución no podrá modificarse ni
+eliminarse».
+
+### 66.5 Reglas de integridad
+
+* No puede haber dos resoluciones con el mismo **número y año** para una misma obra
+  (`ResolucionModel::existeNumeroAnio`); el índice único `(obra_id, numero, anio)` de la tabla lo respalda.
+  En MySQL los nulos no colisionan, por lo que varios trámites incompletos pueden coexistir.
+* El tipo debe existir y estar activo (`TiposResolucionModel`).
+
+### 66.6 Restricciones por estado de obra
+
+El registro, la modificación y la eliminación de resoluciones solo se permiten en obras cuyo estado es
+**EN EJECUCIÓN** o **NEUTRALIZADA** (`EstadoObraModel::PERMITEN_REGISTRAR_RESOLUCIONES`,
+`permiteRegistrarResoluciones`). En cualquier otro estado la pantalla lo informa y el controlador rechaza la
+operación. **La confirmación no está limitada por el estado de la obra**: un trámite ya registrado puede
+confirmarse.
+
+### 66.7 Modelos, migraciones y componentes
+
+* `App\Libraries\ResolucionObra` — reglas, validación y normalización de monto/días/número/año.
+* `App\Models\ResolucionModel` — persistencia, listado por obra, confirmación e inmutabilidad.
+* `App\Models\TipoResolucionModel` — catálogo con orden de presentación propio (OTRO cierra la lista).
+* `App\Models\EstadoObraModel` — estados que permiten registrar resoluciones.
+* Migraciones nuevas (no se modificó ninguna existente):
+  * `2026-10-09-120000_ResolucionesIdentificacionOpcional` — `numero`, `anio` y `fecha_resolucion` pasan a admitir nulos;
+  * `2026-10-09-120100_AddConfirmacionAResoluciones` — columna `confirmada` (BOOLEAN, default 0);
+  * `2026-10-09-120200_AgregarTipoResolucionCuadroYAmpliacion` — incorpora el tipo combinado (idempotente).
+* `App\Views\obras\resoluciones.php`, `public/assets/css/pages/obra-resoluciones.css`,
+  `public/assets/js/pages/obra-resoluciones.js`.
+
+### 66.8 Pruebas
+
+* `tests/unit/ResolucionObraTest.php` — reglas por tipo, normalización y confirmabilidad.
+* `tests/database/ResolucionesModelTest.php` — creación, listado, confirmación, inmutabilidad e identificación.
+* `tests/database/ResolucionesValidacionTest.php` — validación por tipo en la capa de datos.
+* `tests/unit/ResolucionesPantallaTest.php` — contrato estructural de la vista y de las rutas.
+
+### 66.9 Fuera de alcance
+
+* Sin edición ni anulación de resoluciones confirmadas (por diseño, son inmutables).
+* Sin aplicación del **monto contractual vigente** a partir de las resoluciones: el Bloque 2 conserva el
+  monto; el recálculo del monto vigente no forma parte de este bloque ni del Bloque 3.
+* Sin eliminación en cascada de obras ni auditoría funcional de los cambios de resoluciones.
+
+---
+
+## 67. Plazo contractual vigente (Bloque 3) — cálculo derivado y desglose en Ver Obra
+
+El Bloque 3 calcula el **plazo contractual vigente** de la obra y su **fecha de finalización** a partir del
+plazo inicial y de las ampliaciones de plazo confirmadas, y los presenta con un **desglose verificable** en la
+pantalla Ver Obra. No persiste datos derivados, no agrega columnas ni migraciones y no altera la lógica de
+confirmación e inmutabilidad del Bloque 2.
+
+### 67.1 Dónde se calcula
+
+El cálculo se resuelve una sola vez, server-side, en `Obras::ver()`
+(`app/Controllers/Obras.php`):
+
+* `ResolucionModel::listarPorObra($id)` obtiene las resoluciones de la obra (una consulta);
+* `PlazoObra::calcularVigente($plazoInicialDias, $resoluciones)` compone el plazo;
+* `NeutralizacionModel::tieneAbierta($id)` detecta una neutralización abierta;
+* `PlazoObra::fechaFinalizacion($fechaInicio, $plazoVigenteDias, $neutralizacionAbierta)` calcula la fecha.
+
+La vista solo renderiza los datos recibidos; **no duplica reglas de cálculo en JavaScript**.
+
+### 67.2 Regla del plazo vigente
+
+**plazo vigente = plazo inicial (días corridos) + suma de días de las ampliaciones de plazo confirmadas**
+
+* Solo aportan las resoluciones cuyo tipo **amplía el plazo** (`ResolucionObra::ampliaPlazo`):
+  APROBACIÓN DE AMPLIACIÓN DE PLAZO y APROBACIÓN DE CUADRO COMPARATIVO Y AMPLIACIÓN DE PLAZO.
+* Solo aportan las resoluciones **confirmadas** y con una cantidad de **días mayor a cero**.
+* Las resoluciones combinadas aportan sus días **una sola vez** (es una única fila con monto y días).
+* **No aportan**: ADJUDICACIÓN, APROBACIÓN DE CUADRO COMPARATIVO ni OTRO, aunque estén confirmadas.
+* Las resoluciones **pendientes no modifican** el cálculo ni la fecha.
+* El plazo inicial se toma de `obras.plazo_original_dias`. Si es nulo, el plazo vigente no se presenta como
+  un número (`null`), aunque existan ampliaciones.
+
+La fecha de finalización es `fecha_inicio + plazo vigente`, sumando **N días corridos** (no N−1).
+
+### 67.3 Datos iniciales no confirmados
+
+Si los datos iniciales de plazo no fueron confirmados (`obras.plazo_inicial_confirmado = 0`, Bloque 1), el
+plazo y la fecha se presentan como **provisorios** (con una leyenda «(provisorio)» y un aviso). La falta de
+fecha de inicio o de plazo no produce una fecha ficticia: se muestra `—`.
+
+### 67.4 Desglose en Ver Obra
+
+`Views/obras/ficha.php` incorpora el bloque **Cálculo del plazo contractual vigente**, además de las celdas de
+la ficha:
+
+* celdas: **Plazo inicial en días corridos**, **Plazo contractual vigente** (con nota «+N días de ampliación»
+  cuando corresponde) y **Fecha de finalización**;
+* resumen del cálculo: fecha de inicio, plazo inicial (marcado «(provisorio)» si no está confirmado),
+  ampliaciones confirmadas, plazo vigente y fecha de finalización;
+* si no hay ampliaciones confirmadas, se indica expresamente que el plazo vigente coincide con el inicial;
+* tabla **Ampliaciones de plazo confirmadas** (tipo, N°, año, fecha y días) con una fila **Total de días de
+  ampliación aprobados**;
+* tabla **Ampliaciones pendientes de confirmación**, rotulada como **«no se suman al plazo vigente»**, que
+  diferencia los trámites aún no confirmados.
+
+El desglose es visible también para CONSULTA: no depende de `puede_editar`. No contiene CSS ni JavaScript
+embebidos (estilos en `public/assets/css/pages/ficha-obra.css`).
+
+### 67.5 Fecha de finalización y neutralización abierta
+
+Si la obra tiene una **neutralización abierta** (una fila en `neutralizaciones` con `fecha_reinicio IS NULL`),
+`PlazoObra::fechaFinalizacion` devuelve `null` y la ficha muestra la fecha como `—`, con un aviso de que la
+fecha no puede presentarse como vigente hasta registrar el reinicio. La detección se realiza con
+`NeutralizacionModel::tieneAbierta` (modelo de solo lectura).
+
+### 67.6 Fuera de alcance
+
+* **Cómputo de los días neutralizados**: los períodos neutralizados no se descuentan del plazo; el reinicio y
+  el cálculo asociado se implementarán en un bloque posterior (§24).
+* **Registro, edición y reinicio de neutralizaciones**: siguen pendientes (§4.2).
+* Recálculo del **monto contractual vigente** a partir de las resoluciones, certificados, transición de
+  estados de obra y auditoría funcional.
+
+### 67.7 Componentes y pruebas
+
+* `App\Libraries\PlazoObra` — `calcularVigente()` y `fechaFinalizacion()` (además de la conversión de plazo y
+  el manejo de fechas ya existentes).
+* `App\Libraries\ResolucionObra` — `ampliaPlazo()` y `TIPOS_AMPLIACION_PLAZO`.
+* `App\Models\NeutralizacionModel` — `tieneAbierta()` (nuevo, solo lectura).
+* `App\Controllers\Obras::ver()` — integración del cálculo.
+* `tests/unit/PlazoVigenteObraTest.php` (12) — cálculo sin/con ampliaciones, tipos que no amplían, combinada
+  que suma una sola vez, días inválidos, fecha con cambio de mes/año, nulidad de la fecha con neutralización
+  abierta y sin datos iniciales.
+* `tests/database/ObraPlazoVigenteTest.php` (4) — cálculo a partir de resoluciones almacenadas (SQLite),
+  aislamiento por obra y detección de neutralización abierta/reiniciada.
+* `tests/unit/ObraPlazoVigentePantallaTest.php` (7) — contrato estructural de la vista y del controlador, y
+  visibilidad para CONSULTA.
+
+Suite completa: **564 pruebas / 2339 aserciones**. Quedan **2 fallos preexistentes** en
+`UsuariosGestionTest` que dependen del orden de ejecución (pasan aislados); son ajenos a los Bloques 2 y 3 y no
+se modificaron.

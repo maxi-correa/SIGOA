@@ -118,4 +118,87 @@ class PlazoObra
 
         return $fecha->format('Y-m-d');
     }
+
+    /**
+     * Calcula la composición del plazo contractual vigente.
+     *
+     * Plazo vigente = plazo inicial en días + suma de días de las
+     * ampliaciones confirmadas. Solo aportan las resoluciones cuyo tipo
+     * amplía el plazo (ResolucionObra::ampliaPlazo) y cuya cantidad de
+     * días es mayor a cero; las pendientes se devuelven separadas para
+     * poder mostrarlas sin confundirlas con ampliaciones aprobadas.
+     *
+     * No persiste nada: el resultado es un dato derivado.
+     *
+     * @param int|null     $plazoInicialDias Plazo original en días corridos, o null si falta.
+     * @param list<object> $resoluciones     Resoluciones de la obra (tipo_nombre, dias, confirmada).
+     *
+     * @return array{
+     *     inicial_dias: int|null,
+     *     ampliaciones: list<object>,
+     *     pendientes: list<object>,
+     *     total_ampliacion_dias: int,
+     *     vigente_dias: int|null,
+     *     tiene_ampliaciones: bool
+     * }
+     */
+    public static function calcularVigente(?int $plazoInicialDias, array $resoluciones): array
+    {
+        $ampliaciones = [];
+        $pendientes   = [];
+        $total        = 0;
+
+        foreach ($resoluciones as $resolucion) {
+            if (! ResolucionObra::ampliaPlazo($resolucion->tipo_nombre ?? null)) {
+                continue;
+            }
+
+            $dias = ($resolucion->dias === null || (int) $resolucion->dias < 1)
+                ? 0
+                : (int) $resolucion->dias;
+
+            if ((int) ($resolucion->confirmada ?? 0) !== 1) {
+                $pendientes[] = $resolucion;
+
+                continue;
+            }
+
+            if ($dias > 0) {
+                $ampliaciones[] = $resolucion;
+                $total         += $dias;
+            }
+        }
+
+        return [
+            'inicial_dias'          => $plazoInicialDias,
+            'ampliaciones'          => $ampliaciones,
+            'pendientes'            => $pendientes,
+            'total_ampliacion_dias' => $total,
+            'vigente_dias'          => $plazoInicialDias === null ? null : $plazoInicialDias + $total,
+            'tiene_ampliaciones'    => $total > 0,
+        ];
+    }
+
+    /**
+     * Fecha de finalización contractual: inicio + plazo vigente en días.
+     *
+     * Devuelve null cuando faltan datos iniciales válidos o cuando la
+     * obra tiene una neutralización abierta: en ese caso la fecha no
+     * puede presentarse como vigente mientras no se calcule el reinicio.
+     */
+    public static function fechaFinalizacion(
+        ?string $fechaInicio,
+        ?int $plazoVigenteDias,
+        bool $neutralizacionAbierta = false
+    ): ?string {
+        if ($neutralizacionAbierta || $fechaInicio === null || $plazoVigenteDias === null) {
+            return null;
+        }
+
+        if (self::formatearFecha($fechaInicio) === null) {
+            return null;
+        }
+
+        return self::sumarDias($fechaInicio, $plazoVigenteDias);
+    }
 }

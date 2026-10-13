@@ -7,9 +7,11 @@ use App\Models\BarrioModel;
 use App\Models\EmpresaModel;
 use App\Models\EstadoObraModel;
 use App\Models\InspectoresObrasModel;
+use App\Models\NeutralizacionModel;
 use App\Models\ObraModel;
 use App\Models\ObrasRepresentantesTecnicosModel;
 use App\Models\RepresentanteTecnicoModel;
+use App\Models\ResolucionModel;
 use App\Models\TipoLicitacionModel;
 use App\Models\UsuarioModel;
 use App\Services\AccesoInspecciones;
@@ -151,13 +153,22 @@ class Obras extends BaseController
 
         $representantesModel = new ObrasRepresentantesTecnicosModel();
 
-        $plazoDias = ($obra->plazo_original_dias !== null)
+        $plazoInicialDias = ($obra->plazo_original_dias !== null)
             ? (int) $obra->plazo_original_dias
             : null;
 
-        $fechaFin = ($obra->fecha_inicio !== null && $plazoDias !== null)
-            ? PlazoObra::sumarDias((string) $obra->fecha_inicio, $plazoDias)
-            : null;
+        /* Composición del plazo contractual vigente a partir de las
+           resoluciones almacenadas. Una sola consulta por obra. */
+        $resoluciones = (new ResolucionModel())->listarPorObra($id);
+        $plazo        = PlazoObra::calcularVigente($plazoInicialDias, $resoluciones);
+
+        $neutralizacionAbierta = (new NeutralizacionModel())->tieneAbierta($id);
+
+        $fechaFin = PlazoObra::fechaFinalizacion(
+            $obra->fecha_inicio !== null ? (string) $obra->fecha_inicio : null,
+            $plazo['vigente_dias'],
+            $neutralizacionAbierta
+        );
 
         $session = session();
 
@@ -172,7 +183,13 @@ class Obras extends BaseController
             'representantes'    => (new RepresentanteTecnicoModel())->listarActivasConTitulo(),
             'representante_vigente' => $representantesModel->findVigenteConRepresentante($id),
             'unidades'          => PlazoObra::unidades(),
-            'plazo_dias'        => $plazoDias,
+            'plazo_inicial_dias'       => $plazo['inicial_dias'],
+            'plazo_vigente_dias'       => $plazo['vigente_dias'],
+            'total_ampliacion_dias'    => $plazo['total_ampliacion_dias'],
+            'ampliaciones'             => $plazo['ampliaciones'],
+            'ampliaciones_pendientes'  => $plazo['pendientes'],
+            'tiene_ampliaciones'       => $plazo['tiene_ampliaciones'],
+            'neutralizacion_abierta'   => $neutralizacionAbierta,
             'fecha_fin'         => $fechaFin,
             'plazo_inicial_confirmado' => (int) ($obra->plazo_inicial_confirmado ?? 0) === 1,
             'puede_editar'      => array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $roles) !== [],

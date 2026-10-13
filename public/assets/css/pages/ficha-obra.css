@@ -194,7 +194,7 @@
     margin-bottom: var(--space-md);
 }
 
-.ficha-inspector-etiqueta {
+.ficha-etiqueta {
     font-size: var(--font-size-xs);
     font-weight: 600;
     color: var(--color-text-secondary);
@@ -262,6 +262,68 @@
     color: var(--color-text);
     margin: 0;
     overflow-wrap: anywhere;
+}
+
+/* --- Desglose del plazo contractual vigente --- */
+.ficha-valor-nota {
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    color: var(--color-text-secondary);
+}
+
+.plazo-desglose {
+    margin-top: var(--space-lg);
+    padding-top: var(--space-lg);
+    border-top: 1px solid var(--color-border);
+}
+
+.plazo-desglose-encabezado {
+    margin: 0 0 var(--space-md);
+}
+
+.plazo-desglose-resumen {
+    margin-bottom: var(--space-md);
+}
+
+.plazo-desglose-provisorio,
+.plazo-desglose-nota {
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    font-size: var(--font-size-xs);
+}
+
+.plazo-desglose-nota {
+    margin: 0 0 var(--space-sm);
+}
+
+.plazo-desglose-tabla-titulo {
+    margin: var(--space-md) 0 var(--space-sm);
+}
+
+.plazo-desglose-vacio {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    margin: 0;
+}
+
+.sigoa-table.plazo-ampliaciones-tabla {
+    min-width: 32rem;
+}
+
+.plazo-col-dias {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.plazo-ampliaciones-total td {
+    font-weight: 600;
+    background-color: var(--color-background);
+}
+
+.ficha-aviso-alerta {
+    color: var(--color-warning);
 }
 
 /* --- Responsive --- */

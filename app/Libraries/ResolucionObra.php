@@ -28,6 +28,17 @@ class ResolucionObra
 
     public const TIPO_OTRO = 'OTRO';
 
+    /**
+     * Tipos cuyos días amplían el plazo contractual vigente.
+     *
+     * La aprobación del cuadro comparativo y la adjudicación no aportan
+     * días por sí solas; la ampliación simple y la combinada sí.
+     */
+    public const TIPOS_AMPLIACION_PLAZO = [
+        self::TIPO_AMPLIACION_PLAZO,
+        self::TIPO_CUADRO_Y_AMPLIACION,
+    ];
+
     /** Estados de un campo del formulario según el tipo de resolución. */
     public const CAMPO_OCULTO = 'oculto';
 
@@ -74,6 +85,18 @@ class ResolucionObra
                 'dias'  => self::CAMPO_OPCIONAL,
             ],
         };
+    }
+
+    /**
+     * Indica si el tipo de resolución amplía el plazo contractual vigente.
+     *
+     * Se compara por nombre normalizado, sin depender de los ids del
+     * catálogo, para que los consumidores (consulta de plazo, vista) no
+     * dupliquen la lista de tipos.
+     */
+    public static function ampliaPlazo(?string $tipoNombre): bool
+    {
+        return in_array(self::normalizarTipo($tipoNombre), self::TIPOS_AMPLIACION_PLAZO, true);
     }
 
     /**
