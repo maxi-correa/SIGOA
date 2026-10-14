@@ -1,0 +1,30 @@
+/* ===================================================================
+   SIGOA — Componente: Estado de período de neutralización (BLOQUE 5)
+   ===================================================================
+   Pill que distingue un período de neutralización abierto (sin fecha de
+   reinicio) de uno cerrado. Se reutiliza en la ficha de obra y en la
+   pantalla de neutralizaciones.
+   =================================================================== */
+
+.neutralizacion-estado {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.neutralizacion-estado-abierta {
+    background-color: var(--color-warning-bg);
+    color: var(--color-warning);
+    border: 1px solid var(--color-warning-border);
+}
+
+.neutralizacion-estado-cerrada {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid var(--color-success-border);
+}

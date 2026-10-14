@@ -46,6 +46,8 @@ $totalAmpliacionDias = (int) ($total_ampliacion_dias ?? 0);
 $ampliaciones          = $ampliaciones ?? [];
 $ampliacionesPendientes = $ampliaciones_pendientes ?? [];
 $neutralizacionAbierta  = $neutralizacion_abierta ?? false;
+$neutralizaciones       = $neutralizaciones ?? [];
+$totalNeutralizadoDias  = (int) ($total_neutralizado_dias ?? 0);
 
 $plazoInicialTexto = ($plazoInicialDias !== null) ? $plazoInicialDias . ' días' : null;
 $plazoVigenteTexto = ($plazoVigenteDias !== null) ? $plazoVigenteDias . ' días' : null;
@@ -108,6 +110,12 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
                class="btn btn-secondary ficha-btn-resoluciones">
                 <i class="bi bi-file-earmark-check" aria-hidden="true"></i>
                 Ver Resoluciones
+            </a>
+
+            <a href="<?= site_url('/obras/neutralizaciones/' . (int) $obra->id) ?>"
+               class="btn btn-secondary ficha-btn-neutralizaciones">
+                <i class="bi bi-pause-circle" aria-hidden="true"></i>
+                Ver Neutralizaciones
             </a>
         </div>
     </div>
@@ -325,6 +333,16 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
             </div>
 
             <div class="form-group ficha-campo ficha-campo-calculado">
+                <label>Días neutralizados</label>
+                <p class="ficha-valor ficha-valor-calculado">
+                    <?= $totalNeutralizadoDias > 0 ? (int) $totalNeutralizadoDias . ' días' : '—' ?>
+                    <?php if ($neutralizacionAbierta): ?>
+                        <span class="ficha-valor-nota">(neutralización abierta)</span>
+                    <?php endif; ?>
+                </p>
+            </div>
+
+            <div class="form-group ficha-campo ficha-campo-calculado">
                 <label>Monto contractual vigente</label>
                 <p class="ficha-valor ficha-valor-calculado">
                     <?= esc(CertificacionObra::formatearImporte($montoVigente)) ?>
@@ -352,7 +370,8 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
                     <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
                     La obra tiene una neutralización abierta: la fecha de
                     finalización no puede presentarse como vigente hasta que se
-                    registre el reinicio. No se computan días neutralizados.
+                    registre el reinicio. Los períodos cerrados ya computados
+                    siguen sumando.
                 </p>
             <?php endif; ?>
 
@@ -370,6 +389,9 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
 
                 <dt>Ampliaciones confirmadas</dt>
                 <dd><?= $totalAmpliacionDias > 0 ? '+' . (int) $totalAmpliacionDias . ' días' : 'Sin ampliaciones' ?></dd>
+
+                <dt>Días neutralizados computados</dt>
+                <dd><?= $totalNeutralizadoDias > 0 ? '+' . (int) $totalNeutralizadoDias . ' días' : 'Sin neutralizaciones' ?></dd>
 
                 <dt>Plazo contractual vigente</dt>
                 <dd><?= $plazoVigenteTexto !== null ? esc($plazoVigenteTexto) : '—' ?></dd>
@@ -441,6 +463,49 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+
+            <p class="ficha-etiqueta plazo-desglose-tabla-titulo">Neutralizaciones</p>
+            <?php if ($neutralizaciones === []): ?>
+                <p class="plazo-desglose-vacio">No hay neutralizaciones registradas.</p>
+            <?php else: ?>
+                <div class="sigoa-table-wrap">
+                    <table class="sigoa-table plazo-neutralizaciones-tabla">
+                        <thead>
+                            <tr>
+                                <th>N°</th>
+                                <th>Fecha de neutralización</th>
+                                <th>Fecha de reinicio</th>
+                                <th class="plazo-col-dias">Días</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($neutralizaciones as $periodo): ?>
+                                <?php
+                                $periodoAbierto = $periodo->fecha_reinicio === null;
+                                $periodoDias    = PlazoObra::diasNeutralizados($periodo->fecha_inicio, $periodo->fecha_reinicio);
+                                ?>
+                                <tr>
+                                    <td><?= (int) $periodo->numero ?></td>
+                                    <td><?= esc(PlazoObra::formatearFecha($periodo->fecha_inicio) ?? '—') ?></td>
+                                    <td><?= esc(PlazoObra::formatearFecha($periodo->fecha_reinicio) ?? '—') ?></td>
+                                    <td class="plazo-col-dias"><?= $periodoDias === null ? '—' : '+' . (int) $periodoDias ?></td>
+                                    <td>
+                                        <span class="neutralizacion-estado <?= $periodoAbierto ? 'neutralizacion-estado-abierta' : 'neutralizacion-estado-cerrada' ?>">
+                                            <?= $periodoAbierto ? 'Abierta' : 'Cerrada' ?>
+                                        </span>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            <tr class="plazo-ampliaciones-total">
+                                <td colspan="3">Total de días neutralizados</td>
+                                <td class="plazo-col-dias">+<?= (int) $totalNeutralizadoDias ?></td>
+                                <td></td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>

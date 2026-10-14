@@ -361,9 +361,9 @@ final class InspeccionesAccesoPorRolTest extends CIUnitTestCase
         $ultima = end($nombres);
 
         $this->assertSame(
-            '2026-10-09-120200_AgregarTipoResolucionCuadroYAmpliacion.php',
+            '2026-10-14-120000_AddNeutralizacionAbiertaUnica.php',
             $ultima,
-            'E.6 reorganiza accesos y navegación: su cambio de esquema más reciente es el de resoluciones.'
+            'El cambio de esquema más reciente del proyecto es el de neutralizaciones (BLOQUE 5).'
         );
     }
 }

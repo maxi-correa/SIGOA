@@ -31,6 +31,12 @@ class EstadoObraModel extends Model
         'NEUTRALIZADA',
     ];
 
+    /** Estado desde el que puede iniciarse una neutralización (BLOQUE 5). */
+    public const ESTADO_EN_EJECUCION = 'EN EJECUCIÓN';
+
+    /** Estado en el que puede registrarse el reinicio de una obra (BLOQUE 5). */
+    public const ESTADO_NEUTRALIZADA = 'NEUTRALIZADA';
+
     protected $table = 'estados_obra';
 
     protected $primaryKey = 'id';
@@ -107,5 +113,26 @@ class EstadoObraModel extends Model
         }
 
         return false;
+    }
+
+    /**
+     * Indica si un estado de obra permite iniciar una neutralización.
+     *
+     * Solo una obra en ejecución puede neutralizarse (BLOQUE 5). La
+     * comparación es por nombre normalizado, sin depender de los ids.
+     */
+    public function permiteIniciarNeutralizacion(string $estadoNombre): bool
+    {
+        return mb_strtoupper(trim($estadoNombre)) === mb_strtoupper(self::ESTADO_EN_EJECUCION);
+    }
+
+    /**
+     * Indica si un estado de obra permite registrar su reinicio.
+     *
+     * Solo una obra neutralizada puede reanudar su ejecución (BLOQUE 5).
+     */
+    public function permiteReiniciarNeutralizacion(string $estadoNombre): bool
+    {
+        return mb_strtoupper(trim($estadoNombre)) === mb_strtoupper(self::ESTADO_NEUTRALIZADA);
     }
 }

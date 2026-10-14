@@ -180,16 +180,22 @@ class PlazoObra
     }
 
     /**
-     * Fecha de finalización contractual: inicio + plazo vigente en días.
+     * Fecha de finalización contractual: inicio + plazo vigente + días
+     * neutralizados cerrados.
      *
      * Devuelve null cuando faltan datos iniciales válidos o cuando la
      * obra tiene una neutralización abierta: en ese caso la fecha no
      * puede presentarse como vigente mientras no se calcule el reinicio.
+     *
+     * Los días neutralizados corresponden a los períodos ya cerrados
+     * (BLOQUE 5) y se suman a la misma convención de días corridos que
+     * el plazo: fecha de inicio + N días, sin restar uno.
      */
     public static function fechaFinalizacion(
         ?string $fechaInicio,
         ?int $plazoVigenteDias,
-        bool $neutralizacionAbierta = false
+        bool $neutralizacionAbierta = false,
+        int $diasNeutralizados = 0
     ): ?string {
         if ($neutralizacionAbierta || $fechaInicio === null || $plazoVigenteDias === null) {
             return null;
@@ -199,6 +205,93 @@ class PlazoObra
             return null;
         }
 
-        return self::sumarDias($fechaInicio, $plazoVigenteDias);
+        return self::sumarDias($fechaInicio, $plazoVigenteDias + $diasNeutralizados);
+    }
+
+    /**
+     * Diferencia en días corridos entre dos fechas almacenadas (Y-m-d).
+     *
+     * Devuelve la cantidad de días entre `desde` y `hasta` sin incluir
+     * ningún día extra: del 01/03/2026 al 11/03/2026 son 10 días. Puede
+     * ser negativa si `hasta` es anterior a `desde`; los consumidores
+     * deciden cómo tratarla. Devuelve null si alguna fecha es inválida.
+     */
+    public static function diasEntre(?string $desde, ?string $hasta): ?int
+    {
+        $desde = trim((string) $desde);
+        $hasta = trim((string) $hasta);
+
+        if ($desde === '' || $hasta === '') {
+            return null;
+        }
+
+        $inicio = DateTime::createFromFormat('Y-m-d', $desde);
+        $fin    = DateTime::createFromFormat('Y-m-d', $hasta);
+
+        if ($inicio === false || $fin === false) {
+            return null;
+        }
+
+        /* Comparación estricta: rechaza fechas como 2026-02-31, que PHP
+           desplazaría automáticamente. */
+        if ($inicio->format('Y-m-d') !== $desde || $fin->format('Y-m-d') !== $hasta) {
+            return null;
+        }
+
+        $diferencia = $inicio->diff($fin);
+
+        return $diferencia->invert === 1
+            ? -(int) $diferencia->days
+            : (int) $diferencia->days;
+    }
+
+    /**
+     * Días neutralizados de un período.
+     *
+     * Un período abierto (`fecha_reinicio` nula) no aporta todavía una
+     * cantidad definitiva y devuelve null. El día del reinicio no se
+     * cuenta: se computa la diferencia entre la fecha de inicio de la
+     * neutralización y la de reinicio. Devuelve null si el período tiene
+     * una duración negativa o fechas inválidas.
+     */
+    public static function diasNeutralizados(?string $fechaInicio, ?string $fechaReinicio): ?int
+    {
+        if ($fechaReinicio === null || trim((string) $fechaReinicio) === '') {
+            return null;
+        }
+
+        $dias = self::diasEntre($fechaInicio, $fechaReinicio);
+
+        if ($dias === null || $dias < 0) {
+            return null;
+        }
+
+        return $dias;
+    }
+
+    /**
+     * Total de días neutralizados acumulados en los períodos cerrados.
+     *
+     * Los períodos abiertos no suman. Es un dato derivado: se recalcula
+     * desde las filas almacenadas y nunca se persiste.
+     *
+     * @param list<object> $periodos Filas con `fecha_inicio` y `fecha_reinicio`.
+     */
+    public static function totalNeutralizado(array $periodos): int
+    {
+        $total = 0;
+
+        foreach ($periodos as $periodo) {
+            $dias = self::diasNeutralizados(
+                $periodo->fecha_inicio ?? null,
+                $periodo->fecha_reinicio ?? null
+            );
+
+            if ($dias !== null) {
+                $total += $dias;
+            }
+        }
+
+        return $total;
     }
 }

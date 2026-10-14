@@ -362,9 +362,9 @@ final class InspectorInspeccionesGaleriaTest extends CIUnitTestCase
         sort($nombres);
 
         $this->assertSame(
-            '2026-10-09-120200_AgregarTipoResolucionCuadroYAmpliacion.php',
+            '2026-10-14-120000_AddNeutralizacionAbiertaUnica.php',
             end($nombres),
-            'E.5 no introduce cambios de esquema: el más reciente es el de resoluciones.'
+            'El cambio de esquema más reciente del proyecto es el de neutralizaciones (BLOQUE 5).'
         );
 
         $sincronizador = $this->leerApp('Controllers/Inspector/Sincronizar.php');

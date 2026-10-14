@@ -101,8 +101,19 @@ class Obras extends BaseController
 
         $errores = $this->validarDatosObra($datos, $obraId);
 
-        if ($estadoId === null || (new EstadoObraModel())->find($estadoId) === null) {
+        $estadoDestino = ($estadoId === null) ? null : (new EstadoObraModel())->find($estadoId);
+
+        if ($estadoDestino === null) {
             $errores[] = 'El estado seleccionado no existe.';
+        } else {
+            $errorTransicion = $this->validarTransicionEstadoNeutralizacion(
+                $obraId,
+                (string) $estadoDestino->estado
+            );
+
+            if ($errorTransicion !== null) {
+                $errores[] = $errorTransicion;
+            }
         }
 
         if ($errores !== []) {
@@ -170,12 +181,25 @@ class Obras extends BaseController
             $resoluciones
         );
 
-        $neutralizacionAbierta = (new NeutralizacionModel())->tieneAbierta($id);
+        /* Neutralizaciones (BLOQUE 5): los períodos cerrados suman días a
+           la fecha de finalización y una neutralización abierta la suspende. */
+        $neutralizaciones      = (new NeutralizacionModel())->listarPorObra($id);
+        $neutralizacionAbierta = false;
+
+        foreach ($neutralizaciones as $periodo) {
+            if ($periodo->fecha_reinicio === null) {
+                $neutralizacionAbierta = true;
+                break;
+            }
+        }
+
+        $totalNeutralizadoDias = PlazoObra::totalNeutralizado($neutralizaciones);
 
         $fechaFin = PlazoObra::fechaFinalizacion(
             $obra->fecha_inicio !== null ? (string) $obra->fecha_inicio : null,
             $plazo['vigente_dias'],
-            $neutralizacionAbierta
+            $neutralizacionAbierta,
+            $totalNeutralizadoDias
         );
 
         $session = session();
@@ -205,6 +229,8 @@ class Obras extends BaseController
             'monto_vigente'            => $monto['vigente'],
             'tiene_ajustes_monto'      => $monto['tiene_ajustes'],
             'neutralizacion_abierta'   => $neutralizacionAbierta,
+            'neutralizaciones'         => $neutralizaciones,
+            'total_neutralizado_dias'  => $totalNeutralizadoDias,
             'fecha_fin'         => $fechaFin,
             'plazo_inicial_confirmado' => (int) ($obra->plazo_inicial_confirmado ?? 0) === 1,
             'puede_editar'      => array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $roles) !== [],
@@ -496,6 +522,33 @@ class Obras extends BaseController
         }
 
         return $errores;
+    }
+
+    /**
+     * Impide transiciones de estado que eludan el ciclo de neutralización.
+     *
+     * El estado NEUTRALIZADA se asigna registrando una neutralización y se
+     * abandona registrando su reinicio, siempre desde el módulo de
+     * neutralizaciones. La edición general de datos de obra no debe poder
+     * forzar ese estado ni sacar a la obra de él mientras haya un período
+     * abierto. Cualquier otro estado se rige por las reglas ya existentes.
+     *
+     * @return string|null mensaje de error, o `null` si la transición es admisible
+     */
+    private function validarTransicionEstadoNeutralizacion(int $obraId, string $estadoDestino): ?string
+    {
+        $destino      = mb_strtoupper(trim($estadoDestino));
+        $tieneAbierta = (new NeutralizacionModel())->tieneAbierta($obraId);
+
+        if ($destino === mb_strtoupper(EstadoObraModel::ESTADO_NEUTRALIZADA) && ! $tieneAbierta) {
+            return 'El estado NEUTRALIZADA se asigna registrando una neutralización; no puede establecerse desde la edición de la obra.';
+        }
+
+        if ($destino !== mb_strtoupper(EstadoObraModel::ESTADO_NEUTRALIZADA) && $tieneAbierta) {
+            return 'La obra tiene una neutralización abierta: registre el reinicio antes de cambiar su estado.';
+        }
+
+        return null;
     }
 
     /**

@@ -41,6 +41,7 @@ var SHELL_ASSETS = [
     '/assets/css/components/forms.css',
     '/assets/css/components/modal.css',
     '/assets/css/components/navbar.css',
+    '/assets/css/components/neutralizacion-estado.css',
     '/assets/css/components/sidebar.css',
     '/assets/css/components/tables.css',
     '/assets/css/pages/inspector-dashboard.css',

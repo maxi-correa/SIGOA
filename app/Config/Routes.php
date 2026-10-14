@@ -97,6 +97,19 @@ $routes->post('/obras/resoluciones/eliminar', 'Resoluciones::eliminar', [
 ]);
 
 // =============================================
+// NEUTRALIZACIONES DE OBRA — consulta y gestión (ADMIN y SUPERADMIN; consulta solo lectura)
+// =============================================
+$routes->get('/obras/neutralizaciones/(:num)', 'Neutralizaciones::index/$1', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR,CONSULTA'],
+]);
+$routes->post('/obras/neutralizaciones/crear', 'Neutralizaciones::crear', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->post('/obras/neutralizaciones/reiniciar', 'Neutralizaciones::reiniciar', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+
+// =============================================
 // REPRESENTANTES TÉCNICOS — CRUD (ADMIN y SUPERADMIN)
 // =============================================
 $routes->get('/representantes', 'RepresentantesTecnicos::index', [

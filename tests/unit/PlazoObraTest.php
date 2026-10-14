@@ -65,4 +65,56 @@ final class PlazoObraTest extends CIUnitTestCase
         $this->assertSame('2026-07-11', PlazoObra::sumarDias('2026-03-15', 118));
         $this->assertSame('2026-03-15', PlazoObra::sumarDias('2026-03-15', 0));
     }
+
+    public function testDiasEntreCuentaDiasCorridosSinIncluirExtremos(): void
+    {
+        $this->assertSame(10, PlazoObra::diasEntre('2026-03-01', '2026-03-11'));
+        $this->assertSame(0, PlazoObra::diasEntre('2026-03-01', '2026-03-01'));
+        $this->assertSame(-10, PlazoObra::diasEntre('2026-03-11', '2026-03-01'));
+    }
+
+    public function testDiasEntreConFechasInvalidasDevuelveNull(): void
+    {
+        $this->assertNull(PlazoObra::diasEntre(null, '2026-03-11'));
+        $this->assertNull(PlazoObra::diasEntre('2026-03-01', ''));
+        $this->assertNull(PlazoObra::diasEntre('2026-02-31', '2026-03-11'));
+        $this->assertNull(PlazoObra::diasEntre('texto', '2026-03-11'));
+    }
+
+    public function testDiasNeutralizados(): void
+    {
+        $this->assertSame(10, PlazoObra::diasNeutralizados('2026-03-01', '2026-03-11'));
+    }
+
+    public function testDiasNeutralizadosAbiertaODuracionNegativaDevuelveNull(): void
+    {
+        $this->assertNull(PlazoObra::diasNeutralizados('2026-03-01', null));
+        $this->assertNull(PlazoObra::diasNeutralizados('2026-03-11', '2026-03-01'));
+        $this->assertNull(PlazoObra::diasNeutralizados('texto', '2026-03-11'));
+    }
+
+    public function testTotalNeutralizadoSumaSoloPeriodosCerrados(): void
+    {
+        $periodos = [
+            (object) ['fecha_inicio' => '2026-03-01', 'fecha_reinicio' => '2026-03-11'],
+            (object) ['fecha_inicio' => '2026-05-01', 'fecha_reinicio' => null],
+            (object) ['fecha_inicio' => '2026-06-01', 'fecha_reinicio' => '2026-06-06'],
+        ];
+
+        $this->assertSame(15, PlazoObra::totalNeutralizado($periodos));
+        $this->assertSame(0, PlazoObra::totalNeutralizado([]));
+    }
+
+    public function testFechaFinalizacionSumaLosDiasNeutralizados(): void
+    {
+        $this->assertSame(
+            '2026-09-10',
+            PlazoObra::fechaFinalizacion('2026-02-02', 210, false, 10)
+        );
+    }
+
+    public function testFechaFinalizacionConNeutralizacionAbiertaEsNull(): void
+    {
+        $this->assertNull(PlazoObra::fechaFinalizacion('2026-02-02', 210, true, 10));
+    }
 }

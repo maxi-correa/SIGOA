@@ -1,0 +1,166 @@
+/* ===================================================================
+   SIGOA — Página: Neutralizaciones de obra (BLOQUE 5)
+   =================================================================== */
+
+.neutralizaciones-requerido {
+    color: var(--color-danger);
+    font-weight: 700;
+}
+
+.neutralizaciones-aviso {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    margin: 0 0 var(--space-md);
+}
+
+.neutralizaciones-aviso i {
+    margin-right: 0.3rem;
+}
+
+.neutralizaciones-tabla-seccion {
+    margin-top: var(--space-lg);
+}
+
+.neutralizaciones-tabla-encabezado {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-md);
+}
+
+.neutralizaciones-tabla-encabezado .ficha-seccion-titulo {
+    margin: 0;
+}
+
+.neutralizaciones-tabla-encabezado .btn {
+    width: auto;
+}
+
+.neutralizaciones-tabla {
+    min-width: 52rem;
+}
+
+.neutralizaciones-col-dias {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.neutralizaciones-col-acciones {
+    text-align: right;
+    white-space: nowrap;
+    width: 1%;
+}
+
+.neutralizaciones-observaciones {
+    max-width: 20rem;
+    overflow-wrap: anywhere;
+}
+
+.neutralizaciones-tabla-vacia {
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+.neutralizaciones-inmutable {
+    color: var(--color-text-secondary);
+}
+
+/* --- Acciones de fila --- */
+.neutralizaciones-acciones {
+    display: inline-flex;
+    gap: 0.35rem;
+    justify-content: flex-end;
+}
+
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-primary);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.btn-icon:hover:not(:disabled) {
+    background-color: var(--color-primary);
+    color: var(--color-text-on-primary);
+    border-color: var(--color-primary);
+}
+
+.btn-icon:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* --- Resumen de la obra --- */
+.neutralizaciones-resumen {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.neutralizaciones-resumen-dato {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+}
+
+.neutralizaciones-resumen-dato dt {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: var(--space-xs);
+}
+
+.neutralizaciones-resumen-dato dd {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+}
+
+/* --- Formulario --- */
+.neutralizaciones-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-md);
+}
+
+/* --- Errores de validación en cliente --- */
+.neutralizaciones-error {
+    color: var(--color-danger);
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+    margin-top: var(--space-xs);
+}
+
+.form-control.is-invalid {
+    border-color: var(--color-danger);
+}
+
+@media (max-width: 580px) {
+    .neutralizaciones-tabla-encabezado .btn {
+        width: 100%;
+    }
+
+    .neutralizaciones-form-grid {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+}

@@ -113,7 +113,7 @@ Adicionalmente, se encuentra implementada la infraestructura de autenticación y
 * página **Gestión de usuarios** (listado, edición de datos personales y alta de usuarios) para SUPERADMINISTRADOR y ADMINISTRADOR — ver §46;
 * refactor de `getDashboardPath()` y `getRolPrincipal()` a `BaseController`;
 * **dashboard administrativo** (SUPERADMINISTRADOR y ADMINISTRADOR) con la sección **Obras** como eje principal — listado, paginación y alta inicial de obras — ver §47;
-* **edición de datos básicos de obras** — modal reutilizable de alta/edición, estado libre en esta etapa, unicidad de expediente con exclusión — ver §48;
+* **edición de datos básicos de obras** — modal reutilizable de alta/edición, estado editable salvo las transiciones ligadas al ciclo de neutralización (§69.5), unicidad de expediente con exclusión — ver §48;
 * **Fase D.1** — fundación PWA/offline: manifest, Service Worker de app shell, registro de SW, capa propia de IndexedDB (base `SIGOA`, stores `inspecciones`/`fotografias`/`operaciones`), UUID v4 en el cliente y estado online/offline en la topbar — ver §53;
 * **Fase D.2** — nueva inspección 100 % local del inspector móvil: autorización en servidor (estado F.7 + asignación vigente), guardado en IndexedDB (v2), captura/optimización/thumbnail de fotografías en el cliente y vista de inspecciones locales — ver §54;
 * **Fase D.3** — sincronización servidor de inspecciones capturadas offline: endpoint `POST /inspector/sincronizar/inspecciones` idempotente por uuid, autorización histórica del inspector (§52.4), validación del payload, trazabilidad en `operaciones_sincronizacion`, botón "Sincronizar" en la vista de obra y estados `SINCRONIZADA`/`ERROR` en las inspecciones locales — ver §55.
@@ -121,6 +121,7 @@ Adicionalmente, se encuentra implementada la infraestructura de autenticación y
 * **Bloque 2 — trámites administrativos (resoluciones)** — gestión de las resoluciones de una obra: registro de trámites que pueden quedar incompletos, confirmación explícita, inmutabilidad de las resoluciones confirmadas (no se editan ni eliminan), observaciones exigidas según el tipo y restricción de registro a obras EN EJECUCIÓN o NEUTRALIZADA — ver §66;
 * **Bloque 3 — plazo contractual vigente** — cálculo derivado del plazo vigente (plazo inicial confirmado más días de ampliaciones confirmadas) y de la fecha de finalización, con desglose en Ver Obra; la fecha de finalización queda sin calcular mientras exista una neutralización abierta — ver §67.
 * **Bloque 4 — monto contractual vigente** — cálculo derivado del monto vigente (monto de contrato original más ajustes económicos de cuadros comparativos confirmados), **porcentaje de aumento o disminución** respecto del contrato original, persistencia consistente al confirmar resoluciones y desglose en Ver Obra y Ver Certificados; los certificados ya emitidos conservan sus importes almacenados — ver §68.
+* **Bloque 5 — neutralizaciones y reinicios** — registro transaccional de una neutralización (nace confirmada e inmutable y pasa la obra a NEUTRALIZADA) y de su reinicio (vuelve la obra a EN EJECUCIÓN), cómputo derivado de los días neutralizados, suma de esos días a la fecha de finalización, una sola neutralización abierta por obra garantizada por restricción de base de datos, períodos sin superposición y un ciclo que no puede eludirse desde la edición general de la obra — ver §69.
 
 ---
 
@@ -139,7 +140,6 @@ Quedan pendientes, entre otras:
 * funcionamiento offline completo;
 * sincronización;
 * gestión documental;
-* neutralizaciones y reinicios (registro, edición y reinicio; la consulta de si una obra tiene una neutralización abierta está implementada — ver §67);
 * recepciones;
 * certificados;
 * auditoría;
@@ -325,7 +325,7 @@ La neutralización representa una situación especial durante la ejecución:
 
 `EN EJECUCIÓN ↔ NEUTRALIZADA`
 
-El sistema deberá impedir transiciones inválidas cuando se implemente la lógica correspondiente.
+El sistema deberá impedir transiciones inválidas cuando se implemente la lógica correspondiente. El ciclo `EN EJECUCIÓN ↔ NEUTRALIZADA` ya está protegido (Bloque 5, §69.5): no puede forzarse ni eludirse desde la edición general de la obra. El resto de las transiciones permanece como edición libre por ahora.
 
 ---
 
@@ -677,7 +677,7 @@ La neutralización debe conservar:
 
 La neutralización no debe eliminar ni sobrescribir la historia de ejecución.
 
-**Estado implementado (Bloque 3):** solo se consulta si la obra tiene una **neutralización abierta** (una fila en `neutralizaciones` con `fecha_reinicio IS NULL`). Mientras exista una neutralización abierta, el cálculo del plazo no presenta una fecha de finalización como vigente. El **cómputo de días neutralizados** y el **registro del reinicio** no están implementados y quedan para un bloque posterior — ver §67.6.
+**Estado implementado (Bloque 5):** se registran las neutralizaciones y los reinicios. Una neutralización nace confirmada y es inmutable; su registro pasa la obra a NEUTRALIZADA y el reinicio la devuelve a EN EJECUCIÓN. Los días neutralizados son un dato derivado que se suma a la fecha de finalización, y mientras exista una neutralización abierta la fecha no se presenta como vigente. Una obra no puede tener más de una neutralización abierta a la vez ni períodos superpuestos, y el ciclo no puede eludirse desde la edición general de la obra. La **documentación** asociada (`documento_id`) queda habilitada en la estructura pero sin interfaz de carga — ver §69.
 
 ---
 
@@ -1089,7 +1089,7 @@ El principio de avance es el mismo: desarrollar incrementalmente, por bloques pe
 
 No se debe reconstruir la base de datos desde cero para continuar el desarrollo.
 
-Las funcionalidades aún pendientes se enumeran en §4.2 y §37. Entre las previsiblemente próximas se encuentran las mencionadas allí (recepción de neutralizaciones y reinicios, certificados, recepciones, auditoría, alertas y el mecanismo de comunicación definitivo). Esta lista no es un compromiso de orden ni de alcance.
+Las funcionalidades aún pendientes se enumeran en §4.2 y §37. Entre las previsiblemente próximas se encuentran las mencionadas allí (certificados, recepciones, auditoría, alertas y el mecanismo de comunicación definitivo). Esta lista no es un compromiso de orden ni de alcance.
 
 ---
 
@@ -1438,7 +1438,7 @@ Al hacer clic en **[ lápiz ] Editar** en la tabla, JavaScript captura los atrib
 
 ## 48.3 Campos editables
 
-Los campos editables son los mismos que el alta, más el **estado**, que en edición sí puede modificarse libremente:
+Los campos editables son los mismos que el alta, más el **estado**, que en edición puede modificarse (con la salvedad del ciclo de neutralización, §69.5):
 
 * N.º de Expediente (obligatorio)
 * Nombre de obra (obligatorio)
@@ -1446,7 +1446,7 @@ Los campos editables son los mismos que el alta, más el **estado**, que en edic
 * Empresa (opcional)
 * Tipo de Licitación (opcional)
 * N.º de Licitación (opcional)
-* Estado (editable, del catálogo completo)
+* Estado (editable, del catálogo completo; ver §69.5 para las transiciones con NEUTRALIZADA)
 
 El código `OBR-XXXXXX` se muestra como dato identificatorio informativo, pero nunca se incluye como campo editable ni se envía para modificación.
 
@@ -1466,6 +1466,8 @@ En esta etapa inicial del sistema, el **estado sí puede modificarse libremente*
 
 La primera carga de SIGOA requiere registrar obras existentes que pueden encontrarse en cualquier estado. Por eso el backend acepta cualquier `estado_obra_id` válido del catálogo durante la edición.
 
+> **Excepción (Bloque 5, §69.5):** las transiciones que involucran **NEUTRALIZADA** quedan sujetas al ciclo de neutralización. No puede forzarse NEUTRALIZADA sin un período abierto ni abandonarse ese estado mientras exista un período abierto; eso se resuelve registrando el reinicio. El resto de los estados sigue siendo de edición libre.
+
 Esto puede cambiar en fases futuras cuando se implementen transiciones controladas con actas.
 
 Los estados disponibles son: `PREVIO INICIO`, `EN EJECUCIÓN`, `NEUTRALIZADA`, `EN PLAZO DE CONSERVACIÓN`, `FINALIZADA`.
@@ -1478,7 +1480,7 @@ Las validaciones para edición se reutilizan del alta con una única diferencia 
 
 **Catálogos opcionales**: la integridad referencial de `barrio_id`, `empresa_id` y `tipo_licitacion_id` se valida como en el alta.
 
-**Estado obligatorio en edición**: `estado_obra_id` es requerido y se valida existencia en `estados_obra`.
+**Estado obligatorio en edición**: `estado_obra_id` es requerido y se valida existencia en `estados_obra`. Además se valida la transición frente al ciclo de neutralización (§69.5): no se admite forzar NEUTRALIZADA sin período abierto ni abandonarla con un período abierto.
 
 **Número de licitación**: no tiene restricción de unicidad en base de datos. Se acepta cualquier valor, incluido NULL.
 
@@ -1494,7 +1496,7 @@ $routes->post('/obras/actualizar', 'Obras::actualizar', [
 
 El controlador `Obras` tiene ahora dos métodos públicos separados: `crear()` (alta) y `actualizar()` (edición), con validación compartida privada (`validarDatosObra()`).
 
-`actualizar()` recibe el `id` de la obra como campo `obra_id` en POST. Valida la existencia de la obra, aplica las validaciones con exclusión de expediente, ejecuta la actualización, y actualiza `updated_at` sin modificar `created_at`.
+`actualizar()` recibe el `id` de la obra como campo `obra_id` en POST. Valida la existencia de la obra, aplica las validaciones con exclusión de expediente, valida la transición de estado frente al ciclo de neutralización (`validarTransicionEstadoNeutralizacion()`, §69.5), ejecuta la actualización, y actualiza `updated_at` sin modificar `created_at`.
 
 ### Extracción de validación
 
@@ -1528,7 +1530,7 @@ El sistema de reapertura del modal tras error de validación distingue los modos
 * edición de datos básicos de obras mediante modal reutilizable;
 * botón **[ lápiz ] Editar** visible solo para ADMINISTRADOR/SUPERADMINISTRADOR;
 * código OBR-XXXXXX como dato informativo no editable;
-* estado editable libremente (carga inicial);
+* estado editable libremente (carga inicial), salvo las transiciones del ciclo de neutralización (§69.5);
 * unicidad de expediente con exclusión de la propia obra;
 * actualización correcta de `updated_at` sin modificar `created_at`;
 * protección por roles en backend y vista;
@@ -4450,16 +4452,13 @@ embebidos (estilos en `public/assets/css/pages/ficha-obra.css`).
 
 ### 67.5 Fecha de finalización y neutralización abierta
 
-Si la obra tiene una **neutralización abierta** (una fila en `neutralizaciones` con `fecha_reinicio IS NULL`),
-`PlazoObra::fechaFinalizacion` devuelve `null` y la ficha muestra la fecha como `—`, con un aviso de que la
-fecha no puede presentarse como vigente hasta registrar el reinicio. La detección se realiza con
-`NeutralizacionModel::tieneAbierta` (modelo de solo lectura).
+`PlazoObra::fechaFinalizacion` recibe además los **días neutralizados** acumulados de los períodos cerrados y
+los suma a la fecha. La detección de la neutralización abierta se realiza sobre la lista de períodos de la obra
+(`NeutralizacionModel::listarPorObra`).
 
 ### 67.6 Fuera de alcance
 
-* **Cómputo de los días neutralizados**: los períodos neutralizados no se descuentan del plazo; el reinicio y
-  el cálculo asociado se implementarán en un bloque posterior (§24).
-* **Registro, edición y reinicio de neutralizaciones**: siguen pendientes (§4.2).
+* **Cómputo de los días neutralizados y registro del reinicio**: implementados en el Bloque 5 (§69).
 * Recálculo del **monto contractual vigente** a partir de los certificados, la transición de estados de
   obra y la auditoría funcional. El recálculo del monto a partir de las **resoluciones** se implementó en el
   Bloque 4 (§68).
@@ -4467,9 +4466,9 @@ fecha no puede presentarse como vigente hasta registrar el reinicio. La detecci�
 ### 67.7 Componentes y pruebas
 
 * `App\Libraries\PlazoObra` — `calcularVigente()` y `fechaFinalizacion()` (además de la conversión de plazo y
-  el manejo de fechas ya existentes).
+  el manejo de fechas ya existentes). El Bloque 5 amplió `fechaFinalizacion()` con los días neutralizados.
 * `App\Libraries\ResolucionObra` — `ampliaPlazo()` y `TIPOS_AMPLIACION_PLAZO`.
-* `App\Models\NeutralizacionModel` — `tieneAbierta()` (nuevo, solo lectura).
+* `App\Models\NeutralizacionModel` — detección de la neutralización abierta (ampliado en el Bloque 5, §69).
 * `App\Controllers\Obras::ver()` — integración del cálculo.
 * `tests/unit/PlazoVigenteObraTest.php` (12) — cálculo sin/con ampliaciones, tipos que no amplían, combinada
   que suma una sola vez, días inválidos, fecha con cambio de mes/año, nulidad de la fecha con neutralización
@@ -4613,3 +4612,155 @@ servidor.
 No se creó ninguna migración. Suite completa: **593 pruebas / 2440 aserciones**. Quedan **2 fallos
 preexistentes** en `UsuariosGestionTest` que dependen del orden de ejecución (pasan aislados); son ajenos a los
 Bloques 2, 3 y 4 y no se modificaron.
+
+---
+
+## 69. Neutralizaciones y reinicios (Bloque 5) — registro transaccional, inmutabilidad y cómputo de días
+
+El Bloque 5 implementa la **neutralización** y el **reinicio** de una obra: registra el período de suspensión
+de la ejecución, devuelve la obra a ejecución, computa los **días neutralizados** como dato derivado y los suma
+a la fecha de finalización del Bloque 3. Una neutralización **nace confirmada e inmutable** y **una obra no
+puede tener más de una neutralización abierta a la vez**, garantizado por una restricción de base de datos.
+
+### 69.1 Regla de negocio
+
+* **Días neutralizados de un período** = diferencia en días corridos entre `fecha_inicio` (de la
+  neutralización) y `fecha_reinicio`, **sin contar el día del reinicio** (p. ej. 01/03 → 11/03 = 10 días). Un
+  período **abierto** (`fecha_reinicio IS NULL`) no aporta todavía una cantidad definitiva.
+* **Fecha de finalización** = `fecha_inicio` de la obra + `plazo_vigente` + **total de días neutralizados de
+  los períodos cerrados**. Los períodos cerrados **suman**; mientras exista una neutralización **abierta**, la
+  fecha de finalización queda **suspendida** (`null`, se presenta como `—`). El plazo vigente **no** incluye
+  los días neutralizados: se muestran por separado en el desglose.
+* Solo una obra **EN EJECUCIÓN** puede neutralizarse; solo una obra **NEUTRALIZADA** puede reiniciarse.
+* La neutralización requiere que el **plazo inicial** de la obra esté **confirmado** (Bloque 1). La fecha de
+  neutralización no puede ser anterior al inicio de la obra; la fecha de reinicio no puede ser anterior a la
+  de la neutralización.
+* **Los períodos no pueden superponerse.** Una neutralización nueva no puede comenzar antes del `fecha_reinicio`
+  del **último período cerrado** de la obra (se admite que comience el mismo día). Esto evita que los días se
+  computen dos veces. Se mantiene la regla de **duración cero**: si `fecha_inicio` y `fecha_reinicio` coinciden,
+  el período aporta 0 días.
+* Los días neutralizados **no se descuentan** del plazo ni sobrescriben el plazo original: son un dato
+  derivado que se recalcula desde las filas almacenadas y nunca se persiste.
+
+### 69.2 Dónde se calcula
+
+El cómputo se centraliza en `App\Libraries\PlazoObra`, como funciones puras sin acceso a base de datos:
+
+* `PlazoObra::diasEntre($desde, $hasta)` — diferencia en días corridos (puede ser negativa), con validación
+  estricta de formato (rechaza `2026-02-31`); devuelve `null` si alguna fecha es inválida.
+* `PlazoObra::diasNeutralizados($fechaInicio, $fechaReinicio)` — devuelve `null` si el período está abierto,
+  si la duración es negativa o si las fechas son inválidas.
+* `PlazoObra::totalNeutralizado($periodos)` — suma solo los períodos cerrados.
+* `PlazoObra::fechaFinalizacion($fechaInicio, $plazoVigenteDias, $neutralizacionAbierta, $diasNeutralizados)` —
+  ampliada con los días neutralizados, manteniendo compatibilidad hacia atrás.
+
+`Obras::ver()` y `Neutralizaciones::index()` resuelven los períodos con
+`NeutralizacionModel::listarPorObra()`; la vista solo presenta el resultado y **no duplica la regla en
+JavaScript**.
+
+### 69.3 Registro transaccional e inmutabilidad
+
+Una neutralización no tiene un estado "pendiente": **nace confirmada**. El registro es una **única
+transacción** que crea la fila y cambia el estado de la obra a NEUTRALIZADA
+(`Neutralizaciones::crear()`); si algo falla, no queda una fila sin el cambio de estado ni al revés. El
+reinicio completa `fecha_reinicio` y devuelve la obra a EN EJECUCIÓN en otra transacción
+(`Neutralizaciones::reiniciar()`).
+
+La atomicidad no depende solo de `transComplete()`: ante un **fallo lógico posterior a la escritura** (por
+ejemplo, que no exista el estado de destino en el catálogo) el código ejecuta un **`transRollback()` explícito**
+antes de salir, de modo que ninguna escritura parcial se confirme. La fecha se revalida **dentro** de la
+transacción, tras bloquear la obra, para no aceptar una petición basada en datos ya desactualizados.
+
+`NeutralizacionModel` bloquea `update()`, `delete()`, `insertBatch()` y `updateBatch()` (siempre devuelven
+`false`): una vez registrada, la neutralización **no se edita ni se elimina**, y la escritura masiva tampoco
+puede eludir el ciclo transaccional. El reinicio se aplica con un `UPDATE ... WHERE fecha_reinicio IS
+NULL`, de modo que **no puede alterar un período ya cerrado** ni registrar dos reinicios del mismo período.
+No se agregó una columna `confirmada`: el propio registro transaccional es la confirmación.
+
+### 69.4 Una sola neutralización abierta por obra
+
+Dos comprobaciones se refuerzan mutuamente:
+
+* **Aplicación:** dentro de la transacción se revalida el estado de la obra y la ausencia de una
+  neutralización abierta (`tieneAbierta`), y en MySQL/MariaDB se bloquea la fila de la obra (`SELECT ... FOR
+  UPDATE`); en SQLite (pruebas) la transacción serializa por sí misma.
+* **Base de datos:** la migración `2026-10-14-120000_AddNeutralizacionAbiertaUnica` agrega una columna
+  generada almacenada `abierta` (`TINYINT GENERATED ALWAYS AS (IF(fecha_reinicio IS NULL, 1, NULL)) STORED`)
+  y un índice **único** `(obra_id, abierta)`. Como los `NULL` no colisionan, se admiten varios períodos
+  cerrados pero se impide una segunda fila abierta para la misma obra, aun bajo concurrencia. La migración es
+  idempotente y se detiene informando las obras si ya existieran duplicados.
+
+### 69.5 Estados y permisos
+
+La transición implementada es `EN EJECUCIÓN ↔ NEUTRALIZADA`. `EstadoObraModel` expone
+`ESTADO_EN_EJECUCION`, `ESTADO_NEUTRALIZADA`, `permiteIniciarNeutralizacion()` y
+`permiteReiniciarNeutralizacion()` (comparación por nombre normalizado, sin depender de los ids).
+
+Autorización en las rutas (`RoleFilter`): consulta para SUPERADMINISTRADOR, ADMINISTRADOR y CONSULTA; escritura
+(`crear`, `reiniciar`) solo para SUPERADMINISTRADOR y ADMINISTRADOR. Las reglas se revalidan en el servidor: no
+se confía en el estado enviado por el cliente.
+
+El **ciclo de neutralización no puede eludirse desde la edición general de la obra**: `Obras::actualizar()`
+rechaza forzar el estado **NEUTRALIZADA** sin un período abierto y rechaza abandonar ese estado mientras exista
+un período abierto (debe registrarse el reinicio). El resto de los estados sigue las reglas ya existentes. Así
+se preserva el invariante *NEUTRALIZADA ⇔ período abierto*.
+
+### 69.6 Interfaz
+
+* Pantalla de consulta y gestión `Views/obras/neutralizaciones.php` (ruta `/obras/neutralizaciones/{id}`),
+  accesible desde la ficha mediante el botón **Ver Neutralizaciones**.
+* Historial de períodos (N°, fechas, **días**, estado **Abierta/Cerrada** y observaciones) con **Registrar
+  neutralización** (cuando el estado lo permite) y **Registrar reinicio** sobre la fila abierta.
+* Validación de cliente como ayuda (fechas obligatorias y coherentes); la autoridad es el servidor.
+* La **ficha de obra** (`Views/obras/ficha.php`) incorpora el campo calculado **Días neutralizados**, la línea
+  **Días neutralizados computados** en el desglose del plazo y una tabla **Neutralizaciones** con el total.
+* El pill de estado del período vive en el componente
+  `public/assets/css/components/neutralizacion-estado.css` (reutilizado por la ficha y la pantalla), y los
+  estilos/JS de página en `public/assets/css/pages/obra-neutralizaciones.css` y
+  `public/assets/js/pages/obra-neutralizaciones.js`. Sin CSS ni JavaScript embebidos.
+
+### 69.7 Fuera de alcance
+
+* **Auditoría funcional** de neutralizaciones y reinicios.
+* **Documentación** de la neutralización: la columna `documento_id` existe y es admitida por el modelo, pero no
+  hay interfaz de carga documental (§4.2).
+* **Edición o eliminación** de una neutralización registrada (por diseño, inmutable).
+* Transición automática de estados de obra por fuera del alta y el reinicio; alertas y notificaciones.
+* Participación de las recepciones o los certificados en el cómputo del plazo.
+
+### 69.8 Componentes y pruebas
+
+* `App\Libraries\PlazoObra` — `diasEntre()`, `diasNeutralizados()`, `totalNeutralizado()` y
+  `fechaFinalizacion()` ampliada.
+* `App\Models\NeutralizacionModel` — `listarPorObra()`, `abierta()`, `tieneAbierta()`, `proximoNumero()`,
+  `ultimaFechaReinicio()`, `crear()`, `reiniciar()` y bloqueo de `update()`, `delete()`, `insertBatch()` y
+  `updateBatch()`.
+* `App\Models\EstadoObraModel` — `ESTADO_EN_EJECUCION`, `ESTADO_NEUTRALIZADA`,
+  `permiteIniciarNeutralizacion()`, `permiteReiniciarNeutralizacion()`.
+* `App\Controllers\Neutralizaciones` (nuevo) — `index()`, `crear()` y `reiniciar()` transaccionales, con
+  revalidación y `transRollback()` explícito; `App\Controllers\Obras::actualizar()` — restricción de las
+  transiciones de estado ligadas a la neutralización.
+* `app/Database/Migrations/2026-10-14-120000_AddNeutralizacionAbiertaUnica.php` (nueva) — columna generada e
+  índice único de neutralización abierta.
+* `app/Config/Routes.php` — rutas con `RoleFilter`; `App\Controllers\Obras::ver()` — integración del total de
+  días neutralizados; `app/Views/obras/ficha.php` — campo, línea de desglose y tabla de neutralizaciones.
+* `app/Views/obras/neutralizaciones.php`,
+  `public/assets/css/pages/obra-neutralizaciones.css`,
+  `public/assets/js/pages/obra-neutralizaciones.js`,
+  `public/assets/css/components/neutralizacion-estado.css` y `public/sw.js` (componente en el app shell).
+* `tests/unit/PlazoObraTest.php` (+7) — diferencia de días, períodos abiertos/negativos, total y fecha de
+  finalización con días neutralizados.
+* `tests/database/ObraNeutralizacionTest.php` (9) — crear abierta, reinicio, reinicio doble, numeración por
+  obra, orden por número, inmutabilidad y bloqueo masivo, `ultimaFechaReinicio()` y el rechazo de un segundo
+  período abierto por la restricción única (SQLite, con columna generada e índice único reproducidos).
+* `tests/database/NeutralizacionesValidacionTest.php` (10) — D1 (la edición no fuerza NEUTRALIZADA ni la
+  abandona con período abierto), D2 (sin solapamiento; se admite la frontera y se toma el último reinicio) y
+  D3 (un fallo lógico post-escritura no deja neutralización ni reinicio parciales).
+* `tests/unit/NeutralizacionesPantallaTest.php` (7) — contrato estructural de rutas, vista, controlador,
+  modelo, estados y migración.
+* `tests/database/ObraPlazoVigenteTest.php` y `tests/unit/ObraPlazoVigentePantallaTest.php` — adaptados a la
+  ampliación de `fechaFinalizacion()`.
+
+Suite completa: **626 pruebas / 2570 aserciones**. Quedan **2 fallos preexistentes** en `UsuariosGestionTest`
+que dependen del orden de ejecución (pasan aislados); son ajenos a los Bloques 2, 3, 4 y 5 y no se
+modificaron.

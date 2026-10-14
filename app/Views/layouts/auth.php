@@ -27,6 +27,7 @@
     <link rel="stylesheet" href="<?= base_url('assets/css/components/alerts.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/badges.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/estados.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('assets/css/components/neutralizacion-estado.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/connectivity.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/navbar.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/sidebar.css') ?>">

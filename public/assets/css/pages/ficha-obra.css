@@ -349,6 +349,10 @@
     color: var(--color-warning);
 }
 
+.sigoa-table.plazo-neutralizaciones-tabla {
+    min-width: 44rem;
+}
+
 /* --- Responsive --- */
 @media (max-width: 580px) {
     .ficha-identidad,

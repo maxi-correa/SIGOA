@@ -18,7 +18,7 @@ final class ObraPlazoVigentePantallaTest extends CIUnitTestCase
         $this->assertStringContainsString('PlazoObra::fechaFinalizacion', $controlador);
         $this->assertStringContainsString('listarPorObra', $controlador);
         $this->assertStringContainsString('NeutralizacionModel', $controlador);
-        $this->assertStringContainsString('tieneAbierta', $controlador);
+        $this->assertStringContainsString('PlazoObra::totalNeutralizado', $controlador);
     }
 
     public function testLaReglaDeAmpliacionViveEnLaBibliotecaDeResoluciones(): void
@@ -29,14 +29,18 @@ final class ObraPlazoVigentePantallaTest extends CIUnitTestCase
         $this->assertStringContainsString('function ampliaPlazo', $biblioteca);
     }
 
-    public function testElModeloDeNeutralizacionSoloConsulta(): void
+    public function testElModeloDeNeutralizacionPersistePeriodosInmutables(): void
     {
         $modelo = $this->leerApp('Models/NeutralizacionModel.php');
 
         $this->assertStringContainsString('function tieneAbierta', $modelo);
+        $this->assertStringContainsString('function abierta', $modelo);
+        $this->assertStringContainsString('function proximoNumero', $modelo);
+        $this->assertStringContainsString('function crear', $modelo);
+        $this->assertStringContainsString('function reiniciar', $modelo);
+        $this->assertStringContainsString('function update', $modelo);
+        $this->assertStringContainsString('function delete', $modelo);
         $this->assertStringContainsString("'fecha_reinicio'", $modelo);
-        $this->assertStringNotContainsString('function crear', $modelo);
-        $this->assertStringNotContainsString('function reiniciar', $modelo);
     }
 
     public function testLaVistaMuestraElDesgloseDeAmpliacionesYElTotal(): void
