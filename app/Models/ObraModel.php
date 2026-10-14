@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Libraries\MontoObra;
 use CodeIgniter\Model;
 
 class ObraModel extends Model
@@ -407,20 +408,21 @@ class ObraModel extends Model
         return $normalizar($almacenado) === $normalizar($enviado);
     }
 
-     /**
-      * Actualiza la configuración económica de certificación de una obra.
-      *
-      * Al cargar `monto_contrato` se inicializa `monto_contractual_vigente`
-      * con el mismo valor. El original se conserva; el vigente solo cambiará
-      * después por trámites posteriores, fuera de esta configuración.
-      * `created_at` se conserva; `updated_at` se refresca.
-      */
+    /**
+     * Actualiza la configuración económica de certificación de una obra.
+     *
+     * Al cargar `monto_contrato` se inicializa `monto_contractual_vigente`
+     * con el mismo valor, salvo que el llamador aporte un vigente ya
+     * recalculado (`monto_contractual_vigente`), en cuyo caso se respeta.
+     * El original se conserva; el vigente refleja los ajustes confirmados.
+     * `created_at` se conserva; `updated_at` se refresca.
+     */
     public function actualizarConfiguracionEconomica(int $id, array $datos): bool
     {
         return $this->update($id, [
             'presupuesto_oficial'            => $datos['presupuesto_oficial'],
             'monto_contrato'                 => $datos['monto_contrato'],
-            'monto_contractual_vigente'      => $datos['monto_contrato'],
+            'monto_contractual_vigente'      => $datos['monto_contractual_vigente'] ?? $datos['monto_contrato'],
             'tiene_anticipo_financiero'      => $datos['tiene_anticipo_financiero'],
             'porcentaje_anticipo_financiero' => $datos['porcentaje_anticipo_financiero'],
             'tiene_fondo_reparo'             => $datos['tiene_fondo_reparo'],
@@ -428,6 +430,44 @@ class ObraModel extends Model
             'fondo_reparo_con_poliza'        => $datos['fondo_reparo_con_poliza'],
             'updated_at'                     => date('Y-m-d H:i:s'),
         ]);
+    }
+
+    /**
+     * Persiste el monto contractual vigente de una obra.
+     *
+     * Es el único punto que escribe `monto_contractual_vigente` fuera de la
+     * configuración inicial. El valor debe ser el resultado de recalcular
+     * desde las fuentes (nunca una suma incremental del valor previo).
+     */
+    public function fijarMontoContractualVigente(int $id, ?string $monto): bool
+    {
+        return $this->update($id, [
+            'monto_contractual_vigente' => $monto,
+            'updated_at'                => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
+     * Recalcula y persiste el monto contractual vigente de una obra.
+     *
+     * Parte siempre del monto de contrato original almacenado y de las
+     * resoluciones confirmadas presentes (datos fuente), por lo que
+     * ejecutarlo repetidamente es idempotente y no duplica ajustes.
+     */
+    public function recalcularMontoContractualVigente(int $id): bool
+    {
+        $obra = $this->find($id);
+
+        if ($obra === null) {
+            return false;
+        }
+
+        $calculo = MontoObra::calcularVigente(
+            $obra->monto_contrato ?? null,
+            (new ResolucionModel())->listarPorObra($id)
+        );
+
+        return $this->fijarMontoContractualVigente($id, $calculo['vigente']);
     }
 
     /**

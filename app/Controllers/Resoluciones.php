@@ -194,7 +194,18 @@ class Resoluciones extends BaseController
                     : 'Debe completar número, año y fecha antes de confirmar la resolución.');
         }
 
-        if (! (new ResolucionModel())->confirmar($resolucionId)) {
+        $db = db_connect();
+        $db->transStart();
+
+        $confirmada = (new ResolucionModel())->confirmar($resolucionId);
+
+        if ($confirmada && ResolucionObra::ajustaMonto($resolucion->tipo_nombre ?? null)) {
+            $confirmada = (new ObraModel())->recalcularMontoContractualVigente((int) $obra->id);
+        }
+
+        $db->transComplete();
+
+        if (! $confirmada || ! $db->transStatus()) {
             return redirect()->to($destino)
                 ->with('error', 'No se pudo confirmar la resolución.');
         }

@@ -120,6 +120,7 @@ Adicionalmente, se encuentra implementada la infraestructura de autenticación y
 * **Bloque 1 — datos iniciales de plazo** — confirmación explícita de la fecha de inicio y el plazo original de la obra: una vez confirmados (`obras.plazo_inicial_confirmado = 1`), la fecha de inicio y el plazo quedan inmutables y solo el Expte. contable permanece editable desde la ficha. No forma parte de una sección propia todavía; se describe donde es necesario para el cálculo del plazo (§49.5, §67).
 * **Bloque 2 — trámites administrativos (resoluciones)** — gestión de las resoluciones de una obra: registro de trámites que pueden quedar incompletos, confirmación explícita, inmutabilidad de las resoluciones confirmadas (no se editan ni eliminan), observaciones exigidas según el tipo y restricción de registro a obras EN EJECUCIÓN o NEUTRALIZADA — ver §66;
 * **Bloque 3 — plazo contractual vigente** — cálculo derivado del plazo vigente (plazo inicial confirmado más días de ampliaciones confirmadas) y de la fecha de finalización, con desglose en Ver Obra; la fecha de finalización queda sin calcular mientras exista una neutralización abierta — ver §67.
+* **Bloque 4 — monto contractual vigente** — cálculo derivado del monto vigente (monto de contrato original más ajustes económicos de cuadros comparativos confirmados), **porcentaje de aumento o disminución** respecto del contrato original, persistencia consistente al confirmar resoluciones y desglose en Ver Obra y Ver Certificados; los certificados ya emitidos conservan sus importes almacenados — ver §68.
 
 ---
 
@@ -468,6 +469,12 @@ Representa el monto actualmente aprobado considerando las modificaciones contrac
 El monto original no debe sobrescribirse por modificaciones posteriores.
 
 Esto permite conservar la historia contractual.
+
+El **monto contractual vigente** es un dato derivado que se recalcula desde sus fuentes:
+
+**monto vigente = monto de contrato original + suma de los ajustes económicos de los cuadros comparativos confirmados**
+
+Las resoluciones combinadas (APROBACIÓN DE CUADRO COMPARATIVO Y AMPLIACIÓN DE PLAZO) aportan su monto una sola vez. La regla, la persistencia consistente y el desglose en Ver Obra se documentan en §68.
 
 ---
 
@@ -4377,8 +4384,8 @@ confirmarse.
 ### 66.9 Fuera de alcance
 
 * Sin edición ni anulación de resoluciones confirmadas (por diseño, son inmutables).
-* Sin aplicación del **monto contractual vigente** a partir de las resoluciones: el Bloque 2 conserva el
-  monto; el recálculo del monto vigente no forma parte de este bloque ni del Bloque 3.
+* Sin aplicación del **monto contractual vigente** en este bloque: el Bloque 2 solo conserva el monto. El
+  recálculo del monto vigente a partir de las resoluciones se implementó en el Bloque 4 (§68).
 * Sin eliminación en cascada de obras ni auditoría funcional de los cambios de resoluciones.
 
 ---
@@ -4453,8 +4460,9 @@ fecha no puede presentarse como vigente hasta registrar el reinicio. La detecci�
 * **Cómputo de los días neutralizados**: los períodos neutralizados no se descuentan del plazo; el reinicio y
   el cálculo asociado se implementarán en un bloque posterior (§24).
 * **Registro, edición y reinicio de neutralizaciones**: siguen pendientes (§4.2).
-* Recálculo del **monto contractual vigente** a partir de las resoluciones, certificados, transición de
-  estados de obra y auditoría funcional.
+* Recálculo del **monto contractual vigente** a partir de los certificados, la transición de estados de
+  obra y la auditoría funcional. El recálculo del monto a partir de las **resoluciones** se implementó en el
+  Bloque 4 (§68).
 
 ### 67.7 Componentes y pruebas
 
@@ -4474,3 +4482,134 @@ fecha no puede presentarse como vigente hasta registrar el reinicio. La detecci�
 Suite completa: **564 pruebas / 2339 aserciones**. Quedan **2 fallos preexistentes** en
 `UsuariosGestionTest` que dependen del orden de ejecución (pasan aislados); son ajenos a los Bloques 2 y 3 y no
 se modificaron.
+
+---
+
+## 68. Monto contractual vigente (Bloque 4) — cálculo, persistencia y desglose en Ver Obra
+
+El Bloque 4 calcula el **monto contractual vigente** de la obra a partir del monto de contrato original y de
+los ajustes económicos de los **cuadros comparativos confirmados**, persiste ese valor de forma consistente
+al confirmar las resoluciones y lo presenta con un **desglose verificable** en la pantalla Ver Obra. No agrega
+columnas ni migraciones y no altera la inmutabilidad de las resoluciones del Bloque 2 ni el cálculo de plazo
+del Bloque 3.
+
+### 68.1 Dónde se calcula
+
+El cálculo se centraliza en la biblioteca `App\Libraries\MontoObra` y se orquesta en los controladores:
+
+* `MontoObra::calcularVigente($montoContrato, $resoluciones)` compone el monto (función pura, sin acceso a
+  base de datos);
+* `Obras::ver()` lo usa para el desglose de la ficha (solo lectura);
+* `Resoluciones::confirmar()` recalcula y persiste el vigente al confirmar una resolución que ajusta el monto;
+* `Certificados::confirmarConfiguracion()` recalcula el vigente al confirmar/editar la configuración económica.
+
+La vista solo renderiza los datos recibidos; **no duplica reglas de cálculo en JavaScript**.
+
+### 68.2 Regla del monto vigente
+
+**monto vigente = monto de contrato original + suma de los montos de los cuadros comparativos confirmados**
+
+* Solo aportan las resoluciones cuyo tipo **ajusta el monto** (`ResolucionObra::ajustaMonto`): APROBACIÓN DE
+  CUADRO COMPARATIVO y APROBACIÓN DE CUADRO COMPARATIVO Y AMPLIACIÓN DE PLAZO.
+* Solo aportan las resoluciones **confirmadas** y con un **monto válido distinto de cero**. Un monto igual a
+  cero o ausente se considera "no informado" y no se suma.
+* Los ajustes pueden ser **positivos (aditivas) o negativos (deductivas)**.
+* Las resoluciones combinadas aportan su monto **una sola vez** (es una única fila con un único monto).
+* **No aportan**: ADJUDICACIÓN, APROBACIÓN DE AMPLIACIÓN DE PLAZO ni OTRO, aunque estén confirmadas.
+* Las resoluciones **pendientes no modifican** el cálculo.
+* Si el monto de contrato original es nulo, el monto vigente se presenta como `—` (`null`), aunque existan
+  ajustes.
+
+Para evitar errores de coma flotante, los importes se suman en **milésimas enteras** (escala 1000, equivalente
+a `DECIMAL(15,3)`) y luego se formatean.
+
+### 68.3 Persistencia consistente y atomicidad
+
+`ObraModel::recalcularMontoContractualVigente($id)` parte siempre de las **fuentes** (el `monto_contrato`
+almacenado y las resoluciones confirmadas presentes) y escribe el resultado con
+`ObraModel::fijarMontoContractualVigente($id, $monto)`. **Nunca** suma sobre el valor vigente previo, por lo
+que ejecutarlo repetidamente es **idempotente** y no duplica ajustes.
+
+* La **confirmación de una resolución** que ajusta el monto se ejecuta dentro de una **transacción**: se
+  confirma y se recalcula el vigente como una sola operación; si algo falla, no queda una confirmación parcial
+  (`Resoluciones::confirmar`).
+* La **configuración económica** (`Certificados::confirmarConfiguracion`) actualiza el monto de contrato y
+  luego recalcula el vigente, de modo que **editar la configuración no restablece** el vigente al monto de
+  contrato original cuando existen ajustes confirmados.
+* `ObraModel::actualizarConfiguracionEconomica` inicializa `monto_contractual_vigente` con el monto de contrato
+  solo cuando el llamador no aporta un vigente recalculado.
+
+### 68.4 Resoluciones confirmadas e integridad histórica
+
+Las resoluciones confirmadas siguen siendo **inmutables** (Bloque 2): el recálculo no las modifica. Los
+**certificados ya emitidos** no se alteran retroactivamente: los importes almacenados (monto bruto, descuento
+de anticipo, retención de fondo de reparo y monto neto) **no dependen** del monto vigente. El avance mensual y
+acumulado son datos **derivados** que se calculan en lectura sobre el monto vigente actual
+(`CertificacionObra::conAvances`), por lo que **los certificados emitidos a futuro** reflejan el vigente
+recalculado.
+
+### 68.5 Desglose en Ver Obra
+
+`Views/obras/ficha.php` incorpora, además del desglose de plazo del Bloque 3:
+
+* celda calculada **Monto contractual vigente** (con nota «(original + ajustes)» cuando corresponde);
+* bloque **Cálculo del monto contractual vigente** con: monto de contrato original, ajustes económicos
+  confirmados (total) y monto contractual vigente;
+* si no hay ajustes confirmados, se indica expresamente que el monto vigente coincide con el monto de contrato
+  original;
+* tabla **Ajustes económicos confirmados** (tipo, N°, año, fecha, **porcentaje** y monto) con una fila **Total de
+  ajustes económicos aprobados**;
+* tabla **Ajustes económicos pendientes de confirmación**, rotulada como **«no se suman al monto vigente»**.
+
+El desglose es visible también para CONSULTA: no depende de `puede_editar`. No contiene CSS ni JavaScript
+embebidos (estilos en `public/assets/css/pages/ficha-obra.css`).
+
+**Porcentaje de aumento o disminución.** Cada fila de la tabla de ajustes confirmados muestra, entre la fecha y
+el monto, la variación relativa del monto vigente acumulado hasta ese ajuste respecto del monto de contrato
+original: `((vigente - original) / original) × 100`. El denominador es **siempre el monto de contrato original**,
+nunca el vigente parcial previo, de modo que con varios cuadros comparativos cada fila muestra el acumulado
+resultante (p. ej. `+5,00 %` y luego `+3,00 %`). La fila de total muestra la variación final del vigente. Se
+formatea con dos decimales y coma decimal (`MontoObra::DECIMALES_PORCENTAJE`); si no hay base de cálculo (monto
+original nulo o cero) se muestra `—`. El cálculo se centraliza en `MontoObra::porcentajeVariacion()` /
+`MontoObra::calcularVigente()` (clave `porcentajes`).
+
+El **monto contractual vigente** se muestra además, como campo calculado de **solo lectura**, en
+`Views/obras/certificados.php`, dentro del bloque **Datos de la obra**, junto al presupuesto oficial y al monto
+de contrato original (con la nota «(original + ajustes)» cuando difiere del contrato). A su lado se muestra el
+**Porcentaje de aumento o disminución** (misma fórmula, `0,00 %` cuando el vigente coincide con el original),
+también de solo lectura. Son datos **derivados**: la vista solo los presenta, no los recalcula ni los envía al
+servidor.
+
+### 68.6 Fuera de alcance
+
+* Participación de los **certificados** o de la **transición de estados de obra** en el cálculo del monto
+  vigente.
+* **Auditoría funcional** de los cambios de monto.
+* Cualquier tipo de resolución que ajuste el monto por fuera de los cuadros comparativos.
+* Cambios en las bases de anticipo (presupuesto oficial), fondo de reparo o pólizas.
+
+### 68.7 Componentes y pruebas
+
+* `App\Libraries\MontoObra` (nuevo) — `calcularVigente()` (suma en milésimas, formato `DECIMAL(15,3)`, clave
+  `porcentajes`) y `porcentajeVariacion()` (variación relativa sobre el contrato original).
+* `App\Libraries\ResolucionObra` — `ajustaMonto()` y `TIPOS_AJUSTE_MONTO`.
+* `App\Models\ObraModel` — `fijarMontoContractualVigente()`, `recalcularMontoContractualVigente()` y
+  `actualizarConfiguracionEconomica()` corregido para preservar el vigente.
+* `App\Controllers\Resoluciones::confirmar()` — confirmación y recálculo en transacción.
+* `App\Controllers\Certificados::confirmarConfiguracion()` — recálculo del vigente.
+* `App\Controllers\Obras::ver()` — integración del cálculo y variables de la vista.
+* `app/Views/obras/ficha.php` + `public/assets/css/pages/ficha-obra.css` — desglose del monto y columna
+  **Porcentaje**.
+* `app/Views/obras/certificados.php` — monto contractual vigente y **porcentaje de aumento o disminución** de
+  solo lectura en **Datos de la obra** (`tests/unit/CertificadosPantallaTest.php`).
+* `tests/unit/MontoObraTest.php` (14) — regla de ajuste por tipo, sin/con ajustes, combinada una sola vez,
+  ajustes negativos, pendientes, montos inválidos, contrato nulo, exactitud decimal y porcentaje de variación
+  (acumulado sobre el original, cero, aumento/disminución y sin base de cálculo).
+* `tests/database/ObraMontoVigenteTest.php` (5) — recálculo y persistencia (SQLite), idempotencia, pendientes,
+  preservación de ajustes al editar la configuración y cambio del contrato original.
+* `tests/unit/ObraMontoVigentePantallaTest.php` (7) — contrato estructural del controlador, herramientas y
+  vista.
+
+No se creó ninguna migración. Suite completa: **593 pruebas / 2440 aserciones**. Quedan **2 fallos
+preexistentes** en `UsuariosGestionTest` que dependen del orden de ejecución (pasan aislados); son ajenos a los
+Bloques 2, 3 y 4 y no se modificaron.

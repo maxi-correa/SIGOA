@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Libraries\CertificacionObra;
+use App\Libraries\MontoObra;
 use App\Models\CertificadoModel;
 use App\Models\ObraModel;
 
@@ -43,6 +44,10 @@ class Certificados extends BaseController
             'certificados'             => CertificacionObra::conAvances($obra, $certificados),
             'configuracion_confirmada' => CertificacionObra::estaConfirmada($obra),
             'configuracion_bloqueada'  => CertificacionObra::estaBloqueada($cantidad),
+            'porcentaje_variacion'     => MontoObra::porcentajeVariacion(
+                $obra->monto_contrato !== null ? (string) $obra->monto_contrato : null,
+                $obra->monto_contractual_vigente !== null ? (string) $obra->monto_contractual_vigente : null
+            ),
             'anticipo_total'           => CertificacionObra::anticipoTotal($obra),
             'meses'                    => CertificacionObra::meses(),
             'puede_editar'             => array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $roles) !== [],
@@ -92,6 +97,10 @@ class Certificados extends BaseController
             'porcentaje_fondo_reparo'        => $datos['porcentaje_fondo_reparo'],
             'fondo_reparo_con_poliza'        => $datos['fondo_reparo_con_poliza'],
         ]);
+
+        if ($ok) {
+            $ok = $obraModel->recalcularMontoContractualVigente($obraId);
+        }
 
         if (! $ok) {
             return redirect()->to($destino)

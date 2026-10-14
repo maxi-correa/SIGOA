@@ -1,3 +1,5 @@
+<?php use App\Libraries\CertificacionObra; ?>
+<?php use App\Libraries\MontoObra; ?>
 <?php use App\Libraries\PlazoObra; ?>
 <?= $this->extend('layouts/auth') ?>
 
@@ -47,6 +49,17 @@ $neutralizacionAbierta  = $neutralizacion_abierta ?? false;
 
 $plazoInicialTexto = ($plazoInicialDias !== null) ? $plazoInicialDias . ' días' : null;
 $plazoVigenteTexto = ($plazoVigenteDias !== null) ? $plazoVigenteDias . ' días' : null;
+
+$montoContratoOriginal  = $monto_contrato_original ?? null;
+$montoVigente           = $monto_vigente ?? null;
+$montoAjustes           = $monto_ajustes ?? [];
+$montoAjustesPendientes = $monto_ajustes_pendientes ?? [];
+$montoAjustesPorcentajes = $monto_ajustes_porcentajes ?? [];
+$totalAjusteMonto       = $total_ajuste_monto ?? '0.000';
+$tieneAjustesMonto      = $tiene_ajustes_monto ?? false;
+$totalAjusteTexto       = (((float) $totalAjusteMonto > 0) ? '+' : '')
+    . CertificacionObra::formatearImporte($totalAjusteMonto);
+$porcentajeVigenteMonto = MontoObra::porcentajeVariacion($montoContratoOriginal, $montoVigente);
 
 $plazoEtiqueta = null;
 
@@ -311,10 +324,20 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
                 </p>
             </div>
 
+            <div class="form-group ficha-campo ficha-campo-calculado">
+                <label>Monto contractual vigente</label>
+                <p class="ficha-valor ficha-valor-calculado">
+                    <?= esc(CertificacionObra::formatearImporte($montoVigente)) ?>
+                    <?php if ($tieneAjustesMonto): ?>
+                        <span class="ficha-valor-nota">(original + ajustes)</span>
+                    <?php endif; ?>
+                </p>
+            </div>
+
         </div>
 
         <div class="plazo-desglose">
-            <p class="ficha-etiqueta plazo-desglose-encabezado">Cálculo del plazo contractual vigente</p>
+            <h3 class="ficha-seccion-titulo plazo-desglose-encabezado">Cálculo del plazo contractual vigente</h3>
 
             <?php if (! $plazoInicialConfirmado): ?>
                 <p class="ficha-aviso">
@@ -416,6 +439,90 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
                                     <td class="plazo-col-dias">
                                         <?= ($pendiente->dias === null || (int) $pendiente->dias < 1) ? '—' : (int) $pendiente->dias ?>
                                     </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="plazo-desglose">
+            <h3 class="ficha-seccion-titulo plazo-desglose-encabezado">Cálculo del monto contractual vigente</h3>
+
+            <dl class="ficha-resumen plazo-desglose-resumen">
+                <dt>Monto de contrato original</dt>
+                <dd><?= esc(CertificacionObra::formatearImporte($montoContratoOriginal)) ?></dd>
+
+                <dt>Ajustes económicos confirmados</dt>
+                <dd><?= $tieneAjustesMonto ? esc($totalAjusteTexto) : 'Sin ajustes' ?></dd>
+
+                <dt>Monto contractual vigente</dt>
+                <dd><?= esc(CertificacionObra::formatearImporte($montoVigente)) ?></dd>
+            </dl>
+
+            <?php if ($montoAjustes === []): ?>
+                <p class="plazo-desglose-vacio">
+                    No hay ajustes económicos confirmados: el monto vigente
+                    coincide con el monto de contrato original.
+                </p>
+            <?php else: ?>
+                <p class="ficha-etiqueta plazo-desglose-tabla-titulo">Ajustes económicos confirmados</p>
+                <div class="sigoa-table-wrap">
+                    <table class="sigoa-table monto-ajustes-tabla">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>N°</th>
+                                <th>Año</th>
+                                <th>Fecha</th>
+                                <th class="monto-col-porcentaje">Porcentaje</th>
+                                <th class="monto-col-importe">Monto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($montoAjustes as $indice => $ajuste): ?>
+                                <tr>
+                                    <td><?= esc($ajuste->tipo_nombre ?? '—') ?></td>
+                                    <td><?= $ajuste->numero === null ? '—' : (int) $ajuste->numero ?></td>
+                                    <td><?= $ajuste->anio === null ? '—' : (int) $ajuste->anio ?></td>
+                                    <td><?= esc(PlazoObra::formatearFecha($ajuste->fecha_resolucion) ?? '—') ?></td>
+                                    <td class="monto-col-porcentaje"><?= esc($montoAjustesPorcentajes[$indice] ?? '—') ?></td>
+                                    <td class="monto-col-importe"><?= esc(CertificacionObra::formatearImporte($ajuste->monto)) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            <tr class="monto-ajustes-total">
+                                <td colspan="4">Total de ajustes económicos aprobados</td>
+                                <td class="monto-col-porcentaje"><?= esc($porcentajeVigenteMonto ?? '—') ?></td>
+                                <td class="monto-col-importe"><?= esc($totalAjusteTexto) ?></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($montoAjustesPendientes !== []): ?>
+                <p class="ficha-etiqueta plazo-desglose-tabla-titulo">Ajustes económicos pendientes de confirmación</p>
+                <p class="plazo-desglose-nota">Trámites aún no confirmados: no se suman al monto vigente.</p>
+                <div class="sigoa-table-wrap">
+                    <table class="sigoa-table monto-ajustes-tabla">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>N°</th>
+                                <th>Año</th>
+                                <th>Fecha</th>
+                                <th class="monto-col-importe">Monto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($montoAjustesPendientes as $pendiente): ?>
+                                <tr>
+                                    <td><?= esc($pendiente->tipo_nombre ?? '—') ?></td>
+                                    <td><?= $pendiente->numero === null ? '—' : (int) $pendiente->numero ?></td>
+                                    <td><?= $pendiente->anio === null ? '—' : (int) $pendiente->anio ?></td>
+                                    <td><?= esc(PlazoObra::formatearFecha($pendiente->fecha_resolucion) ?? '—') ?></td>
+                                    <td class="monto-col-importe"><?= esc(CertificacionObra::formatearImporte($pendiente->monto)) ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>

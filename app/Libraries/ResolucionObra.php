@@ -12,8 +12,9 @@ namespace App\Libraries;
  * decisión en el JavaScript.
  *
  * El plazo original y el monto contractual original no se modifican aquí:
- * los trámites solo se conservan. La aplicación de ampliaciones al plazo
- * o al monto contractual vigente es una etapa posterior.
+ * los trámites solo se conservan. Qué tipos amplían el plazo o ajustan el
+ * monto contractual vigente se decide con `ampliaPlazo()` y `ajustaMonto()`;
+ * el cálculo derivado se resuelve en `PlazoObra` y `MontoObra`.
  */
 class ResolucionObra
 {
@@ -36,6 +37,19 @@ class ResolucionObra
      */
     public const TIPOS_AMPLIACION_PLAZO = [
         self::TIPO_AMPLIACION_PLAZO,
+        self::TIPO_CUADRO_Y_AMPLIACION,
+    ];
+
+    /**
+     * Tipos cuyo monto ajusta el monto contractual vigente.
+     *
+     * La aprobación del cuadro comparativo (por sí sola o combinada con la
+     * ampliación de plazo) puede reexpresar el monto contractual. La
+     * ampliación de plazo y la adjudicación no ajustan monto; el OTRO
+     * tampoco, aunque sea informativo.
+     */
+    public const TIPOS_AJUSTE_MONTO = [
+        self::TIPO_CUADRO_COMPARATIVO,
         self::TIPO_CUADRO_Y_AMPLIACION,
     ];
 
@@ -97,6 +111,20 @@ class ResolucionObra
     public static function ampliaPlazo(?string $tipoNombre): bool
     {
         return in_array(self::normalizarTipo($tipoNombre), self::TIPOS_AMPLIACION_PLAZO, true);
+    }
+
+    /**
+     * Indica si el tipo de resolución ajusta el monto contractual vigente.
+     *
+     * Se compara por nombre normalizado, sin depender de los ids del
+     * catálogo, para que los consumidores (cálculo del monto, vista) no
+     * dupliquen la lista de tipos. Una resolución combinada
+     * (cuadro + ampliación) ajusta el monto una sola vez, ya que es una
+     * única fila con un único monto.
+     */
+    public static function ajustaMonto(?string $tipoNombre): bool
+    {
+        return in_array(self::normalizarTipo($tipoNombre), self::TIPOS_AJUSTE_MONTO, true);
     }
 
     /**

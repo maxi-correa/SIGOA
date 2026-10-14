@@ -285,14 +285,16 @@
     margin-bottom: var(--space-md);
 }
 
-.plazo-desglose-provisorio,
-.plazo-desglose-nota {
+.plazo-desglose-provisorio {
     color: var(--color-text-secondary);
     font-weight: 500;
     font-size: var(--font-size-xs);
 }
 
 .plazo-desglose-nota {
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    line-height: 1.5;
     margin: 0 0 var(--space-sm);
 }
 
@@ -302,7 +304,7 @@
 
 .plazo-desglose-vacio {
     font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
+    color: var(--color-text);
     line-height: 1.5;
     margin: 0;
 }
@@ -318,6 +320,27 @@
 }
 
 .plazo-ampliaciones-total td {
+    font-weight: 600;
+    background-color: var(--color-background);
+}
+
+.sigoa-table.monto-ajustes-tabla {
+    min-width: 34rem;
+}
+
+.monto-col-importe {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.monto-col-porcentaje {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.monto-ajustes-total td {
     font-weight: 600;
     background-color: var(--color-background);
 }

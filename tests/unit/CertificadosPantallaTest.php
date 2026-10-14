@@ -75,6 +75,26 @@ final class CertificadosPantallaTest extends CIUnitTestCase
         $this->assertStringNotContainsString('YA_LIQUIDADO', $vista);
     }
 
+    public function testLaVistaMuestraElMontoContractualVigenteJuntoAlContrato(): void
+    {
+        $vista = $this->leerApp('Views/obras/certificados.php');
+
+        $this->assertStringContainsString('Presupuesto oficial', $vista);
+        $this->assertStringContainsString('Monto de contrato original', $vista);
+        $this->assertStringContainsString('Monto contractual vigente', $vista);
+        $this->assertStringContainsString('monto_contractual_vigente', $vista);
+        $this->assertStringContainsString('ficha-campo-calculado', $vista);
+        $this->assertStringNotContainsString('name="monto_contractual_vigente"', $vista);
+    }
+
+    public function testLaVistaMuestraElPorcentajeDeAumentoODisminucion(): void
+    {
+        $vista = $this->leerApp('Views/obras/certificados.php');
+
+        $this->assertStringContainsString('Porcentaje de aumento o disminución', $vista);
+        $this->assertStringContainsString('$porcentajeVariacion', $vista);
+    }
+
     public function testElControladorRecalculaValoresAlCrearYNoTomaDescuentosDelCliente(): void
     {
         $controlador = $this->leerApp('Controllers/Certificados.php');
@@ -89,6 +109,7 @@ final class CertificadosPantallaTest extends CIUnitTestCase
         $this->assertStringContainsString('estaConfirmada', $controlador);
         $this->assertStringContainsString('ultimoPorObra', $controlador);
         $this->assertStringContainsString('validarPeriodoPosterior', $controlador);
+        $this->assertStringContainsString('porcentaje_variacion', $controlador);
     }
 
     public function testNoSeCrearonCamposRedundantesDeAnticipoNiAvance(): void

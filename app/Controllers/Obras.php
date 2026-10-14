@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Libraries\MontoObra;
 use App\Libraries\PlazoObra;
 use App\Models\BarrioModel;
 use App\Models\EmpresaModel;
@@ -162,6 +163,13 @@ class Obras extends BaseController
         $resoluciones = (new ResolucionModel())->listarPorObra($id);
         $plazo        = PlazoObra::calcularVigente($plazoInicialDias, $resoluciones);
 
+        /* Composición del monto contractual vigente a partir del monto de
+           contrato original y de los cuadros comparativos confirmados. */
+        $monto = MontoObra::calcularVigente(
+            $obra->monto_contrato !== null ? (string) $obra->monto_contrato : null,
+            $resoluciones
+        );
+
         $neutralizacionAbierta = (new NeutralizacionModel())->tieneAbierta($id);
 
         $fechaFin = PlazoObra::fechaFinalizacion(
@@ -189,6 +197,13 @@ class Obras extends BaseController
             'ampliaciones'             => $plazo['ampliaciones'],
             'ampliaciones_pendientes'  => $plazo['pendientes'],
             'tiene_ampliaciones'       => $plazo['tiene_ampliaciones'],
+            'monto_contrato_original'  => $monto['contrato'],
+            'monto_ajustes'            => $monto['ajustes'],
+            'monto_ajustes_pendientes' => $monto['pendientes'],
+            'monto_ajustes_porcentajes' => $monto['porcentajes'],
+            'total_ajuste_monto'       => $monto['total_ajuste'],
+            'monto_vigente'            => $monto['vigente'],
+            'tiene_ajustes_monto'      => $monto['tiene_ajustes'],
             'neutralizacion_abierta'   => $neutralizacionAbierta,
             'fecha_fin'         => $fechaFin,
             'plazo_inicial_confirmado' => (int) ($obra->plazo_inicial_confirmado ?? 0) === 1,

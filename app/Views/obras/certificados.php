@@ -56,6 +56,14 @@ $polizaSiNo       = $valorRadio('fondo_reparo_con_poliza', $obra->fondo_reparo_c
 $mostrarAnticipoPct = $anticipoSiNo === '1';
 $mostrarFondoCampos = $fondoSiNo === '1';
 
+$montoVigente      = $obra->monto_contractual_vigente ?? null;
+$contratoNumerico  = ($obra->monto_contrato === null || $obra->monto_contrato === '') ? null : (float) $obra->monto_contrato;
+$vigenteNumerico   = ($montoVigente === null || $montoVigente === '') ? null : (float) $montoVigente;
+$montoVigenteAjustado = $contratoNumerico !== null
+    && $vigenteNumerico !== null
+    && abs($contratoNumerico - $vigenteNumerico) > 0.0005;
+$porcentajeVariacion = $porcentaje_variacion ?? null;
+
 $valorMes  = old('mes', '');
 $valorAnio = old('anio', (string) $anioActual);
 $valorBruto = old('monto_bruto', '');
@@ -207,6 +215,21 @@ $celdaImporte = static function (mixed $valor, bool $deduccion = false): string 
                 <?php else: ?>
                     <p class="ficha-valor ficha-valor-calculado"><?= esc(CertificacionObra::formatearImporte($obra->monto_contrato ?? null)) ?></p>
                 <?php endif; ?>
+            </div>
+
+            <div class="form-group ficha-campo ficha-campo-calculado">
+                <label>Monto contractual vigente</label>
+                <p class="ficha-valor ficha-valor-calculado">
+                    <?= esc(CertificacionObra::formatearImporte($montoVigente)) ?>
+                    <?php if ($montoVigenteAjustado): ?>
+                        <span class="ficha-valor-nota">(original + ajustes)</span>
+                    <?php endif; ?>
+                </p>
+            </div>
+
+            <div class="form-group ficha-campo ficha-campo-calculado">
+                <label>Porcentaje de aumento o disminución</label>
+                <p class="ficha-valor ficha-valor-calculado"><?= esc($porcentajeVariacion ?? '—') ?></p>
             </div>
         </div>
     </section>
