@@ -258,30 +258,25 @@ class ObraModel extends Model
     }
 
     /**
-     * Actualiza los datos de la ficha: expediente contable, fecha de
-     * inicio y plazo original.
+     * Actualiza los datos iniciales de la ficha: fecha de inicio y plazo
+     * original.
      *
-     * Cuando los datos iniciales ya fueron confirmados, la fecha de
-     * inicio y el plazo original se conservan sin cambios y solo se
-     * actualiza el expediente contable.
+     * No escribe `expediente_contable`: ese campo tiene su propio bloque
+     * de guardado (`actualizarExpedienteContable`). Si los datos iniciales
+     * ya fueron confirmados, el techo de inmutabilidad de `update()`
+     * rechaza cualquier cambio real en la fecha o el plazo.
      *
      * `updated_at` se refresca y `created_at` se conserva.
      */
     public function actualizarFicha(int $id, array $datos): bool
     {
-        $registro = [
-            'expediente_contable' => $datos['expediente_contable'] ?? null,
-            'updated_at'          => date('Y-m-d H:i:s'),
-        ];
-
-        if (! $this->datosInicialesConfirmados($id)) {
-            $registro['fecha_inicio']          = $datos['fecha_inicio'] ?? null;
-            $registro['plazo_original_valor']  = $datos['plazo_original_valor'] ?? null;
-            $registro['plazo_original_unidad'] = $datos['plazo_original_unidad'] ?? null;
-            $registro['plazo_original_dias']   = $datos['plazo_original_dias'] ?? null;
-        }
-
-        return $this->update($id, $registro);
+        return $this->update($id, [
+            'fecha_inicio'          => $datos['fecha_inicio'] ?? null,
+            'plazo_original_valor'  => $datos['plazo_original_valor'] ?? null,
+            'plazo_original_unidad' => $datos['plazo_original_unidad'] ?? null,
+            'plazo_original_dias'   => $datos['plazo_original_dias'] ?? null,
+            'updated_at'            => date('Y-m-d H:i:s'),
+        ]);
     }
 
     /**

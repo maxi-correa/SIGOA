@@ -246,12 +246,13 @@ class Obras extends BaseController
     }
 
     /**
-     * Guarda los datos operativos de la ficha: Expte. contable, fecha de
-     * inicio y plazo original (valor, unidad y días corridos calculados).
+     * Guarda los datos iniciales de la ficha: fecha de inicio y plazo
+     * original (valor, unidad y días corridos calculados).
      *
-     * Si los datos iniciales de plazo ya fueron confirmados, la fecha de
-     * inicio y el plazo quedan inmutables y solo se admite el cambio del
-     * expediente contable.
+     * Es un bloque de guardado independiente del Expte. contable y solo
+     * actualiza los campos iniciales del plazo. Una vez confirmados dejan
+     * de ser editables: la petición se rechaza y la inmutabilidad se
+     * garantiza además en `ObraModel::update()`.
      *
      * Solo se actualiza `updated_at` si existe una modificación real.
      */
@@ -267,32 +268,82 @@ class Obras extends BaseController
                 ->with('error', 'La obra seleccionada no existe.');
         }
 
-        $datos = $this->tomarDatosFicha();
+        $destino = '/obras/ver/' . $obraId;
 
         if ((int) ($obra->plazo_inicial_confirmado ?? 0) === 1) {
-            return $this->actualizarExpedienteContableFicha($obraModel, $obraId, $obra, $datos);
+            return redirect()->to($destino)
+                ->with('error', 'Los datos iniciales de la obra ya fueron confirmados y no pueden modificarse.');
         }
+
+        $datos = $this->tomarDatosFicha();
 
         $errores = $this->validarDatosFicha($datos);
 
         if ($errores !== []) {
-            return redirect()->to('/obras/ver/' . $obraId)
+            return redirect()->to($destino)
                 ->withInput()
                 ->with('errores_ficha', $errores);
         }
 
         if ($this->fichaSinCambios($datos, $obra)) {
-            return redirect()->to('/obras/ver/' . $obraId)
-                ->with('success', 'No se registraron cambios en la ficha de la obra.');
+            return redirect()->to($destino)
+                ->with('success', 'No se registraron cambios en los datos de la obra.');
         }
 
         if (! $obraModel->actualizarFicha($obraId, $datos)) {
-            return redirect()->to('/obras/ver/' . $obraId)
-                ->with('error', 'No se pudieron guardar los cambios de la ficha.');
+            return redirect()->to($destino)
+                ->with('error', 'No se pudieron guardar los cambios de los datos de la obra.');
         }
 
-        return redirect()->to('/obras/ver/' . $obraId)
-            ->with('success', 'La ficha de la obra fue actualizada correctamente.');
+        return redirect()->to($destino)
+            ->with('success', 'Los datos iniciales de la obra fueron actualizados correctamente.');
+    }
+
+    /**
+     * Guarda únicamente el Expte. contable de la obra.
+     *
+     * Es un bloque de guardado independiente de los datos iniciales de
+     * plazo: solo escribe `expediente_contable` y nunca la fecha de
+     * inicio, el plazo original ni su estado de confirmación, con
+     * independencia de los campos que envíe el formulario.
+     */
+    public function actualizarExpedienteContable()
+    {
+        $roles     = session()->get('roles') ?? [];
+        $obraModel = new ObraModel();
+        $obraId    = (int) $this->request->getPost('obra_id');
+        $obra      = $obraModel->find($obraId);
+
+        if ($obra === null) {
+            return redirect()->to($this->getDashboardPath($roles))
+                ->with('error', 'La obra seleccionada no existe.');
+        }
+
+        $destino       = '/obras/ver/' . $obraId;
+        $expedienteRaw = trim((string) $this->request->getPost('expediente_contable'));
+
+        $errores = $this->validarExpedienteContable($expedienteRaw);
+
+        if ($errores !== []) {
+            return redirect()->to($destino)
+                ->withInput()
+                ->with('errores_ficha', $errores);
+        }
+
+        $expediente = ($expedienteRaw === '') ? null : mb_strtoupper($expedienteRaw);
+
+        if ($this->expedienteContableSinCambios(['expediente_contable' => $expediente], $obra)) {
+            return redirect()->to($destino)
+                ->with('success', 'No se registraron cambios en el Expte. contable.');
+        }
+
+        if (! $obraModel->actualizarExpedienteContable($obraId, $expediente)) {
+            return redirect()->to($destino)
+                ->with('error', 'No se pudieron guardar los cambios del Expte. contable.');
+        }
+
+        return redirect()->to($destino)
+            ->with('success', 'El Expte. contable de la obra fue actualizado correctamente.');
     }
 
     /**
@@ -321,7 +372,12 @@ class Obras extends BaseController
                 ->with('error', 'Los datos iniciales de la obra ya fueron confirmados.');
         }
 
-        $datos   = $this->tomarDatosFicha();
+        $datos = $this->tomarDatosFicha();
+
+        /* El Expte. contable pertenece a su propio bloque de guardado:
+           la confirmación no lo lee ni lo modifica. */
+        $datos['expediente_contable'] = $obra->expediente_contable;
+
         $errores = $this->validarDatosFicha($datos, true);
 
         if ($errores !== []) {
@@ -337,36 +393,6 @@ class Obras extends BaseController
 
         return redirect()->to($destino)
             ->with('success', 'La fecha de inicio y el plazo de la obra fueron confirmados. Ya no pueden modificarse.');
-    }
-
-    /**
-     * Guarda el expediente contable de una obra con datos iniciales ya
-     * confirmados: es el único dato de la ficha que sigue editable.
-     *
-     * @param array<string, mixed> $datos
-     */
-    private function actualizarExpedienteContableFicha(ObraModel $obraModel, int $obraId, object $obra, array $datos)
-    {
-        $errores = $this->validarExpedienteContable($datos['expediente_contable_raw']);
-
-        if ($errores !== []) {
-            return redirect()->to('/obras/ver/' . $obraId)
-                ->withInput()
-                ->with('errores_ficha', $errores);
-        }
-
-        if ($this->expedienteContableSinCambios($datos, $obra)) {
-            return redirect()->to('/obras/ver/' . $obraId)
-                ->with('success', 'No se registraron cambios en la ficha de la obra.');
-        }
-
-        if (! $obraModel->actualizarExpedienteContable($obraId, $datos['expediente_contable'])) {
-            return redirect()->to('/obras/ver/' . $obraId)
-                ->with('error', 'No se pudieron guardar los cambios de la ficha.');
-        }
-
-        return redirect()->to('/obras/ver/' . $obraId)
-            ->with('success', 'El Expte. contable de la obra fue actualizado correctamente.');
     }
 
     /**
@@ -658,10 +684,12 @@ class Obras extends BaseController
     }
 
     /**
-     * Determina si los datos enviados modifican realmente la obra.
+     * Determina si los datos iniciales de plazo enviados modifican
+     * realmente la obra.
      *
      * Se compara contra los valores almacenados normalizando nulos y
-     * tipos, para no refrescar `updated_at` sin cambios reales.
+     * tipos, para no refrescar `updated_at` sin cambios reales. El Expte.
+     * contable no forma parte de este bloque.
      *
      * @param array<string, mixed> $datos
      */
@@ -672,7 +700,6 @@ class Obras extends BaseController
         };
 
         $actuales = [
-            'expediente_contable'   => $normalizar($obra->expediente_contable ?? null),
             'fecha_inicio'          => $normalizar($obra->fecha_inicio ?? null),
             'plazo_original_valor'  => $normalizar($obra->plazo_original_valor ?? null),
             'plazo_original_unidad' => $normalizar($obra->plazo_original_unidad ?? null),

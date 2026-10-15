@@ -145,18 +145,20 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
         </div>
     <?php endif; ?>
 
+    <!-- ============================================================
+         BLOQUE 1 — Encabezado de identificación y Expte. contable
+         Formulario de guardado independiente: solo actualiza el
+         Expte. contable.
+         ============================================================ -->
     <?php if ($puedeEditar): ?>
         <form method="post"
-              action="<?= site_url('/obras/ficha/actualizar') ?>"
-              id="formFichaObra"
+              action="<?= site_url('/obras/ficha/actualizar-expediente') ?>"
+              id="formExpedienteContable"
               novalidate>
             <?= csrf_field() ?>
             <input type="hidden" name="obra_id" value="<?= (int) $obra->id ?>">
     <?php endif; ?>
 
-    <!-- ============================================================
-         Encabezado de identificación de la obra
-         ============================================================ -->
     <section class="ficha-identidad">
         <div class="ficha-identidad-principal">
             <div class="ficha-titular">
@@ -236,11 +238,35 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
                 </dd>
             </div>
         </dl>
+
+        <?php if ($puedeEditar): ?>
+            <div class="ficha-form-acciones">
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-check-lg" aria-hidden="true"></i>
+                    Guardar cambios
+                </button>
+            </div>
+        <?php endif; ?>
     </section>
 
+    <?php if ($puedeEditar): ?>
+        </form>
+    <?php endif; ?>
+
     <!-- ============================================================
-         Datos operativos de la obra
+         BLOQUE 2 — Datos operativos de la obra (fecha de inicio y
+         plazo original). Formulario de guardado independiente: se
+         muestra solo mientras los datos iniciales sean editables.
          ============================================================ -->
+    <?php if ($puedeEditar && ! $plazoInicialConfirmado): ?>
+        <form method="post"
+              action="<?= site_url('/obras/ficha/actualizar') ?>"
+              id="formDatosObra"
+              novalidate>
+            <?= csrf_field() ?>
+            <input type="hidden" name="obra_id" value="<?= (int) $obra->id ?>">
+    <?php endif; ?>
+
     <section class="ficha-datos">
         <h2 class="ficha-seccion-titulo">Datos de la obra</h2>
 
@@ -596,28 +622,26 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
             <?php endif; ?>
         </div>
 
-        <?php if ($puedeEditar): ?>
+        <?php if ($puedeEditar && ! $plazoInicialConfirmado): ?>
             <div class="ficha-form-acciones">
                 <button type="submit" class="btn btn-success">
                     <i class="bi bi-check-lg" aria-hidden="true"></i>
                     Guardar cambios
                 </button>
 
-                <?php if (! $plazoInicialConfirmado): ?>
-                    <button type="button"
-                            class="btn btn-secondary"
-                            id="btnConfirmarPlazoInicial"
-                            aria-haspopup="dialog"
-                            aria-controls="modalConfirmarPlazo">
-                        <i class="bi bi-check-circle" aria-hidden="true"></i>
-                        Confirmar datos iniciales
-                    </button>
-                <?php endif; ?>
+                <button type="button"
+                        class="btn btn-secondary"
+                        id="btnConfirmarPlazoInicial"
+                        aria-haspopup="dialog"
+                        aria-controls="modalConfirmarPlazo">
+                    <i class="bi bi-check-circle" aria-hidden="true"></i>
+                    Confirmar datos iniciales
+                </button>
             </div>
         <?php endif; ?>
     </section>
 
-    <?php if ($puedeEditar): ?>
+    <?php if ($puedeEditar && ! $plazoInicialConfirmado): ?>
         </form>
     <?php endif; ?>
 
@@ -903,7 +927,7 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
             </button>
             <button type="submit"
                     class="btn btn-success"
-                    form="formFichaObra"
+                    form="formDatosObra"
                     formaction="<?= site_url('/obras/ficha/confirmar-plazo') ?>">
                 <i class="bi bi-check-lg" aria-hidden="true"></i>
                 Confirmar

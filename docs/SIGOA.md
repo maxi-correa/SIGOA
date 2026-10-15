@@ -1570,7 +1570,7 @@ La ficha se compone de:
 
 ## 49.4 Expte. contable
 
-El Expte. contable (`obras.expediente_contable`) se muestra en el encabezado y es editable por SUPERADMINISTRADOR/ADMINISTRADOR dentro del mismo formulario de datos operativos. Para CONSULTA se muestra como texto. La columna ya existía en la estructura consolidada; no se creó migración.
+El Expte. contable (`obras.expediente_contable`) se muestra en el encabezado y es editable por SUPERADMINISTRADOR/ADMINISTRADOR mediante un formulario propio (`POST /obras/ficha/actualizar-expediente`), independiente del formulario de los datos iniciales de plazo, porque permanece editable durante toda la vida de la obra, incluso después de confirmado el plazo. Para CONSULTA se muestra como texto. La columna ya existía en la estructura consolidada; no se creó migración.
 
 ## 49.5 Plazo de obra
 
@@ -1587,7 +1587,9 @@ La ficha muestra un **desglose del cálculo** (plazo inicial, ampliaciones confi
 
 ## 49.6 Edición de datos operativos
 
-* El encabezado y los datos operativos comparten un único formulario (`POST /obras/ficha/actualizar`).
+* El encabezado (Expte. contable) y los datos iniciales de plazo tienen formularios y guardados independientes: el Expte. contable por `POST /obras/ficha/actualizar-expediente` y la fecha de inicio y el plazo por `POST /obras/ficha/actualizar`.
+* El guardado de cada bloque escribe exclusivamente sus propios campos y ninguno lee ni sobrescribe los del otro; el servidor no confía en los campos enviados por el formulario para decidirlo.
+* El formulario de datos iniciales deja de mostrarse, junto con su botón «Guardar cambios», una vez confirmado el plazo: el bloque pasa a solo lectura. El Expte. contable mantiene su propio botón durante toda la vida de la obra.
 * Fechas: entrada `dd/mm/aaaa` con máscara en JS; el backend valida estrictamente con `DateTime::createFromFormat('d/m/Y')`.
 * Si no hay cambios reales, no se actualiza `updated_at`.
 * `created_at` nunca se modifica.
@@ -1610,6 +1612,7 @@ El nuevo inspector debe ser un usuario activo con rol INSPECTOR y distinto del v
 | ------ | ---- | ----------- | ----- |
 | GET  | `/obras/ver/(:num)`         | `Obras::ver`               | SUPERADMINISTRADOR, ADMINISTRADOR, CONSULTA |
 | POST | `/obras/ficha/actualizar`   | `Obras::actualizarFicha`   | SUPERADMINISTRADOR, ADMINISTRADOR |
+| POST | `/obras/ficha/actualizar-expediente` | `Obras::actualizarExpedienteContable` | SUPERADMINISTRADOR, ADMINISTRADOR |
 | POST | `/obras/inspector/actualizar` | `Obras::actualizarInspector` | SUPERADMINISTRADOR, ADMINISTRADOR |
 | POST | `/obras/representante/actualizar` | `Obras::actualizarRepresentante` | SUPERADMINISTRADOR, ADMINISTRADOR |
 

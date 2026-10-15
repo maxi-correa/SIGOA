@@ -19,6 +19,7 @@ final class ObraDatosInicialesPantallaTest extends CIUnitTestCase
             $rutas
         );
         $this->assertStringContainsString("post('/obras/ficha/actualizar', 'Obras::actualizarFicha'", $rutas);
+        $this->assertStringContainsString("post('/obras/ficha/actualizar-expediente', 'Obras::actualizarExpedienteContable'", $rutas);
         $this->assertStringContainsString('role:SUPERADMINISTRADOR,ADMINISTRADOR', $rutas);
     }
 
@@ -29,12 +30,28 @@ final class ObraDatosInicialesPantallaTest extends CIUnitTestCase
         $this->assertStringContainsString('id="modalConfirmarPlazo"', $vista);
         $this->assertStringContainsString('id="btnConfirmarPlazoInicial"', $vista);
         $this->assertStringContainsString('/obras/ficha/confirmar-plazo', $vista);
-        $this->assertStringContainsString('form="formFichaObra"', $vista);
+        $this->assertStringContainsString('form="formDatosObra"', $vista);
         $this->assertStringContainsString('Confirmar datos iniciales', $vista);
 
         $this->assertStringContainsString('$plazoInicialConfirmado', $vista);
         $this->assertStringContainsString('no pueden modificarse', $vista);
         $this->assertStringContainsString('ficha-aviso-ok', $vista);
+    }
+
+    public function testLaVistaSeparaElGuardadoEnDosBloquesIndependientes(): void
+    {
+        $vista = $this->leerApp('Views/obras/ficha.php');
+
+        $this->assertStringContainsString('id="formExpedienteContable"', $vista);
+        $this->assertStringContainsString('action="' . "<?= site_url('/obras/ficha/actualizar-expediente') ?>" . '"', $vista);
+        $this->assertStringContainsString('id="formDatosObra"', $vista);
+        $this->assertStringContainsString("<?= site_url('/obras/ficha/actualizar') ?>", $vista);
+
+        $this->assertStringContainsString(
+            "\$puedeEditar && ! \$plazoInicialConfirmado",
+            $vista,
+            'El bloque de datos de obra no debe ofrecer guardado cuando el plazo ya está confirmado.'
+        );
     }
 
     public function testLaVistaNoUsaEstilosNiJavascriptEmbebidos(): void
@@ -55,7 +72,31 @@ final class ObraDatosInicialesPantallaTest extends CIUnitTestCase
         $this->assertStringContainsString('confirmarDatosIniciales', $controlador);
         $this->assertStringContainsString('validarDatosFicha($datos, true)', $controlador);
         $this->assertStringContainsString('es obligatoria para confirmar los datos iniciales', $controlador);
-        $this->assertStringContainsString('actualizarExpedienteContableFicha', $controlador);
+        $this->assertStringContainsString('public function actualizarExpedienteContable()', $controlador);
+        $this->assertStringContainsString("\$datos['expediente_contable'] = \$obra->expediente_contable;", $controlador);
+    }
+
+    public function testElGuardadoDeLosDatosDeObraNoEscribeElExpedienteContable(): void
+    {
+        $controlador = $this->leerApp('Controllers/Obras.php');
+        $modelo      = $this->leerApp('Models/ObraModel.php');
+
+        $this->assertStringContainsString('public function actualizarFicha()', $controlador);
+        $this->assertStringContainsString('Los datos iniciales de la obra ya fueron confirmados', $controlador);
+
+        $inicioActualizarFicha = strpos($modelo, 'public function actualizarFicha(');
+        $finActualizarFicha    = strpos($modelo, 'public function actualizarExpedienteContable(');
+
+        $this->assertNotFalse($inicioActualizarFicha);
+        $this->assertNotFalse($finActualizarFicha);
+
+        $cuerpo = substr($modelo, $inicioActualizarFicha, $finActualizarFicha - $inicioActualizarFicha);
+
+        $this->assertStringNotContainsString(
+            'expediente_contable',
+            $cuerpo,
+            'actualizarFicha no debe escribir el Expte. contable: tiene su propio guardado.'
+        );
     }
 
     public function testElModeloGarantizaLaInmutabilidadDelPlazoConfirmado(): void

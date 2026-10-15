@@ -118,7 +118,41 @@ final class ObraDatosInicialesTest extends CIUnitTestCase
         $this->assertSame(180, (int) $obra->plazo_original_dias);
     }
 
-    public function testActualizarFichaTrasConfirmarSoloEditaElExpedienteContable(): void
+    public function testActualizarExpedienteContableTrasConfirmarSoloCambiaElExpediente(): void
+    {
+        $this->insertarObra(2);
+
+        $modelo = new ObraModel();
+        $modelo->confirmarDatosIniciales(2, $this->datosIniciales());
+
+        $guardado = $modelo->actualizarExpedienteContable(2, 'EXP-NUEVO');
+
+        $this->assertTrue($guardado);
+
+        $obra = $modelo->find(2);
+
+        $this->assertSame('EXP-NUEVO', $obra->expediente_contable);
+        $this->assertSame(1, (int) $obra->plazo_inicial_confirmado);
+        $this->assertSame('2026-02-02', $obra->fecha_inicio, 'El plazo confirmado no debe modificarse.');
+        $this->assertSame(180, (int) $obra->plazo_original_dias);
+    }
+
+    public function testActualizarFichaSinConfirmarNoTocaElExpedienteContable(): void
+    {
+        $this->insertarObra(2, ['expediente_contable' => 'EXP-ANTIGUO']);
+
+        $guardado = (new ObraModel())->actualizarFicha(2, $this->datosIniciales());
+
+        $this->assertTrue($guardado);
+
+        $obra = (new ObraModel())->find(2);
+
+        $this->assertSame('EXP-ANTIGUO', $obra->expediente_contable, 'El guardado de datos de obra no debe escribir el Expte. contable.');
+        $this->assertSame('2026-02-02', $obra->fecha_inicio);
+        $this->assertSame(180, (int) $obra->plazo_original_dias);
+    }
+
+    public function testActualizarFichaTrasConfirmarRechazaElCambioDeDatosIniciales(): void
     {
         $this->insertarObra(2);
 
@@ -126,19 +160,17 @@ final class ObraDatosInicialesTest extends CIUnitTestCase
         $modelo->confirmarDatosIniciales(2, $this->datosIniciales());
 
         $guardado = $modelo->actualizarFicha(2, [
-            'expediente_contable'   => 'EXP-NUEVO',
             'fecha_inicio'          => '2027-01-01',
             'plazo_original_valor'  => 30,
             'plazo_original_unidad' => 'DIAS',
             'plazo_original_dias'   => 30,
         ]);
 
-        $this->assertTrue($guardado);
+        $this->assertFalse($guardado, 'La fecha y el plazo confirmados deben ser inmutables.');
 
         $obra = $modelo->find(2);
 
-        $this->assertSame('EXP-NUEVO', $obra->expediente_contable);
-        $this->assertSame('2026-02-02', $obra->fecha_inicio, 'El plazo confirmado no debe modificarse.');
+        $this->assertSame('2026-02-02', $obra->fecha_inicio);
         $this->assertSame(180, (int) $obra->plazo_original_dias);
     }
 

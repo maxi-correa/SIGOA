@@ -147,8 +147,13 @@ $routes->get('/obras/ver/(:num)', 'Obras::ver/$1', [
     'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR,CONSULTA'],
 ]);
 
-// FICHA DE OBRA — edición de datos operativos (ADMIN y SUPERADMIN)
+// FICHA DE OBRA — edición de los datos iniciales de plazo (ADMIN y SUPERADMIN)
 $routes->post('/obras/ficha/actualizar', 'Obras::actualizarFicha', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+
+// FICHA DE OBRA — edición del Expte. contable (ADMIN y SUPERADMIN)
+$routes->post('/obras/ficha/actualizar-expediente', 'Obras::actualizarExpedienteContable', [
     'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
 ]);
 
