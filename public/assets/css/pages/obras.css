@@ -32,33 +32,55 @@
     width: auto;
 }
 
-/* --- Zona reservada: buscador y filtros futuros --- */
+/* --- Buscador, filtro por estado y limpiar filtros --- */
 .obras-filtros {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
     gap: var(--space-sm);
-    flex-wrap: wrap;
     margin-bottom: var(--space-lg);
 }
 
-.obras-filtros-item {
+/* Campo de búsqueda y su botón de lupa comparten una misma celda;
+   el campo absorbe el espacio sobrante. */
+.obras-filtros-busqueda {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    min-width: 0;
+}
+
+.obras-filtros-busqueda .form-control {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Selector de estado: ancho legible, sin estirarse. */
+.obras-filtros select.form-control {
+    width: auto;
+    min-width: 11rem;
+}
+
+/* Los controles de la zona comparten altura. */
+.obras-filtros .form-control,
+.obras-filtros .btn {
+    min-height: 2.5rem;
+}
+
+/* Botones: no se estiran para ocupar espacio innecesario. */
+.obras-filtros .btn {
+    width: auto;
+    padding: 0.55rem 1rem;
+    line-height: 1.4;
+}
+
+.obras-filtros-btn-buscar {
     flex: 0 0 auto;
 }
 
-.obras-filtros-buscador {
-    flex: 1 1 16rem;
-    min-width: 12rem;
-}
-
-.obras-filtros select.form-control {
-    width: auto;
-    min-width: 10rem;
-}
-
-.obras-filtros .form-control:disabled {
-    background-color: var(--color-background);
-    color: var(--color-text-secondary);
-    opacity: 0.9;
-    cursor: not-allowed;
+/* Limpiar filtros: solo icono, con área de interacción cómoda. */
+.obras-filtros .obras-filtros-btn-limpiar {
+    padding: 0.55rem 0.8rem;
 }
 
 /* --- Tabla --- */
@@ -128,6 +150,10 @@
 .obras-vacio-texto {
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
+}
+
+.obras-vacio-accion {
+    margin-top: var(--space-md);
 }
 
 .obras-vacio-accion .btn {
@@ -252,10 +278,15 @@
 
 @media (max-width: 580px) {
     .obras-filtros {
-        flex-direction: column;
+        grid-template-columns: 1fr auto;
     }
 
-    .obras-filtros-item,
+    /* El buscador ocupa toda la fila; el estado y limpiar comparten la
+       siguiente línea sin desbordar el contenedor. */
+    .obras-filtros-busqueda {
+        grid-column: 1 / -1;
+    }
+
     .obras-filtros select.form-control {
         width: 100%;
     }

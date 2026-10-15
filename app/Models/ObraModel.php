@@ -65,10 +65,27 @@ class ObraModel extends Model
      * Devuelve la lista de la página actual; el paginador queda disponible
      * en $this->pager.
      *
+     * Admite dos filtros opcionales, evaluados en el servidor para que el
+     * paginador opere siempre sobre el conjunto completo de coincidencias:
+     *
+     * - `$buscar`: fragmento de texto sin distinguir mayúsculas/minúsculas
+     *   (la collation `utf8mb4_general_ci` del proyecto también lo hace
+     *   insensible a acentos), comparado contra nombre de obra, expediente
+     *   municipal, número de licitación, barrio y razón social de la empresa.
+     *   Los caracteres comodín `%` y `_` del texto se escapan explícitamente
+     *   con `escapeLikeString()`: el término se usa como fragmento literal, no
+     *   como patrón. (`like()` solo cita el valor; no escapa los comodines.)
+     * - `$estadoId`: id del catálogo `estados_obra`. `null` no filtra.
+     *
      * @return list<object>
      */
-    public function listarPaginado(int $perPage = 10): array
+    public function listarPaginado(int $perPage = 10, string $buscar = '', ?int $estadoId = null): array
     {
+        $buscar = trim($buscar);
+
+        /* Los comodines LIKE del texto deben tratarse como literales. */
+        $buscarLike = $buscar !== '' ? $this->db->escapeLikeString($buscar) : '';
+
         $this->select('obras.id, obras.codigo, obras.expediente_municipal, obras.nombre, obras.numero_licitacion, obras.created_at')
             ->select('obras.barrio_id, obras.empresa_id, obras.tipo_licitacion_id, obras.estado_obra_id')
             ->select('barrios.nombre AS barrio_nombre')
@@ -79,6 +96,24 @@ class ObraModel extends Model
             ->join('empresas', 'empresas.id = obras.empresa_id', 'left')
             ->join('tipos_licitacion', 'tipos_licitacion.id = obras.tipo_licitacion_id', 'left')
             ->join('estados_obra', 'estados_obra.id = obras.estado_obra_id', 'inner')
+            ->when(
+                $estadoId !== null,
+                static function ($builder) use ($estadoId): void {
+                    $builder->where('obras.estado_obra_id', $estadoId);
+                }
+            )
+            ->when(
+                $buscarLike !== '',
+                static function ($builder) use ($buscarLike): void {
+                    $builder->groupStart()
+                        ->like('obras.nombre', $buscarLike)
+                        ->orLike('obras.expediente_municipal', $buscarLike)
+                        ->orLike('obras.numero_licitacion', $buscarLike)
+                        ->orLike('barrios.nombre', $buscarLike)
+                        ->orLike('empresas.razon_social', $buscarLike)
+                        ->groupEnd();
+                }
+            )
             ->orderBy('obras.created_at', 'DESC')
             ->orderBy('obras.id', 'DESC');
 

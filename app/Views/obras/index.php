@@ -21,6 +21,24 @@ $oldEstado  = old('estado_obra_id') ?? '';
 
 $rolesNav          = $roles ?? [];
 $puedeEditarObras  = array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $rolesNav) !== [];
+
+// Filtros activos del buscador (definidos en datosDashboardObras()).
+$buscarTexto     = (string) ($buscar ?? '');
+$estadoFiltro    = $estado_filtro ?? null;
+$hayFiltros      = (bool) ($hay_filtros ?? ($buscarTexto !== '' || $estadoFiltro !== null));
+
+// Parámetros que conserva cada enlace de paginación.
+$paramsPagina = [];
+if ($buscarTexto !== '') {
+    $paramsPagina['buscar'] = $buscarTexto;
+}
+if ($estadoFiltro !== null) {
+    $paramsPagina['estado'] = $estadoFiltro;
+}
+$urlPagina = static fn (int $pagina): string => '?' . http_build_query($paramsPagina + ['page' => $pagina]);
+
+// Enlace a la misma pantalla sin filtros (current_url() no incluye el query string).
+$urlLimpiar = current_url();
 ?>
 
 <div class="obras-page">
@@ -65,37 +83,76 @@ $puedeEditarObras  = array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $r
         </div>
     <?php endif; ?>
 
-    <!-- Zona reservada para buscador y filtros futuros -->
-    <div class="obras-filtros" aria-hidden="true">
-        <div class="obras-filtros-item obras-filtros-buscador">
+    <!-- Buscador y filtro por estado — filtrado server-side vía GET -->
+    <form class="obras-filtros"
+          id="obrasFiltrosForm"
+          method="get"
+          role="search"
+          aria-label="Buscar y filtrar obras">
+        <div class="obras-filtros-item obras-filtros-busqueda">
             <label class="sr-only" for="buscarObra">Buscar obra</label>
             <input type="search"
                    id="buscarObra"
                    name="buscar"
                    class="form-control"
-                   placeholder="Buscar obra..."
-                   disabled
-                   title="Disponible próximamente">
+                   placeholder="Buscar por nombre, barrio, expediente o empresa..."
+                   value="<?= esc($buscarTexto) ?>"
+                   autocomplete="off">
+            <button type="submit"
+                    class="btn btn-primary obras-filtros-btn-buscar"
+                    aria-label="Buscar obras"
+                    title="Buscar obras">
+                <i class="bi bi-search" aria-hidden="true"></i>
+            </button>
         </div>
         <div class="obras-filtros-item">
-            <label class="sr-only" for="filtroEstado">Filtro por estado</label>
+            <label class="sr-only" for="filtroEstado">Filtrar por estado</label>
             <select id="filtroEstado"
                     name="estado"
-                    class="form-control"
-                    disabled
-                    title="Disponible próximamente">
-                <option value="">Estado</option>
+                    class="form-control">
+                <option value="">Todos los estados</option>
+                <?php foreach ($estados as $estadoFiltroOpcion): ?>
+                    <option value="<?= (int) $estadoFiltroOpcion->id ?>"
+                        <?= $estadoFiltro !== null && $estadoFiltro === (int) $estadoFiltroOpcion->id ? 'selected' : '' ?>>
+                        <?= esc($estadoFiltroOpcion->estado) ?>
+                    </option>
+                <?php endforeach; ?>
             </select>
         </div>
-    </div>
+        <?php if ($hayFiltros): ?>
+            <div class="obras-filtros-item">
+                <a class="btn btn-secondary obras-filtros-btn-limpiar"
+                   href="<?= esc($urlLimpiar) ?>"
+                   aria-label="Limpiar filtros"
+                   title="Limpiar filtros">
+                    <i class="bi bi-eraser" aria-hidden="true"></i>
+                </a>
+            </div>
+        <?php endif; ?>
+    </form>
 
     <?php if (empty($obras)): ?>
 
         <div class="obras-vacio">
-            <p class="obras-vacio-titulo">Aún no hay obras cargadas.</p>
-            <p class="obras-vacio-texto">
-                Utilice <strong>“Agregar obra”</strong> para registrar la primera obra.
-            </p>
+            <?php if ($hayFiltros): ?>
+                <p class="obras-vacio-titulo">No se encontraron obras con los criterios seleccionados.</p>
+                <p class="obras-vacio-texto">
+                    Pruebe con otro texto o restablezca los filtros para ver todas las obras.
+                </p>
+                <p class="obras-vacio-accion">
+                    <a class="btn btn-secondary obras-filtros-btn-limpiar"
+                       href="<?= esc($urlLimpiar) ?>"
+                       title="Quitar todos los filtros">
+                        <i class="bi bi-eraser" aria-hidden="true"></i>
+                        Limpiar filtros
+                    </a>
+                </p>
+            <?php else: ?>
+                <p class="obras-vacio-titulo">Aún no hay obras cargadas.</p>
+                <p class="obras-vacio-texto">
+                    Utilice <strong>“Agregar obra”</strong> para registrar la primera obra.
+                </p>
+            <?php endif; ?>
             <?php if ($puedeEditarObras): ?>
                 <p class="obras-vacio-accion">
                     <button type="button"
@@ -219,7 +276,7 @@ $puedeEditarObras  = array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $r
             <ul class="obras-paginacion-lista">
                 <li>
                     <?php if ($paginaActual > 1): ?>
-                        <a class="obras-paginacion-link" href="?page=<?= $paginaActual - 1 ?>">
+                        <a class="obras-paginacion-link" href="<?= esc($urlPagina($paginaActual - 1)) ?>">
                             <i class="bi bi-chevron-left" aria-hidden="true"></i>
                             Anterior
                         </a>
@@ -233,14 +290,14 @@ $puedeEditarObras  = array_intersect(['SUPERADMINISTRADOR', 'ADMINISTRADOR'], $r
                         <?php if ($p === $paginaActual): ?>
                             <span class="obras-paginacion-link is-current" aria-current="page"><?= $p ?></span>
                         <?php else: ?>
-                            <a class="obras-paginacion-link" href="?page=<?= $p ?>"><?= $p ?></a>
+                            <a class="obras-paginacion-link" href="<?= esc($urlPagina($p)) ?>"><?= $p ?></a>
                         <?php endif; ?>
                     </li>
                 <?php endfor; ?>
 
                 <li>
                     <?php if ($paginaActual < $paginasTotales): ?>
-                        <a class="obras-paginacion-link" href="?page=<?= $paginaActual + 1 ?>">
+                        <a class="obras-paginacion-link" href="<?= esc($urlPagina($paginaActual + 1)) ?>">
                             Siguiente
                             <i class="bi bi-chevron-right" aria-hidden="true"></i>
                         </a>

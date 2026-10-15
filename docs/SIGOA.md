@@ -1324,12 +1324,21 @@ Columnas (en este orden): **N° Expte. · Nombre de obra · Barrio · Empresa ·
 * La columna **Estado** se implementa desde esta versión con los cinco estados documentados, respetando exactamente los colores oficiales de REQUERIMIENTOS §8/§9.
 * La columna **Acciones** queda reservada y muestra la etiqueta neutra "En preparación". No se implementan acciones en esta fase.
 * **Orden por defecto**: `created_at DESC` (las obras más recientes primero). No se implementa ordenamiento manual por columnas en esta fase.
-* **Paginación**: 10 obras por página, realizada por consulta backend (`ObraModel::listarPaginado()` usa `paginate()`). Permite avanzar/retroceder y acceder a páginas concretas, con información contextual "Mostrando X–Y de Z obras".
-* **Estado vacío**: si no existen obras se muestra "Aún no hay obras cargadas." con indicación de usar "Agregar obra". El botón de alta permanece visible.
+* **Paginación**: 10 obras por página, realizada por consulta backend (`ObraModel::listarPaginado()` usa `paginate()`). Permite avanzar/retroceder y acceder a páginas concretas, con información contextual "Mostrando X–Y de Z obras". Los enlaces de página conservan los filtros activos del buscador.
+* **Estado vacío**: si no existen obras se muestra "Aún no hay obras cargadas." con indicación de usar "Agregar obra". El botón de alta permanece visible. Cuando no hay coincidencias con los filtros activos, el mensaje se reemplaza por "No se encontraron obras con los criterios seleccionados.", se conservan visibles el texto y el estado elegidos y se ofrece la acción **"Limpiar filtros"**. El botón de alta permanece visible para los roles con permiso.
 
-## 47.3 Zona reservada para buscador y filtros
+## 47.3 Buscador y filtro por estado
 
-Debajo del encabezado existe una zona preparada (visualmente deshabilitada) para el futuro **buscador** y **filtros** (principalmente el filtro por **Estado**; más adelante también Barrio, Empresa y Tipo de Licitación). No hay búsqueda ni filtrado funcional en esta fase.
+Debajo del encabezado existe una zona funcional de **buscador** y **filtro por estado**, disponible en la vista compartida `obras/index.php` (SUPERADMINISTRADOR, ADMINISTRADOR y CONSULTA).
+
+* **Buscador** (`#buscarObra`): campo de texto de tipo `search`. La búsqueda es **explícita**: se ejecuta con el **botón de lupa** (`type="submit"`, icono `bi-search`, nombre accesible "Buscar obras", visible aunque solo muestre el icono) o con la tecla **Enter**. No hay envío automático por tecla. Busca, sin distinguir mayúsculas/minúsculas ni acentos (collation `utf8mb4_general_ci`), coincidencias parciales en **nombre de obra, barrio, N° de expediente municipal, N° de licitación y razón social de la empresa**.
+* **Filtro por estado** (`#filtroEstado`): selector con la opción **"Todos los estados"** y los estados del catálogo real `estados_obra` (`EstadoObraModel::findAllActivos()`). Se aplica **de inmediato** al cambiar la selección, conservando el texto ingresado.
+* **Limpiar filtros**: acción visible que descarta el texto y el estado y devuelve el listado completo. Es un enlace a `current_url()` (que no incluye la cadena de consulta, por lo que apunta a la misma pantalla sin filtros). Se muestra junto a los controles cuando hay filtros activos y también dentro del estado sin resultados.
+* Ambos controles forman un **formulario GET** (`#obrasFiltrosForm`) con `name="buscar"` y `name="estado"`. Sin JavaScript, el envío sigue funcionando con el botón y la tecla Enter (submit nativo, mejora progresiva).
+* El **filtrado es server-side**: los parámetros llegan a `ObraModel::listarPaginado()` a través de `BaseController::datosDashboardObras()`, de modo que la paginación opera siempre sobre el conjunto completo de coincidencias. No se realiza filtrado local en JavaScript (produciría resultados incompletos por la paginación server-side).
+* El término se **recorta** y limita a 100 caracteres; los comodines `%` y `_` se escapan (`escapeLikeString()`), por lo que se tratan como texto literal. El `estado` se valida contra el catálogo real: un valor desconocido o no numérico se ignora (equivale a "Todos los estados").
+* **Comportamiento JS** en `public/assets/js/pages/obras.js`: el cambio de estado se envía de inmediato (conservando el término) y, tras la recarga, se restaura el foco y el cursor en el buscador cuando hay término. La búsqueda por texto no se dispara automáticamente.
+* Cambiar de filtro reinicia a la **página 1** (el formulario no envía `page`) y los enlaces de paginación conservan los filtros activos.
 
 ## 47.4 Alta inicial de obras
 
@@ -1398,13 +1407,13 @@ La creación solo es accesible para SUPERADMINISTRADOR y ADMINISTRADOR. El lista
 * paginación (10/página) y orden `created_at DESC`;
 * estado de obra con colores oficiales;
 * presentación `S/D` para datos faltantes;
-* zona reservada para buscador/filtros;
+* buscador explícito (botón de lupa / Enter), filtro por estado inmediato, acción "Limpiar filtros" y filtrado server-side;
 * alta inicial de obra (modal);
 * estado obligatorio PREVIO INICIO;
 * generación automática de código OBR-XXXXXX;
 * componentes CSS/JS nuevos solo donde fueron necesarios.
 
-**Fuera de alcance (fases futuras):** edición completa de obras, eliminación, cambio manual de estado, gestión completa de estados/transiciones, detalle completo, certificados/certificaciones, inspecciones, fotografías, documentación, contratos, actas, búsquedas y filtros avanzados, acciones masivas, y dashboards diferenciados entre roles.
+**Fuera de alcance (fases futuras):** edición completa de obras, eliminación, cambio manual de estado, gestión completa de estados/transiciones, detalle completo, certificados/certificaciones, inspecciones, fotografías, documentación, contratos, actas, filtros avanzados (Barrio, Empresa y Tipo de Licitación además del estado), acciones masivas, y dashboards diferenciados entre roles.
 
 ---
 
@@ -2240,7 +2249,11 @@ Archivo: `public/sw.js`. Implementación deliberadamente pequeña y mantenible.
 * **Cache-first para recursos estáticos** (`/assets/…`, manifest, robots, favicon), con fallback a red; las respuestas nuevas se incorporan al cache solo si son `ok`, del mismo origen (`type === 'basic'`) y **no llevan cabecera `Set-Cookie`**.
 * **No se intercepta ni se cachea** ninguna página HTML, `/login`, `/dashboard`, APIs ni futuras rutas de sincronización: esas respuestas son privadas/dinámicas y pueden contener sesión, CSRF o datos personales.
 * **No hay Background Sync**, ni cola, ni lógica de sincronización (Fase D.x).
-* **Versionado**: constante `CACHE_VERSION = 'sigoa-shell-v1'`. Al modificar cualquier asset del app shell hay que incrementar la versión, o los clientes quedarán con assets viejos. En `activate` se borran los caches `sigoa-shell-*` de versiones anteriores.
+* **Versionado**: constante `CACHE_VERSION` (forma `sigoa-shell-vN`). Se debe incrementar cuando se modifica **cualquier recurso que el Service Worker pueda almacenar**, sin distinguir entre precargado y runtime:
+  * los assets precargados del app shell (`SHELL_ASSETS`);
+  * los recursos estáticos que se incorporan a la caché en runtime mediante la estrategia cache-first (todo `/assets/…`, más `manifest.json`, `robots.txt` y `favicon.ico`).
+
+  Si no se incrementa, los clientes seguirán sirviendo la copia obsoleta desde el cache. El bump es el **mecanismo de invalidación**: al cambiar `CACHE_VERSION` cambian los bytes de `sw.js`, el navegador reinstala el Service Worker y, en `activate`, se borran los caches `sigoa-shell-*` de versiones anteriores, conforme al ciclo de vida implementado.
 
 Alcance del SW: servido desde la raíz (`/sw.js`), su control cubre toda la aplicación.
 

@@ -84,10 +84,23 @@ abstract class BaseController extends Controller
     /**
      * Datos del dashboard administrativo (sección Obras).
      *
-     * Compartido por SUPERADMINISTRADOR y ADMINISTRADOR en esta fase.
-     * Las obras se listan paginadas (10 por página) y ordenadas por
+     * Compartido por SUPERADMINISTRADOR, ADMINISTRADOR y CONSULTA en esta
+     * fase. Las obras se listan paginadas (10 por página) y ordenadas por
      * created_at DESC. Incluye los catálogos necesarios para el modal
      * de alta inicial.
+     *
+     * Lee del query string los filtros del buscador del listado:
+     *
+     * - `buscar`: término de texto (nombre, barrio, expediente, empresa o
+     *   número de licitación). Se recorta y limita; vacío = sin filtro.
+     * - `estado`: id del catálogo `estados_obra`. Se valida contra el
+     *   catálogo real; un valor desconocido o no numérico se ignora.
+     *
+     * El filtrado ocurre en el servidor, en ObraModel::listarPaginado(),
+     * para que la paginación opere sobre el conjunto completo de
+     * coincidencias. En la vista se exponen 'buscar', 'estado_filtro' y
+     * 'hay_filtros' para rellenar el formulario y diferenciar el estado
+     * vacío con/sin filtros activos.
      *
      * @return array<string, mixed>
      */
@@ -95,8 +108,12 @@ abstract class BaseController extends Controller
     {
         $session = session();
 
+        $estados      = (new \App\Models\EstadoObraModel())->findAllActivos();
+        $buscar       = $this->normalizarTerminoBusqueda($this->request->getGet('buscar'));
+        $estadoFiltro = $this->validarEstadoFiltro($this->request->getGet('estado'), $estados);
+
         $obraModel = new \App\Models\ObraModel();
-        $obras     = $obraModel->listarPaginado(10);
+        $obras     = $obraModel->listarPaginado(10, $buscar, $estadoFiltro);
 
         return [
             'titulo'               => 'Obras',
@@ -109,8 +126,53 @@ abstract class BaseController extends Controller
             'barrios'              => (new \App\Models\BarrioModel())->findAllActivos(),
             'empresas'             => (new \App\Models\EmpresaModel())->findAllActivas(),
             'tipos_licitacion'     => (new \App\Models\TipoLicitacionModel())->findAllActivos(),
-            'estados'              => (new \App\Models\EstadoObraModel())->findAllActivos(),
+            'estados'              => $estados,
             'estado_previo_inicio' => (new \App\Models\EstadoObraModel())->findPrevioInicio(),
+            'buscar'               => $buscar,
+            'estado_filtro'        => $estadoFiltro,
+            'hay_filtros'          => $buscar !== '' || $estadoFiltro !== null,
         ];
+    }
+
+    /**
+     * Normaliza el término de búsqueda recibido por query string.
+     *
+     * Devuelve '' si el valor no es una cadena o queda vacío tras recortar
+     * espacios. Elimina caracteres de control y limita el largo a 100
+     * caracteres para evitar consultas innecesariamente pesadas.
+     */
+    private function normalizarTerminoBusqueda(mixed $valor): string
+    {
+        if (! is_string($valor)) {
+            return '';
+        }
+
+        $valor = preg_replace('/[\x00-\x1F\x7F]/u', '', $valor) ?? '';
+
+        return mb_substr(trim($valor), 0, 100);
+    }
+
+    /**
+     * Valida el id de estado recibido por query string contra el catálogo
+     * real de `estados_obra`.
+     *
+     * @param array<int, object> $estados Catálogo de EstadoObraModel::findAllActivos()
+     * @return int|null id válido o null cuando no hay filtro de estado aplicable
+     */
+    private function validarEstadoFiltro(mixed $valor, array $estados): ?int
+    {
+        if ($valor === null || $valor === '' || ! is_numeric($valor)) {
+            return null;
+        }
+
+        $id = (int) $valor;
+
+        foreach ($estados as $estado) {
+            if ((int) $estado->id === $id) {
+                return $id;
+            }
+        }
+
+        return null;
     }
 }

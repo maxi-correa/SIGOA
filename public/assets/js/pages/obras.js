@@ -192,4 +192,35 @@
         }
     });
 
+    /* ------------------------------------------------------------------
+       Buscador y filtro por estado
+       ------------------------------------------------------------------
+       El listado se filtra en el servidor (el paginador necesita operar
+       sobre el conjunto completo de coincidencias). El formulario hace GET:
+       el texto se busca de forma explícita con el botón de lupa o la tecla
+       Enter (submit nativo), y el cambio de estado se aplica de inmediato
+       conservando el texto ingresado. La acción "Limpiar filtros" es un
+       enlace a la misma pantalla sin query string. Sin JavaScript, el
+       formulario sigue funcionando con el botón y la tecla Enter.
+       ------------------------------------------------------------------ */
+    var formFiltros        = document.getElementById('obrasFiltrosForm');
+    var inputBuscar        = document.getElementById('buscarObra');
+    var selectEstadoFiltro = document.getElementById('filtroEstado');
+
+    if (formFiltros && selectEstadoFiltro) {
+        selectEstadoFiltro.addEventListener('change', function () {
+            formFiltros.submit();
+        });
+    }
+
+    /* Tras la recarga, devolver el foco al buscador para continuar
+       escribiendo sin volver a hacer clic. */
+    if (inputBuscar && inputBuscar.value !== '') {
+        inputBuscar.focus();
+        if (typeof inputBuscar.setSelectionRange === 'function') {
+            var largo = inputBuscar.value.length;
+            inputBuscar.setSelectionRange(largo, largo);
+        }
+    }
+
 })();

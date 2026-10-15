@@ -17,14 +17,24 @@
 
    NO hay Background Sync ni cola de operaciones: eso es Fase D.x.
 
-   ACTUALIZACIÓN DE VERSIÓN: al modificar cualquier asset del app shell
-   hay que incrementar CACHE_VERSION para no quedar con assets viejos.
+   ACTUALIZACIÓN DE VERSIÓN: al modificar CUALQUIER recurso que el Service
+   Worker pueda almacenar —tanto los assets precargados del app shell
+   (SHELL_ASSETS) como los recursos estáticos que se incorporan a la caché en
+   runtime mediante la estrategia cache-first (todo /assets/, más manifest,
+   robots.txt y favicon)— hay que incrementar CACHE_VERSION. No distingue
+   entre precargado y runtime: si el recurso puede quedar cacheado, la
+   versión debe subir.
+
+   El bump es el mecanismo de invalidación: al cambiar CACHE_VERSION cambian
+   los bytes de este archivo, el navegador reinstala el Service Worker y, en
+   `activate`, se borran los caches `sigoa-shell-*` de versiones anteriores,
+   de modo que los clientes no quedan sirviendo copias obsoletas.
    =================================================================== */
 
 'use strict';
 
-var CACHE_VERSION = 'sigoa-shell-v13';
-var SHELL_CACHE = 'sigoa-shell-v13';
+var CACHE_VERSION = 'sigoa-shell-v16';
+var SHELL_CACHE = 'sigoa-shell-v16';
 
 var PREFIJO_ESTATICO = '/assets/';
 
