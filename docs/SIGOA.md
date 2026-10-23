@@ -2044,6 +2044,9 @@ Endpoints (grupo `inspector`, filtros `auth` + `role:INSPECTOR` + CSRF):
 | GET | `/inspector/offline/obras` | Snapshot de obras vigentes (§52.11) | pendiente |
 | GET | `/inspector/fotografias/ver/{uuid}` | Servir fotografía original | **implementado — ver §64** |
 | GET | `/inspector/fotografias/mini/{uuid}` | Servir miniatura | **implementado — ver §64** |
+| GET | `/inspector/documentacion/{id}` | Documentación vigente de la obra (pantalla) | **implementado — ver §70** |
+| GET | `/inspector/documentacion/api/{id}` | Documentación vigente de la obra (JSON) | **implementado — ver §70** |
+| GET | `/inspector/documentacion/ver/{id}` | Servir PDF de un documento de la obra | **implementado — ver §70** |
 
 * **Idempotencia:** si el `uuid` ya existe, el servidor devuelve el registro existente (200) sin duplicar.
 * **401:** sesión expirada → JSON 401 → proceso de reautenticación (§52.6).
@@ -4780,3 +4783,191 @@ se preserva el invariante *NEUTRALIZADA ⇔ período abierto*.
 Suite completa: **626 pruebas / 2570 aserciones**. Quedan **2 fallos preexistentes** en `UsuariosGestionTest`
 que dependen del orden de ejecución (pasan aislados); son ajenos a los Bloques 2, 3, 4 y 5 y no se
 modificaron.
+
+## 70. Documentación disponible del inspector — consulta de la versión vigente, descarga y apertura sin conexión
+
+La gestión documental de una obra era, hasta ahora, exclusivamente administrativa: el rol que carga un
+PDF es el que lo ve. El inspector, que es quien está en la obra, no tenía forma de consultar la
+documentación vigente (acta de inicio, de reinicio, de neutralización, planos, otros) ni de abrirla en
+un lugar sin cobertura. Esta sección implementa la **consulta** de la documentación vigente y su
+**disponibilidad sin conexión**, sin tocar la carga, el reemplazo de versiones ni la neutralización, que
+siguen siendo materia de los roles administrativos.
+
+### 70.1 Qué ve el inspector: solo la versión vigente
+
+El inspector consulta **la versión vigente de cada documento lógico** de la obra, nunca el historial de
+versiones reemplazadas. La regla no es una condición de la vista: es una consulta distinta.
+
+* `DocumentoModel::listarPorObra($obraId)` — historial completo (uso administrativo, sin cambios).
+* `DocumentoModel::listarVigentesPorObra($obraId)` — únicamente `es_version_actual = 1`.
+
+Ambas comparten el mismo constructor de consulta (`builderPorObra()`), de modo que el tipo de documento,
+el usuario de carga y el evento vinculado se resuelven igual en los dos casos: la diferencia es
+exactamente una condición.
+
+El listado se entrega en JSON con la **identidad lógica** de cada documento (`logico_id` =
+`documento_padre_id` o, si no tiene padre, el propio `id`). Es el dato que permite emparejar la copia
+descargada con la versión vigente del servidor: al reemplazarse una versión cambian el identificador
+físico del PDF y el del registro `documentos`, pero **no** la identidad lógica del documento.
+
+### 70.2 Autorización: la asignación vigente, y nada más
+
+La pantalla vive en el grupo de rutas `inspector` (`auth` + `role:INSPECTOR`), de modo que un rol
+administrativo no entra por aquí y un inspector sin asignación no llega a la obra. Dentro de la pantalla
+la autorización es la misma de las inspecciones: `InspectoresObrasModel::esVigente($obraId, $usuarioId)`.
+
+| Operación | Regla |
+| --- | --- |
+| Ver la documentación de la obra | Rol `INSPECTOR` **y** asignación vigente |
+| Consultar el listado en JSON | Rol `INSPECTOR` **y** asignación vigente |
+| Descargar / abrir un PDF | Asignación vigente **sobre la obra del documento** |
+
+La entrega del PDF comprueba la asignación **sobre la obra del documento**, no sobre la URL: pedir el
+PDF de un documento de otra obra responde 403 aunque el identificador sea válido. Si la consulta incluye
+`obra_id`, debe coincidir con la obra real del documento.
+
+El **servicio** que entrega el archivo es único: `App\Services\DocumentoArchivo`, que ahora usan tanto la
+gestión administrativa como esta pantalla. `servirPdf()` resuelve la ruta relativa contra la raíz de
+almacenamiento, distingue dos situaciones que antes se confundían y nunca expone la ubicación del
+archivo en el servidor:
+
+* ruta no autorizada (travesía, ruta absoluta, raíz hermana con prefijo común) → **403** «Acceso
+  denegado»;
+* archivo que ya no está en el almacenamiento → **404** «Archivo no encontrado»;
+* archivo presente → **200** con el PDF y `Content-Disposition: inline`.
+
+### 70.3 Qué se guarda en el dispositivo
+
+La copia local se guarda en IndexedDB (base `SIGOA`, **versión 3**) con dos almacenes nuevos:
+
+| Almacén | Clave | Contenido |
+| --- | --- | --- |
+| `documentos` | `clave` | PDF descargado y sus metadatos (versión, tamaño, hash, fecha de descarga) |
+| `perfiles` | `id` | Perfil local de la cuenta activa (`id = 'activo'`) |
+
+El almacén `documentos` tiene dos índices: `por_usuario_obra` (clave `usuario_id::obra_id`) y
+`por_usuario` (clave `usuario_id`). La clave de cada copia es
+`usuario_id::obra_id::documento_logico_id`: **dos cuentas que usen el mismo dispositivo no ven la
+documentación de la otra**, porque la separación está en la clave, no en la interfaz.
+
+### 70.4 Actualizar una copia nunca es «escribir encima»
+
+Reemplazar una copia local es la operación delicada: si el dispositivo se queda sin espacio, se queda
+sin red a mitad de la escritura o el PDF llegó truncado, escribir encima destruiría la versión que
+todavía funcionaba. El procedimiento es deliberadamente largo:
+
+1. la versión nueva se escribe en una **clave temporal** (`<clave>::tmp`, marcada con `temporal: 1`);
+2. se recupera y se comprueba que la copia es utilizable (existe y su tamaño coincide);
+3. solo entonces se **sustituye** la anterior con `reemplazar()`, que hace el borrado y la escritura
+   dentro de **una sola transacción**: si la escritura falla, la transacción se aborta y la copia
+   anterior permanece intacta;
+4. la temporal se elimina.
+
+Ante cualquier fallo se borra la temporal y **se conserva la copia que ya funcionaba**. Las temporales
+que sobrevivan a una sesión interrumpida se descartan al cargar la pantalla: no son documentos, son
+restos de una actualización a medias.
+
+### 70.5 Lo que se verifica antes de guardar
+
+Una descarga solo se guarda si el contenido es el que el servidor dice que es:
+
+* el tamaño recibido coincide con `tamano_bytes` del documento;
+* los primeros 1024 bytes contienen la firma `%PDF-` (un HTML de error o un archivo truncado se
+  descartan);
+* cuando el navegador lo permite, se calcula el **SHA-256** del contenido y se guarda con la copia.
+
+### 70.6 La pantalla sin conexión
+
+`public/assets/offline/documentacion.html` es un **shell estático**: no contiene datos de sesión ni de
+la documentación (es un archivo HTML sin PHP). El service worker lo entrega cuando la navegación a
+`/inspector/documentacion/<id>`, `/inspector/obras/ver/<id>` o `/inspector/dashboard` falla por falta
+de conexión; la respuesta autenticada del servidor **nunca se cachea**. Si el shell tampoco está en la
+caché, se responde un 503 mínimo que explica la situación.
+
+La vista en línea (`app/Views/inspector/documentacion.php`) y el shell comparten los **mismos
+identificadores**, y por eso el mismo módulo (`public/assets/js/pages/documentacion-inspector.js`) los
+pinta igual: la lista, los filtros, el estado vacío, el aviso y el indicador de conexión son los
+mismos elementos en los dos casos. El render se construye con el DOM (nunca con `innerHTML`), de modo que
+un nombre de documento no puede inyectar marcado.
+
+El indicador de conexión **no se apoya en `navigator.onLine`**: el cliente consulta la API real y
+distingue tres situaciones —con y sin conexión, y con la sesión caída (401)— porque «hay red» y «la
+sesión sigue viva» son cosas distintas (RNF §44).
+
+### 70.7 El perfil local de la sesión
+
+Las copias descargadas pertenecen a la cuenta que las descargó, así que el dispositivo necesita saber
+qué cuenta está activa. `app.js` registra el perfil (`perfiles/activo`) leyendo los metadatos
+`sigOA-usuario-id` y `sigOA-usuario-nombre` que expone el layout autenticado, y se borra:
+
+* al **cerrar sesión** (`components/sidebar.js`), antes de navegar, para no perder la transacción;
+* al **cargar la pantalla de login** (`pages/login.js`), porque la sesión anterior terminó y el shell
+  sin conexión no debe mostrar la documentación de la cuenta anterior.
+
+No se guarda ningún dato sensible: solo el identificador de usuario y su nombre.
+
+### 70.8 Rutas, controlador y componentes
+
+| Pieza | Ubicación |
+| --- | --- |
+| Rutas | `GET /inspector/documentacion/(:num)`, `GET /inspector/documentacion/api/(:num)`, `GET /inspector/documentacion/ver/(:num)` (grupo `inspector`: `auth` + `role:INSPECTOR`) |
+| Controlador | `App\Controllers\Inspector\Documentacion` — `index()`, `api()`, `ver()` |
+| Servicio | `App\Services\DocumentoArchivo` — `rutaNormalizada()`, `rutaAutorizada()`, `servirPdf()` |
+| Modelo | `App\Models\DocumentoModel` — `listarVigentesPorObra()`, `builderPorObra()` |
+| Vista | `app/Views/inspector/documentacion.php` |
+| CSS | `public/assets/css/pages/documentacion-inspector.css` |
+| JS | `public/assets/js/pages/documentacion-inspector.js` |
+| Shell offline | `public/assets/offline/documentacion.html` |
+
+La entrada a la pantalla es el enlace «Documentación disponible» de la ficha de obra del inspector.
+
+### 70.9 Interfaz
+
+* Tarjeta por documento: tipo, nombre, versión, fecha, tamaño y fecha de descarga, con un distintivo
+  (`badge`) del estado de la copia: *Disponible offline*, *Versión nueva disponible*, *Pendiente de
+  descargar* o *Ya no vigente*.
+* Acciones por documento: **Ver** (abre la copia local si existe, el PDF del servidor si no), **Descargar**
+  o **Actualizar** según el estado, y **Quitar descarga** cuando hay copia local.
+* Filtros: *Todos*, *Disponibles offline* y *Pendientes de descargar*.
+* **Quitar descarga** pide confirmación en el modal propio del sistema (§36) y solo afecta al
+  dispositivo: el documento del servidor no se modifica.
+* Colores, tipografía, iconografía y espaciados son los del sistema: la página no introduce tokens
+  nuevos.
+
+### 70.10 Pruebas
+
+* `tests/database/InspectorDocumentacionTest.php` (16) — listado de vigentes frente a historial, apertura
+  de la pantalla, rechazo de obra sin asignación vigente, JSON con solo los vigentes y con la identidad
+  lógica, rol administrativo fuera de la pantalla, entrega del PDF (200/403/404), rechazo de un
+  `obra_id` que no coincide y de una ruta fuera de la raíz, y comprobación de que la respuesta no
+  expone la ruta física.
+* `tests/unit/InspectorDocumentacionInterfazTest.php` (13) — contrato estructural: layout autenticado,
+  ausencia de estilos y scripts embebidos, JSON escapado, identificadores compartidos con el shell,
+  shell sin datos de sesión, montage con el DOM y sin `innerHTML`, verificación del PDF, rutas con su
+  filtro de rol, tokens del sistema en el CSS y registro/borrado del perfil local.
+* `tests/js/documentacion-inspector.test.js` (24) — funciones puras: claves, estados, emparejamiento por
+  documento lógico, copia que ya no está vigente, modo general sin conexión, filtros y formateo.
+* `tests/unit/InfraestructuraOfflineTest.php` — adaptado a la base local v3 y al shell de documentación
+  (el chequeo de recursos del app shell pasó a examinar la lista de precarga, que es lo que el service
+  worker guarda en caché).
+
+### 70.11 Fuera de alcance
+
+* **Carga, reemplazo, borrado y neutralización de documentos**: siguen siendo exclusivos de los roles
+  administrativos.
+* Descarga por lotes o descarga automática de toda la obra.
+* Apertura del PDF con anotaciones, firma o herramientas de marcado.
+* Sincronización de acciones del inspector: esta pantalla solo **consulta**; no escribe en el servidor.
+* Conservación de la copia local más allá de que el documento deje de estar vigente: se conserva y se
+  marca como tal, y el inspector decide si la quita.
+
+### 70.12 Discrepancias
+
+* El inspector **no ve el historial de versiones** de un documento. Es deliberado: la pantalla muestra la
+  documentación vigente, que es la que se consulta en la obra. El historial permanece en la gestión
+  administrativa.
+* La copia local **no caduca por tiempo**: se mantiene hasta que el inspector la quita o hasta que el
+  documento deja de estar vigente. No hay política de expiración automática.
+* El service worker **no sirve el listado de la obra sin conexión** desde la caché: el shell sin conexión
+  muestra lo que hay en el dispositivo. El listado vigente requiere conexión, salvo en la propia obra
+  abierta, cuyo contenido ya está en la copia local.

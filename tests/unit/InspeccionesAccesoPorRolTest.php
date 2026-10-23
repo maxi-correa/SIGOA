@@ -361,7 +361,7 @@ final class InspeccionesAccesoPorRolTest extends CIUnitTestCase
         $ultima = end($nombres);
 
         $this->assertSame(
-            '2026-10-14-120000_AddNeutralizacionAbiertaUnica.php',
+            '2026-10-16-140100_AddForeignKeysToDocumentos.php',
             $ultima,
             'El cambio de esquema más reciente del proyecto es el de neutralizaciones (BLOQUE 5).'
         );

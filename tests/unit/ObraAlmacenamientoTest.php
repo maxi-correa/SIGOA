@@ -380,6 +380,142 @@ final class ObraAlmacenamientoTest extends CIUnitTestCase
         $this->assertNull($servicio->rutaRelativaObra('OBR-1'));
     }
 
+    /* =================================================================
+       Nombre físico de PDFs de documentación de obra
+       ================================================================= */
+
+    public function testNormalizarTipoDocumentoSinAcentosMayusculasYGuiones(): void
+    {
+        $servicio = new ObraAlmacenamiento($this->tmp);
+
+        $this->assertSame('ACTA-DE-INICIO', $servicio->normalizarTipoDocumento('ACTA DE INICIO'));
+        $this->assertSame(
+            'RECEPCION-PROVISORIA',
+            $servicio->normalizarTipoDocumento('Recepción Provisoria')
+        );
+        $this->assertSame(
+            'ACTA-DE-DEVOLUCION-DE-VEHICULO',
+            $servicio->normalizarTipoDocumento('ACTA DE DEVOLUCIÓN DE VEHÍCULO')
+        );
+        $this->assertSame(
+            'DESIGNACION-DE-INSPECCION',
+            $servicio->normalizarTipoDocumento('DESIGNACIÓN DE INSPECCIÓN')
+        );
+    }
+
+    /**
+     * Los caracteres problemáticos (separadores de ruta, puntuación,
+     * control) no sobreviven a la normalización: nada que pueda alterar la
+     * ruta llega al nombre.
+     */
+    public function testNormalizarTipoDocumentoEliminaCaracteresProblematicos(): void
+    {
+        $servicio = new ObraAlmacenamiento($this->tmp);
+
+        $this->assertSame('PLANOS-Y-DETALLES-A1', $servicio->normalizarTipoDocumento('PLANOS Y DETALLES / A1'));
+        $this->assertSame('OTROS-ANEXO-2', $servicio->normalizarTipoDocumento('OTROS: anexo #2'));
+        $this->assertSame('A-B', $servicio->normalizarTipoDocumento('A__B'));
+        $this->assertSame('A-B', $servicio->normalizarTipoDocumento('-- A . B --'));
+    }
+
+    public function testNormalizarTipoDocumentoSinCaracteresValidosDevuelveNull(): void
+    {
+        $servicio = new ObraAlmacenamiento($this->tmp);
+
+        $this->assertNull($servicio->normalizarTipoDocumento(''));
+        $this->assertNull($servicio->normalizarTipoDocumento('   '));
+        $this->assertNull($servicio->normalizarTipoDocumento('¿?¿?'));
+        $this->assertNull($servicio->normalizarTipoDocumento('../'));
+    }
+
+    /**
+     * Tipos únicos y por evento: sin identificador.
+     */
+    public function testNombrePdfDocumentoSinIdentificador(): void
+    {
+        $servicio = new ObraAlmacenamiento($this->tmp);
+
+        $this->assertSame(
+            'OBR-000123_ACTA-DE-INICIO_V01.pdf',
+            $servicio->nombrePdfDocumento('OBR-000123', 'ACTA DE INICIO', 1)
+        );
+        $this->assertSame(
+            'OBR-000123_ACTA-DE-NEUTRALIZACION_V03.pdf',
+            $servicio->nombrePdfDocumento('OBR-000123', 'ACTA DE NEUTRALIZACIÓN', 3)
+        );
+    }
+
+    /**
+     * Documentos múltiples: el identificador (id raíz cero-padded) separa
+     * documentos independientes del mismo tipo.
+     */
+    public function testNombrePdfDocumentoConIdentificador(): void
+    {
+        $servicio = new ObraAlmacenamiento($this->tmp);
+
+        $this->assertSame(
+            'OBR-000123_PLANO_001_V01.pdf',
+            $servicio->nombrePdfDocumento('OBR-000123', 'PLANO', 1, 1)
+        );
+        $this->assertSame(
+            'OBR-000123_PLANO_002_V02.pdf',
+            $servicio->nombrePdfDocumento('OBR-000123', 'PLANO', 2, 2)
+        );
+        $this->assertSame(
+            'OBR-000123_OTROS_123_V10.pdf',
+            $servicio->nombrePdfDocumento('OBR-000123', 'OTROS', 10, 123)
+        );
+    }
+
+    public function testNombrePdfDocumentoVersionConDosDigitosMinimo(): void
+    {
+        $servicio = new ObraAlmacenamiento($this->tmp);
+
+        $this->assertStringEndsWith('_V01.pdf', (string) $servicio->nombrePdfDocumento('OBR-000001', 'PLIEGO', 1));
+        $this->assertStringEndsWith('_V09.pdf', (string) $servicio->nombrePdfDocumento('OBR-000001', 'PLIEGO', 9));
+        $this->assertStringEndsWith('_V10.pdf', (string) $servicio->nombrePdfDocumento('OBR-000001', 'PLIEGO', 10));
+        $this->assertStringEndsWith('_V100.pdf', (string) $servicio->nombrePdfDocumento('OBR-000001', 'PLIEGO', 100));
+    }
+
+    public function testNombrePdfDocumentoRechazaEntradasInvalidas(): void
+    {
+        $servicio = new ObraAlmacenamiento($this->tmp);
+
+        $this->assertNull($servicio->nombrePdfDocumento('INVALIDO', 'PLANO', 1));
+        $this->assertNull($servicio->nombrePdfDocumento('OBR-000001', '¿?', 1));
+        $this->assertNull($servicio->nombrePdfDocumento('OBR-000001', 'PLANO', 0));
+        $this->assertNull($servicio->nombrePdfDocumento('OBR-000001', 'PLANO', 1, 0));
+        $this->assertNull($servicio->nombrePdfDocumento('OBR-000001', 'PLANO', 1, -5));
+    }
+
+    /**
+     * El nombre generado es seguro: sin separadores de ruta ni traversal.
+     */
+    public function testNombrePdfDocumentoEsUnNombreSeguro(): void
+    {
+        $servicio = new ObraAlmacenamiento($this->tmp);
+
+        $nombre = (string) $servicio->nombrePdfDocumento('OBR-000001', 'ACTA DE INICIO', 2);
+
+        $this->assertSame(basename($nombre), $nombre);
+        $this->assertStringNotContainsString('/', $nombre);
+        $this->assertStringNotContainsString('\\', $nombre);
+        $this->assertMatchesRegularExpression('/\A[A-Za-z0-9._-]+\z/', $nombre);
+    }
+
+    public function testExisteArchivoRelativo(): void
+    {
+        $servicio = new ObraAlmacenamiento($this->tmp);
+
+        $this->assertTrue($servicio->asegurarEstructuraObra('OBR-000001'));
+        $this->assertFalse($servicio->existeArchivoRelativo('OBR-000001/falta.pdf'));
+
+        file_put_contents($this->tmp . DIRECTORY_SEPARATOR . 'OBR-000001' . DIRECTORY_SEPARATOR . 'esta.pdf', 'x');
+
+        $this->assertTrue($servicio->existeArchivoRelativo('OBR-000001/esta.pdf'));
+        $this->assertFalse($servicio->existeArchivoRelativo('../../etc/passwd'));
+    }
+
     private function eliminarTree(string $directorio): void
     {
         if (! is_dir($directorio)) {

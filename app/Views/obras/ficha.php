@@ -117,6 +117,12 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
                 <i class="bi bi-pause-circle" aria-hidden="true"></i>
                 Ver Neutralizaciones
             </a>
+
+            <a href="<?= site_url('/obras/documentacion/' . (int) $obra->id) ?>"
+               class="btn btn-secondary ficha-btn-documentacion">
+                <i class="bi bi-folder2-open" aria-hidden="true"></i>
+                Documentación
+            </a>
         </div>
     </div>
 

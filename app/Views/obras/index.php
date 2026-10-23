@@ -240,6 +240,13 @@ $urlLimpiar = current_url();
                                         Ver obra
                                     </a>
 
+                                    <a class="obras-btn-accion"
+                                       href="<?= site_url('/obras/documentacion/' . (int) $obra->id) ?>"
+                                       title="Documentación">
+                                        <i class="bi bi-folder" aria-hidden="true"></i>
+                                        Documentación
+                                    </a>
+
                                     <?php if ($puedeEditarObras): ?>
                                         <button type="button"
                                                 class="obras-btn-accion"

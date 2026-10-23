@@ -56,6 +56,23 @@ $puedeInspeccionar = (bool) ($puede_inspeccionar ?? false);
         </a>
     </section>
 
+    <!-- ============================================================
+         Acción "Documentación disponible": consulta de los documentos
+         vigentes de la obra y descarga selectiva para poder abrirlos
+         sin conexión.
+
+         Es una consulta de solo lectura como el historial: se muestra en
+         cualquier estado de obra, porque el inspector puede necesitar
+         consultar un documento aunque no pueda iniciar inspecciones.
+         ============================================================ -->
+    <section class="io-consulta">
+        <a href="<?= site_url('/inspector/documentacion/' . (int) $obra->id) ?>"
+           class="btn btn-secondary io-btn-consulta">
+            <i class="bi bi-folder2-open" aria-hidden="true"></i>
+            Documentación disponible
+        </a>
+    </section>
+
     <?php if (session()->getFlashdata('warning')): ?>
         <div class="alert alert-warning" role="alert">
             <span class="alert-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></span>

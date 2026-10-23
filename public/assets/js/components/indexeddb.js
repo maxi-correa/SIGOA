@@ -3,19 +3,26 @@
    ===================================================================
    Implementación vanilla JavaScript, sin librerías externas.
 
-   Base local versionada: `SIGOA` (v1 → v2 en Fase D.2) con stores:
+   Base local versionada: `SIGOA` (v1 → v2 en Fase D.2 → v3 con la
+   documentación descargable del inspector) con stores:
 
    * inspecciones  — PK `uuid`     (identidad local de sincronización;
-                                    D.2 agrega el índice `por_obra`)
+                                     D.2 agrega el índice `por_obra`)
    * fotografias   — PK `uuid`     (relación por `inspeccion_uuid`;
-                                    blobs/thumbnail optimizados desde
-                                    Fase D.2)
+                                     blobs/thumbnail optimizados desde
+                                     Fase D.2)
    * operaciones   — PK `id` auto  (cola local futura; en D.1/D.2 no
-                                    realiza ninguna request al servidor)
+                                     realiza ninguna request al servidor)
+   * documentos    — PK `clave`    (copias PDF descargadas por el inspector;
+                                     v3 agrega los índices `por_usuario_obra`
+                                     y `por_usuario`)
+   * perfiles      — PK `id`       (perfil local activo: a qué cuenta
+                                     pertenecen las copias descargadas)
 
    La versión v2 no borra datos: al abrir la base existente se crean los
    índices faltantes (p. ej. `inspecciones.por_obra`) conservando los
-   registros ya almacenados.
+   registros ya almacenados. La v3 aplica la misma política: se crean los
+   stores y los índices nuevos sin tocar los datos existentes.
 
    Esta capa NO almacena contraseñas, cookies de sesión ni tokens CSRF
    (decisión de seguridad Fase B / §52.7 / §52.6).
@@ -28,7 +35,7 @@
     'use strict';
 
     var NOMBRE_BASE = 'SIGOA';
-    var VERSION_BASE = 2;
+    var VERSION_BASE = 3;
 
     var STORES = {
         inspecciones: {
@@ -52,13 +59,28 @@
                 { nombre: 'por_entidad', keyPath: 'entidad_uuid' },
                 { nombre: 'por_estado', keyPath: 'estado' }
             ]
+        },
+        documentos: {
+            keyPath: 'clave',
+            autoIncrement: false,
+            indices: [
+                { nombre: 'por_usuario_obra', keyPath: 'clave_usuario_obra' },
+                { nombre: 'por_usuario', keyPath: 'usuario_id' }
+            ]
+        },
+        perfiles: {
+            keyPath: 'id',
+            autoIncrement: false,
+            indices: []
         }
     };
 
     var ALMACENES = {
         inspecciones: 'inspecciones',
         fotografias: 'fotografias',
-        operaciones: 'operaciones'
+        operaciones: 'operaciones',
+        documentos: 'documentos',
+        perfiles: 'perfiles'
     };
 
     function soportado() {
@@ -212,6 +234,55 @@
         });
     }
 
+    /**
+     * Sustituye el valor de una clave dentro de una **única** transacción.
+     *
+     * El borrado del valor anterior y la escritura del nuevo ocurren en la
+     * misma transacción: si la escritura falla (por ejemplo, por cuota
+     * insuficiente), la transacción se aborta y el valor anterior permanece
+     * intacto. Es el mecanismo que permite actualizar una copia local de
+     * documento sin arriesgar la versión que ya funcionaba.
+     */
+    function reemplazar(nombreStore, clave, valor) {
+        return abrir().then(function (db) {
+            return new Promise(function (resolver, rechazar) {
+                var transaccion;
+
+                try {
+                    transaccion = db.transaction(nombreStore, 'readwrite');
+                } catch (error) {
+                    db.close();
+                    rechazar(error);
+                    return;
+                }
+
+                transaccion.oncomplete = function () {
+                    db.close();
+                    resolver(true);
+                };
+
+                transaccion.onerror = function () {
+                    db.close();
+                    rechazar(transaccion.error || new Error('SIGOA: falló la transacción IndexedDB.'));
+                };
+
+                transaccion.onabort = function () {
+                    db.close();
+                    rechazar(transaccion.error || new Error('SIGOA: la transacción IndexedDB fue abortada.'));
+                };
+
+                try {
+                    var store = transaccion.objectStore(nombreStore);
+                    store.delete(clave);
+                    store.put(valor);
+                } catch (error) {
+                    db.close();
+                    rechazar(error);
+                }
+            });
+        });
+    }
+
     function contar(nombreStore) {
         return conStore(nombreStore, 'readonly', function (store) {
             return store.count();
@@ -319,6 +390,7 @@
         guardar: guardar,
         agregar: agregar,
         eliminar: eliminar,
+        reemplazar: reemplazar,
         limpiar: limpiar,
         contar: contar,
         iniciar: iniciar,

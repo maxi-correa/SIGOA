@@ -100,6 +100,9 @@
         </div>
     </main>
 
+    <!-- Almacenamiento local: perfil de la sesión (copias descargadas) -->
+    <script src="<?= base_url('assets/js/components/indexeddb.js') ?>"></script>
+
     <!-- JavaScript login -->
     <script src="<?= base_url('assets/js/pages/login.js') ?>"></script>
 </body>

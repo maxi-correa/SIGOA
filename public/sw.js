@@ -6,6 +6,8 @@
    * Precache del app shell (recursos estáticos de /assets/, manifest,
      robots.txt y favicon) al instalar.
    * GET sobre recursos estáticos → cache-first con fallback a red.
+   * Navegación a la documentación del inspector sin conexión → shell
+     estático de `/assets/offline/documentacion.html`.
    * Todo lo demás (páginas HTML, APIs, login, sincronización futura,
      respuestas con sesión) NO se intercepta ni se cachea.
 
@@ -14,6 +16,15 @@
    * tokens CSRF;
    * contraseñas;
    * páginas autenticadas ni respuestas JSON privadas/dinámicas.
+
+   EXCEPCIÓN DOCUMENTADA — shell sin conexión:
+   `/assets/offline/documentacion.html` es una página estática que NO
+   contiene datos de sesión ni de la obra: solo la estructura de la
+   pantalla. El service worker la entrega únicamente cuando la
+   navegación a `/inspector/documentacion/<id>` falla por falta de
+   conexión; nunca se cachea la respuesta autenticada del servidor. El
+   contenido real lo pinta el cliente con los datos de IndexedDB, que
+   pertenecen a la cuenta activa en el dispositivo.
 
    NO hay Background Sync ni cola de operaciones: eso es Fase D.x.
 
@@ -33,10 +44,16 @@
 
 'use strict';
 
-var CACHE_VERSION = 'sigoa-shell-v16';
-var SHELL_CACHE = 'sigoa-shell-v16';
+var CACHE_VERSION = 'sigoa-shell-v19';
+var SHELL_CACHE = 'sigoa-shell-v19';
 
 var PREFIJO_ESTATICO = '/assets/';
+
+/* Navegaciones que, sin conexión, se resuelven con el shell estático. */
+var SHELL_DOCUMENTACION = '/assets/offline/documentacion.html';
+var PREFIJO_DOCUMENTACION = '/inspector/documentacion/';
+var PREFIJO_OBRA_INSPECTOR = '/inspector/obras/ver/';
+var DASHBOARD_INSPECTOR = '/inspector/dashboard';
 
 var SHELL_ASSETS = [
     '/manifest.json',
@@ -54,6 +71,7 @@ var SHELL_ASSETS = [
     '/assets/css/components/neutralizacion-estado.css',
     '/assets/css/components/sidebar.css',
     '/assets/css/components/tables.css',
+    '/assets/css/pages/documentacion-inspector.css',
     '/assets/css/pages/inspector-dashboard.css',
     '/assets/css/pages/inspector-inspeccion-detalle.css',
     '/assets/css/pages/inspector-inspecciones.css',
@@ -75,9 +93,11 @@ var SHELL_ASSETS = [
     '/assets/js/components/connectivity.js',
     '/assets/js/components/camera-resize.js',
     '/assets/js/components/sincronizacion.js',
+    '/assets/js/pages/documentacion-inspector.js',
     '/assets/js/pages/inspeccion-nueva.js',
     '/assets/js/pages/obra-inspecciones.js',
-    '/assets/js/app.js'
+    '/assets/js/app.js',
+    SHELL_DOCUMENTACION
 ];
 
 function abs(ruta) {
@@ -120,6 +140,52 @@ function esRecursoEstatico(url) {
         || url.pathname === '/favicon.ico';
 }
 
+/**
+ * Navegación a la documentación del inspector.
+ *
+ * Se intenta la red; si no hay conexión se entrega el shell estático.
+ * La respuesta autenticada del servidor nunca se cachea: solo se usa
+ * mientras la red responde.
+ *
+ * El shell cubre las tres entradas del inspector que permiten llegar a la
+ * documentación sin conexión:
+ *
+ * * `/inspector/documentacion/<id>` — la documentación de una obra;
+ * * `/inspector/obras/ver/<id>`    — la obra concreta;
+ * * `/inspector/dashboard`          — el listado de lo descargado.
+ */
+function esNavegacionDocumentacion(request, url) {
+    if (request.mode !== 'navigate' || url.origin !== self.location.origin) {
+        return false;
+    }
+
+    var ruta = url.pathname;
+
+    return ruta.indexOf(PREFIJO_DOCUMENTACION) === 0
+        || ruta.indexOf(PREFIJO_OBRA_INSPECTOR) === 0
+        || ruta === DASHBOARD_INSPECTOR;
+}
+
+function shellSinConexion() {
+    return caches.match(abs(SHELL_DOCUMENTACION)).then(function (respuesta) {
+        if (respuesta) {
+            return respuesta;
+        }
+
+        return new Response(
+            '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">'
+            + '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+            + '<title>SIGOA</title></head><body>'
+            + '<p>No hay conexión con el servidor y esta pantalla no está disponible sin conexión.</p>'
+            + '</body></html>',
+            {
+                status: 503,
+                headers: { 'Content-Type': 'text/html; charset=utf-8' }
+            }
+        );
+    });
+}
+
 self.addEventListener('fetch', function (event) {
     var request = event.request;
 
@@ -132,6 +198,16 @@ self.addEventListener('fetch', function (event) {
     try {
         url = new URL(request.url);
     } catch (error) {
+        return;
+    }
+
+    if (esNavegacionDocumentacion(request, url)) {
+        event.respondWith(
+            fetch(request).catch(function () {
+                return shellSinConexion();
+            })
+        );
+
         return;
     }
 

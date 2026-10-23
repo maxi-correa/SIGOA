@@ -362,7 +362,7 @@ final class InspectorInspeccionesGaleriaTest extends CIUnitTestCase
         sort($nombres);
 
         $this->assertSame(
-            '2026-10-14-120000_AddNeutralizacionAbiertaUnica.php',
+            '2026-10-16-140100_AddForeignKeysToDocumentos.php',
             end($nombres),
             'El cambio de esquema más reciente del proyecto es el de neutralizaciones (BLOQUE 5).'
         );

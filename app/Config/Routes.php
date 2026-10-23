@@ -216,6 +216,12 @@ $routes->group('inspector', [
     // VISTA OPERATIVA DE LA OBRA (preparada) — accesible solo con asignación vigente
     $routes->get('obras/ver/(:num)', 'Inspector\Obras::ver/$1');
 
+    // DOCUMENTACIÓN DISPONIBLE DE LA OBRA — solo lectura; se muestra la versión
+    // vigente de cada documento lógico. Requiere asignación vigente del inspector.
+    $routes->get('documentacion/api/(:num)', 'Inspector\Documentacion::api/$1');
+    $routes->get('documentacion/ver/(:num)', 'Inspector\Documentacion::ver/$1');
+    $routes->get('documentacion/(:num)', 'Inspector\Documentacion::index/$1');
+
     // LISTADO DE OBRAS CONSULTABLES (Fase E.6) — sin asignación vigente: también
     // sirve cuando el inspector no tiene ninguna obra a cargo
     $routes->get('inspecciones', 'Inspector\Inspecciones::index');
@@ -276,3 +282,22 @@ $routes->group('consulta', [
     // LISTADO DE OBRAS CONSULTABLES (Fase E.6) — solo lectura, sin creación
     $routes->get('inspecciones', 'Inspecciones::index');
 });
+
+// =============================================
+// DOCUMENTACIÓN DE OBRA
+// =============================================
+$routes->get('/obras/documentacion/(:num)', 'Documentacion::index/$1', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR,CONSULTA'],
+]);
+$routes->post('/obras/documentacion/subir', 'Documentacion::subir', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->post('/obras/documentacion/reemplazar', 'Documentacion::reemplazar', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->get('/obras/documentacion/ver/(:num)', 'Documentacion::ver/$1', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR,CONSULTA'],
+]);
+$routes->get('/obras/documentacion/ubicacion/(:num)', 'Documentacion::ubicacion/$1', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);

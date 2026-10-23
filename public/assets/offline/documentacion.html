@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentación disponible — SIGOA</title>
+    <meta name="theme-color" content="#24344C">
+
+    <!-- Tipografía Inter (local) -->
+    <link rel="stylesheet" href="/assets/fonts/inter/fonts.css">
+
+    <!-- Bootstrap Icons 1.11.3 (local) -->
+    <link rel="stylesheet" href="/assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
+
+    <!-- Estilos SIGOA -->
+    <link rel="stylesheet" href="/assets/css/app.css">
+    <link rel="stylesheet" href="/assets/css/components/buttons.css">
+    <link rel="stylesheet" href="/assets/css/components/alerts.css">
+    <link rel="stylesheet" href="/assets/css/components/badges.css">
+    <link rel="stylesheet" href="/assets/css/components/estados.css">
+    <link rel="stylesheet" href="/assets/css/components/connectivity.css">
+    <link rel="stylesheet" href="/assets/css/components/sidebar.css">
+    <link rel="stylesheet" href="/assets/css/components/modal.css">
+    <link rel="stylesheet" href="/assets/css/pages/documentacion-inspector.css">
+</head>
+<body class="layout-auth">
+
+<!-- ===================================================================
+     Shell sin conexión de la documentación del inspector.
+
+     Es una página estática: NO contiene datos de sesión ni de la
+     documentación. El service worker la entrega cuando la navegación a
+     `/inspector/documentacion/<id>` falla por falta de conexión; el
+     contenido real lo pinta `documentacion-inspector.js` con los datos
+     que hay en IndexedDB.
+
+     Sin un perfil local vigente (es decir, con la sesión cerrada) no se
+     muestra ninguna copia: los documentos descargados pertenecen a la
+     cuenta que los descargó.
+     =================================================================== -->
+
+<header class="topbar">
+    <div class="topbar-left">
+        <span class="brand">SIGOA</span>
+    </div>
+    <div class="topbar-user">
+        <span class="connectivity-indicator is-offline" id="sigaConnectividad" role="status">
+            <i class="bi bi-wifi-off connectivity-icon" aria-hidden="true"></i>
+            <span class="connectivity-text">Sin conexión</span>
+        </span>
+    </div>
+</header>
+
+<main class="content">
+    <div class="did-page" id="documentacionDisponible">
+
+        <div class="did-barra-acciones">
+            <a href="#" class="btn btn-secondary" id="didVolver">
+                <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                Volver a la obra
+            </a>
+        </div>
+
+        <header class="did-encabezado">
+            <div class="did-contexto">
+                <p class="did-obra" id="didObra">Documentación de la obra</p>
+            </div>
+
+            <h1 class="did-titulo">Documentación disponible</h1>
+
+            <p class="did-resumen" id="didResumen">Documentos guardados en este dispositivo</p>
+        </header>
+
+        <section class="did-conexion is-offline" id="didConexion" role="status" aria-live="polite">
+            <span class="did-conexion-icono" aria-hidden="true">
+                <i class="bi bi-cloud-slash"></i>
+            </span>
+            <span class="did-conexion-texto" id="didConexionTexto">Sin conexión con el servidor.</span>
+            <button type="button" class="did-conexion-accion" id="didRefrescar">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                Actualizar
+            </button>
+        </section>
+
+        <nav class="did-filtros" id="didFiltros" aria-label="Filtros de la documentación">
+            <button type="button" class="did-filtro is-activo" data-filtro="todos" aria-pressed="true">
+                Todos
+            </button>
+            <button type="button" class="did-filtro" data-filtro="offline" aria-pressed="false">
+                Disponibles offline
+            </button>
+            <button type="button" class="did-filtro" data-filtro="pendientes" aria-pressed="false">
+                Pendientes de descargar
+            </button>
+        </nav>
+
+        <div class="alert alert-info did-aviso" id="didAviso" role="alert" hidden>
+            <span class="alert-icon"><i class="bi bi-info-circle" aria-hidden="true"></i></span>
+            <span id="didAvisoTexto"></span>
+        </div>
+
+        <ul class="did-lista" id="didLista"></ul>
+
+        <div class="did-vacio" id="didVacio" hidden>
+            <div class="did-vacio-icono" aria-hidden="true">
+                <i class="bi bi-folder2-open"></i>
+            </div>
+            <h2 class="did-vacio-titulo" id="didVacioTitulo">No hay documentos para mostrar</h2>
+            <p class="did-vacio-texto" id="didVacioTexto"></p>
+        </div>
+
+    </div>
+</main>
+
+<script src="/assets/js/components/indexeddb.js"></script>
+<script src="/assets/js/pages/documentacion-inspector.js"></script>
+</body>
+</html>

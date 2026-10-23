@@ -72,4 +72,38 @@
             setOpen(false);
         }
     });
+
+    /* ------------------------------------------------------------------
+       Cierre de sesión: se borra el perfil local de la sesión antes de
+       salir, de modo que la documentación descargada en el dispositivo
+       quede asociada a ninguna cuenta y no pueda consultarse desde el
+       shell sin conexión.
+
+       La navegación se espera al borrado porque una transacción IndexedDB
+       se aborta si la página se descarga antes de que termine.
+       ------------------------------------------------------------------ */
+    var enlaceLogout = document.querySelector('.sidebar-link-logout');
+
+    if (enlaceLogout) {
+        enlaceLogout.addEventListener('click', function (evento) {
+            var almacen = window.SIGOA ? window.SIGOA.almacenamiento : null;
+
+            if (!almacen) {
+                return;
+            }
+
+            evento.preventDefault();
+
+            Promise.resolve()
+                .then(function () {
+                    return almacen.eliminar(almacen.ALMACENES.perfiles, 'activo');
+                })
+                .catch(function () {
+                    /* Si no se puede borrar, no se bloquea la salida. */
+                })
+                .then(function () {
+                    window.location.href = enlaceLogout.getAttribute('href');
+                });
+        });
+    }
 })();

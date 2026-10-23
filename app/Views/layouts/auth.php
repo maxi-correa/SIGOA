@@ -14,6 +14,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="SIGOA">
 
+    <!-- Identidad de la sesión (solo metadatos: ningún dato sensible) -->
+    <meta name="sigOA-usuario-id" content="<?= esc((string) session()->get('user_id')) ?>">
+    <meta name="sigOA-usuario-nombre" content="<?= esc((string) session()->get('user_name')) ?>">
+
     <!-- Tipografía Inter (local) -->
     <link rel="stylesheet" href="<?= base_url('assets/fonts/inter/fonts.css') ?>">
 

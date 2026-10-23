@@ -82,6 +82,31 @@
     }
 
     /* ----------------------------------------------------------------
+       Perfil local de la sesión
+
+       Las copias de documentación descargadas en el dispositivo pertenecen
+       a la cuenta que las descargó. Al llegar a la pantalla de login la
+       sesión anterior ya terminó, así que el perfil local se borra: el
+       shell sin conexión no debe mostrar la documentación de la cuenta
+       anterior. La cuenta que entre ahora registrará su propio perfil al
+       cargar cualquier pantalla autenticada.
+       ---------------------------------------------------------------- */
+    function initPerfilLocal() {
+        var almacen = window.SIGOA ? window.SIGOA.almacenamiento : null;
+
+        if (!almacen || !almacen.ALMACENES || !almacen.ALMACENES.perfiles) return;
+
+        Promise.resolve()
+            .then(function () {
+                return almacen.eliminar(almacen.ALMACENES.perfiles, 'activo');
+            })
+            .catch(function () {
+                /* Si el almacenamiento local no está disponible no hay
+                   perfil que borrar: el login sigue funcionando. */
+            });
+    }
+
+    /* ----------------------------------------------------------------
        Validación frontend
        ---------------------------------------------------------------- */
     function initFormValidation() {
@@ -175,5 +200,6 @@
         initPasswordToggle();
         initRememberUser();
         initFormValidation();
+        initPerfilLocal();
     });
 })();

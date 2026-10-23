@@ -113,16 +113,36 @@ final class InfraestructuraOfflineTest extends CIUnitTestCase
     {
         $sw = $this->leerPublic('sw.js');
 
-        preg_match_all("/'(\/[^']+)'/", $sw, $coincidencias);
+        /* Solo se comprueban los recursos precargados: el resto de rutas
+          quoted en el archivo (prefijos de navegación) no son archivos. */
+        $this->assertSame(
+            1,
+            preg_match('/var SHELL_ASSETS = \[(.*?)\];/s', $sw, $coincidencia),
+            'No se encontró la lista de recursos del app shell.'
+        );
 
-        $this->assertGreaterThan(0, count($coincidencias[1]));
+        preg_match_all("/'(\/[^']+)'/", $coincidencia[1], $recursos);
 
-        foreach ($coincidencias[1] as $ruta) {
+        $this->assertGreaterThan(0, count($recursos[1]));
+
+        foreach ($recursos[1] as $ruta) {
             $this->assertFileExists(
                 $this->publicPath($ruta),
                 "El app shell referencia un recurso que no existe: {$ruta}"
             );
         }
+    }
+
+    public function testAppShellIncluyeElShellEstaticoDeDocumentacion(): void
+    {
+        $sw = $this->leerPublic('sw.js');
+
+        $this->assertStringContainsString("var SHELL_DOCUMENTACION = '/assets/offline/documentacion.html';", $sw);
+        $this->assertStringContainsString('SHELL_DOCUMENTACION', $sw);
+        $this->assertFileExists(
+            $this->publicPath('assets/offline/documentacion.html'),
+            'Falta el shell estático de la documentación sin conexión.'
+        );
     }
 
     public function testComponentesJsOfflineExisten(): void
@@ -163,10 +183,21 @@ final class InfraestructuraOfflineTest extends CIUnitTestCase
     {
         $capa = $this->leerPublic('assets/js/components/indexeddb.js');
 
-        $this->assertStringContainsString("VERSION_BASE = 2", $capa, 'La base local debe migrar a v2 en D.2.');
+        $this->assertStringContainsString('VERSION_BASE = 3', $capa, 'La base local debe migrar a v3 con la documentación del inspector.');
         $this->assertStringContainsString("nombre: 'por_obra'", $capa);
         $this->assertStringContainsString("keyPath: 'obra_id'", $capa);
         $this->assertStringContainsString('buscarPorIndice', $capa);
+    }
+
+    public function testCapaIndexeddbD3AgregaAlmacenDeDocumentosYPerfiles(): void
+    {
+        $capa = $this->leerPublic('assets/js/components/indexeddb.js');
+
+        $this->assertStringContainsString("documentos: {", $capa, 'Debe existir el almacén de documentos descargados.');
+        $this->assertStringContainsString("perfiles: {", $capa, 'Debe existir el almacén del perfil de la cuenta activa.');
+        $this->assertStringContainsString("nombre: 'por_usuario_obra'", $capa);
+        $this->assertStringContainsString("nombre: 'por_usuario'", $capa);
+        $this->assertStringContainsString('reemplazar', $capa, 'La actualización de una copia debe poder reemplazar la anterior de forma atómica.');
     }
 
     public function testComponenteCamaraRespetaLimitesDeProcesamiento(): void

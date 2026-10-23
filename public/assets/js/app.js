@@ -7,6 +7,8 @@
      contexto lo permite (HTTPS o localhost);
    * iniciar la capa de conectividad online/offline;
    * crear/abre la base IndexedDB local (stores preparados);
+   * registrar el perfil local de la sesión (a qué cuenta pertenecen las
+     copias descargadas en el dispositivo);
    * iniciar la cola de sincronización (Fase D.4 / §56), que reanuda las
      operaciones pendientes del dispositivo y registra sus disparadores.
 
@@ -57,6 +59,64 @@
         });
     }
 
+    /* ------------------------------------------------------------------
+       Perfil local de la sesión.
+
+       Las copias de documentación descargadas en el dispositivo pertenecen
+       a la cuenta que las descargó. El perfil registra qué cuenta está
+       activa para que la pantalla sin conexión solo muestre las suyas.
+
+       Se borra al cerrar sesión (`components/sidebar.js`), de modo que
+       cerrar sesión deja el dispositivo sin acceso a la documentación
+       descargada. No se guarda ningún dato sensible: solo el identificador
+       de usuario y su nombre.
+       ------------------------------------------------------------------ */
+    function registrarPerfilLocal() {
+        if (!window.SIGOA || !window.SIGOA.almacenamiento) {
+            return Promise.resolve(false);
+        }
+
+        if (typeof document.querySelector !== 'function') {
+            return Promise.resolve(false);
+        }
+
+        var meta = document.querySelector('meta[name="sigOA-usuario-id"]');
+
+        if (!meta) {
+            return Promise.resolve(false);
+        }
+
+        var usuarioId = parseInt(meta.getAttribute('content'), 10);
+
+        if (!usuarioId) {
+            return Promise.resolve(false);
+        }
+
+        var nombre = '';
+        var metaNombre = document.querySelector('meta[name="sigOA-usuario-nombre"]');
+
+        if (metaNombre) {
+            nombre = metaNombre.getAttribute('content') || '';
+        }
+
+        var almacen = window.SIGOA.almacenamiento;
+
+        return almacen.guardar(almacen.ALMACENES.perfiles, {
+            id: 'activo',
+            usuario_id: usuarioId,
+            usuario_nombre: nombre,
+            actualizado_en: new Date().toISOString()
+        }).then(function () {
+            return true;
+        }).catch(function (error) {
+            if (window.console && console.warn) {
+                console.warn('SIGOA: no se pudo registrar el perfil local de la sesión.', error);
+            }
+
+            return false;
+        });
+    }
+
     function iniciar() {
         if (window.SIGOA && window.SIGOA.conectividad) {
             window.SIGOA.conectividad.iniciar();
@@ -72,6 +132,9 @@
         Promise.resolve(baseLista)
             .catch(function () {
                 return false;
+            })
+            .then(function () {
+                return registrarPerfilLocal();
             })
             .then(function () {
                 if (!window.SIGOA || !window.SIGOA.sincronizacion) {

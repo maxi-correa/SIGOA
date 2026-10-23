@@ -75,6 +75,9 @@ class ObraAlmacenamiento
     /** Permisos utilizados al crear directorios. */
     private const PERMISOS_DIRECTORIO = 0755;
 
+    /** Longitud máxima del fragmento de tipo normalizado dentro del nombre. */
+    private const LONGITUD_MAXIMA_TIPO = 80;
+
     private string $raiz;
 
     /**
@@ -106,6 +109,117 @@ class ObraAlmacenamiento
         $codigo = mb_strtoupper(trim($codigo));
 
         return preg_match('/^OBR-\d{6}$/', $codigo) === 1 ? $codigo : null;
+    }
+
+    /**
+     * Normaliza el nombre de un tipo documental para usarlo como fragmento
+     * del nombre físico de un PDF.
+     *
+     * La normalización es determinista: mayúsculas, sin diacríticos, los
+     * espacios y cualquier carácter no alfanumérico pasan a guion, se
+     * colapsan guiones repetidos y se recortan los extremos. El tipo procede
+     * siempre del registro SIGOA (`tipos_documento.tipo_documento`), nunca
+     * del nombre original del archivo que sube el cliente.
+     *
+     * Devuelve null si, tras normalizar, no queda ningún carácter válido
+     * (p. ej. un tipo compuesto solo de signos), para no generar un nombre
+     * ambiguo.
+     *
+     * Ejemplo: `Recepción Provisoria` → `RECEPCION-PROVISORIA`.
+     */
+    public function normalizarTipoDocumento(string $tipoDocumento): ?string
+    {
+        $tipo = trim($tipoDocumento);
+
+        if ($tipo === '') {
+            return null;
+        }
+
+        /* Descompone los caracteres acentuados y elimina los diacríticos. */
+        $ascii = transliterator_transliterate('Any-Latin; Latin-ASCII', $tipo);
+        if ($ascii === false) {
+            $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $tipo) ?: '';
+        }
+
+        $ascii = mb_strtoupper($ascii);
+
+        /* Todo lo que no sea A-Z0-9 pasa a guion. */
+        $ascii = preg_replace('/[^A-Z0-9]+/', '-', $ascii) ?? '';
+
+        $ascii = trim($ascii, '-');
+
+        if ($ascii === '') {
+            return null;
+        }
+
+        if (strlen($ascii) > self::LONGITUD_MAXIMA_TIPO) {
+            $ascii = rtrim(substr($ascii, 0, self::LONGITUD_MAXIMA_TIPO), '-');
+        }
+
+        return $ascii === '' ? null : $ascii;
+    }
+
+    /**
+     * Nombre físico determinista de un PDF de documentación de obra.
+     *
+     * Convención: `CODIGO-OBRA_TIPO-DOCUMENTO[_IDENTIFICADOR]_VXX.pdf`.
+     *  * `CODIGO-OBRA` es `obras.codigo` validado (`OBR-XXXXXX`).
+     *  * `TIPO-DOCUMENTO` es el tipo normalizado (`normalizarTipoDocumento()`).
+     *  * `IDENTIFICADOR` solo aparece en documentos múltiples (varios
+     *    documentos lógicos del mismo tipo por obra) y es el id raíz
+     *    cero-padded a 3 dígitos como mínimo.
+     *  * `VXX` es la versión con dos dígitos como mínimo.
+     *
+     * Devuelve null si el código, el tipo, el identificador o la versión no
+     * son válidos, de modo que nunca se compone un nombre a partir de datos
+     * no verificados ni se genera un nombre ambiguo.
+     *
+     * @param int|null $identificador Id raíz del documento lógico, o null
+     *                               para tipos únicos y por evento.
+     */
+    public function nombrePdfDocumento(string $codigo, string $tipoDocumento, int $version, ?int $identificador = null): ?string
+    {
+        $codigo = $this->normalizarCodigo($codigo);
+        $tipo   = $this->normalizarTipoDocumento($tipoDocumento);
+
+        if ($codigo === null || $tipo === null || $version < 1) {
+            return null;
+        }
+
+        $nombre = $codigo . '_' . $tipo;
+
+        if ($identificador !== null) {
+            if ($identificador < 1) {
+                return null;
+            }
+
+            $nombre .= '_' . str_pad((string) $identificador, 3, '0', STR_PAD_LEFT);
+        }
+
+        $nombre .= '_V' . str_pad((string) $version, 2, '0', STR_PAD_LEFT);
+
+        $nombre .= '.pdf';
+
+        if (! $this->esNombreArchivoSeguro($nombre)) {
+            return null;
+        }
+
+        return $nombre;
+    }
+
+    /**
+     * ¿Existe ya físicamente un archivo en la ruta relativa indicada dentro
+     * de la raíz autorizada?
+     *
+     * Se usa como barrera anti-sobrescritura antes de mover un PDF con
+     * nombre determinista: si el nombre ya está ocupado, la operación debe
+     * rechazarse en lugar de pisar un archivo existente.
+     */
+    public function existeArchivoRelativo(string $relativa): bool
+    {
+        $absoluta = $this->absolutoDesdeRelativa($relativa);
+
+        return $absoluta !== null && is_file($absoluta);
     }
 
     /**
