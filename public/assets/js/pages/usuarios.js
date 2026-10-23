@@ -41,6 +41,7 @@
     var formEditar  = document.getElementById('formEditarUsuario');
     var btnCancelarEditar = document.getElementById('btnCancelarEditarUsuario');
     var inputEditarId     = document.getElementById('editar_usuario_id');
+    var inputEditarUsuario = document.getElementById('editar_usuario');
     var inputEditarNombre = document.getElementById('editar_nombre');
     var inputEditarApellido = document.getElementById('editar_apellido');
     var inputEditarEmail  = document.getElementById('editar_email');
@@ -99,6 +100,9 @@
         limpiarErrores(modalEditar);
 
         inputEditarId.value = btn.getAttribute('data-id') || '';
+        if (inputEditarUsuario) {
+            inputEditarUsuario.value = btn.getAttribute('data-usuario') || '';
+        }
         inputEditarNombre.value = btn.getAttribute('data-nombre') || '';
         inputEditarApellido.value = btn.getAttribute('data-apellido') || '';
         inputEditarEmail.value = btn.getAttribute('data-email') || '';
@@ -109,11 +113,15 @@
                 'Modifique los datos personales de ' +
                 (btn.getAttribute('data-nombre') || '') + ' ' +
                 (btn.getAttribute('data-apellido') || '') +
-                '. El usuario, el rol y la contraseña no se modifican desde aquí.';
+                '. El rol y la contraseña no se modifican desde aquí.';
         }
 
         mostrarOverlay(modalEditar);
-        inputEditarNombre.focus();
+        if (inputEditarUsuario) {
+            inputEditarUsuario.focus();
+        } else {
+            inputEditarNombre.focus();
+        }
     }
 
     /* ================================================================
@@ -267,6 +275,15 @@
         limpiarErroresFormulario(formEditar);
 
         var errores = [];
+
+        if (inputEditarUsuario) {
+            var usuarioValor = inputEditarUsuario.value.trim();
+            if (usuarioValor === '') {
+                errores.push({ el: inputEditarUsuario, msg: 'El usuario es obligatorio.' });
+            } else if (usuarioValor.length < 3) {
+                errores.push({ el: inputEditarUsuario, msg: 'El usuario debe tener al menos 3 caracteres.' });
+            }
+        }
 
         if (inputEditarNombre.value.trim() === '') {
             errores.push({ el: inputEditarNombre, msg: 'El nombre es obligatorio.' });

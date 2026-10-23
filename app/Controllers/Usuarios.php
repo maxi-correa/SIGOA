@@ -33,15 +33,17 @@ class Usuarios extends BaseController
         $roles = $session->get('roles') ?? [];
 
         $puedeAgregar = $this->esGestor();
+        $esSuperadmin = in_array('SUPERADMINISTRADOR', $roles, true);
 
         $data = [
-            'titulo'          => 'Gestión de usuarios',
-            'user_name'       => $session->get('user_name'),
-            'username'        => $session->get('username'),
-            'roles'           => $roles,
-            'usuarios'        => $this->usuarioModel->findAllConRoles(),
-            'user_id'         => $session->get('user_id'),
-            'puede_agregar'   => $puedeAgregar,
+            'titulo'            => 'Gestión de usuarios',
+            'user_name'         => $session->get('user_name'),
+            'username'          => $session->get('username'),
+            'roles'             => $roles,
+            'usuarios'          => $this->usuarioModel->findAllConRoles(),
+            'user_id'           => $session->get('user_id'),
+            'puede_agregar'     => $puedeAgregar,
+            'es_superadmin'     => $esSuperadmin,
             'roles_disponibles' => $puedeAgregar
                 ? $this->usuarioModel->findRolesActivos()
                 : [],
@@ -198,8 +200,9 @@ class Usuarios extends BaseController
     /**
      * Toma y normaliza los datos del formulario de edición.
      *
-     * Solo se leen los campos permitidos: usuario, rol y contraseña no
-     * pueden provenir de este formulario.
+     * Solo se leen los campos permitidos: rol y contraseña no pueden
+     * provenir de este formulario. El nombre de usuario se lee únicamente
+     * para que el controlador lo autorice explícitamente.
      *
      * @return array<string, mixed>
      */
@@ -209,12 +212,14 @@ class Usuarios extends BaseController
         $apellido = trim((string) $this->request->getPost('apellido'));
         $email    = trim((string) $this->request->getPost('email'));
         $activo   = $this->request->getPost('activo');
+        $usuario  = trim((string) $this->request->getPost('usuario'));
 
         return [
             'nombre'   => mb_strtoupper($nombre),
             'apellido' => mb_strtoupper($apellido),
             'email'    => ($email === '') ? null : $email,
             'activo'   => ((string) $activo === '1') ? 1 : 0,
+            'usuario'  => mb_strtolower($usuario),
         ];
     }
 
@@ -248,10 +253,11 @@ class Usuarios extends BaseController
      * Valida los datos personales del formulario de edición.
      *
      * @param array<string, mixed> $datos
+     * @param int|null             $usuarioIdEdicion Id del usuario que se edita (solo para validar unicidad)
      *
      * @return list<string>
      */
-    private function validarDatosPersonales(array $datos): array
+    private function validarDatosPersonales(array $datos, ?int $usuarioIdEdicion = null): array
     {
         $errores = [];
 
@@ -267,8 +273,20 @@ class Usuarios extends BaseController
             $errores[] = 'El apellido no puede superar los 100 caracteres.';
         }
 
+        if (array_key_exists('usuario', $datos) && $usuarioIdEdicion !== null) {
+            if ($datos['usuario'] === '') {
+                $errores[] = 'El usuario es obligatorio.';
+            } elseif (mb_strlen((string) $datos['usuario']) > 100) {
+                $errores[] = 'El usuario no puede superar los 100 caracteres.';
+            } elseif (mb_strlen((string) $datos['usuario']) < 3) {
+                $errores[] = 'El usuario debe tener al menos 3 caracteres.';
+            } elseif ($this->usuarioModel->existeUsuario((string) $datos['usuario'], $usuarioIdEdicion)) {
+                $errores[] = 'Ya existe un usuario con ese nombre de usuario.';
+            }
+        }
+
         if ($datos['email'] !== null) {
-            if (strlen($datos['email']) > 150 || ! filter_var($datos['email'], FILTER_VALIDATE_EMAIL)) {
+            if (strlen((string) $datos['email']) > 150 || ! filter_var((string) $datos['email'], FILTER_VALIDATE_EMAIL)) {
                 $errores[] = 'El correo electrónico ingresado no es válido.';
             }
         }

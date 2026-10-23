@@ -109,9 +109,9 @@ class UsuarioModel extends Model
     /**
      * Actualiza datos personales de un usuario y su updated_at.
      *
-     * Solo admite nombre, apellido, email y activo: usuario, rol y
-     * password_hash quedan excluidos por diseño y no pueden modificarse
-     * mediante este método.
+     * Por defecto admite nombre, apellido, email y activo. Si se envía
+     * explícitamente 'usuario', también se permite actualizarlo (el
+     * controlador es el responsable de autorizar esta acción).
      *
      * El modelo no utiliza timestamps automáticos (useTimestamps = false),
      * por lo que updated_at se asigna explícitamente.
@@ -120,12 +120,15 @@ class UsuarioModel extends Model
      */
     public function actualizarDatosPersonales(int $usuarioId, array $datos): bool
     {
-        $permitidos = array_intersect_key($datos, array_flip([
+        $permitidosBase = [
             'nombre',
             'apellido',
             'email',
             'activo',
-        ]));
+            'usuario',
+        ];
+
+        $permitidos = array_intersect_key($datos, array_flip($permitidosBase));
 
         if ($permitidos === []) {
             return false;

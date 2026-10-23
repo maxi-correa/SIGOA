@@ -1828,7 +1828,34 @@ La identidad visual de SIGOA puede resumirse de la siguiente manera:
 
 ---
 
-# 51. Principio fundamental
+# 48. Gestión de usuarios
+
+## 48.1 Modificación del nombre de usuario
+
+* El nombre de usuario (`usuarios.usuario`) solo puede ser modificado desde la pantalla de Gestión de Usuarios por el rol **SUPERADMINISTRADOR**.
+* Únicamente ese rol dispone del campo correspondiente habilitado en el formulario de edición. Los roles **ADMINISTRADOR**, **INSPECTOR** y **CONSULTA** no pueden modificarlo.
+* La autorización se valida en el servidor. El campo no es fiable desde el cliente: si se envía manualmente por un usuario sin permisos, debe ser rechazado o ignorado de forma segura sin permitir la modificación.
+* El nombre de usuario debe seguir siendo único en todo el sistema, excluyendo al propio usuario que se está editando.
+* Debe conservarse la longitud máxima permitida por la base de datos y las validaciones existentes. Si se envía vacío o con formato inválido, el servidor lo rechazará con los mensajes de validación correspondientes.
+* La edición del nombre de usuario no debe alterar la contraseña, el rol, el nombre, el apellido, el correo electrónico ni el resto de los campos ajenos a la operación.
+* Debe conservarse la restricción que impide al usuario editarse a sí mismo desde la pantalla de Gestión de Usuarios.
+
+# 49. Identificación visual de los roles
+
+En la tabla de Gestión de Usuarios y en los componentes que muestran el rol, se utilizarán las siguientes etiquetas identificativas:
+
+| Rol | Color de fondo | Color de texto | Uso |
+|---|---|---|---|
+| SUPERADMINISTRADOR | `#B8862F` | Blanco (`var(--color-text-on-primary)`) | Identificación visual complementaria |
+| ADMINISTRADOR | `#B84A4A` | Blanco (`var(--color-text-on-primary)`) | Identificación visual complementaria |
+| INSPECTOR | `#3B6E9E` | Blanco (`var(--color-text-on-primary)`) | Identificación visual complementaria |
+| CONSULTA | `#3F7D5A` | Blanco (`var(--color-text-on-primary)`) | Identificación visual complementaria |
+
+* El nombre textual completo del rol **debe seguir siendo visible**. El color es un mecanismo complementario de identificación visual, no debe ser el único medio para comunicarlo.
+* Se reutilizará el componente de insignias existente. No se modificarán los colores globales de la paleta para este fin.
+* Únicamente se aplicará en los lugares directamente relacionados con la gestión/visualización de roles solicitados; no se realizará un cambio masivo en otras pantallas sin justificación.
+
+# 50. Principio fundamental
 
 El diseño visual de SIGOA deberá respetar el siguiente principio:
 

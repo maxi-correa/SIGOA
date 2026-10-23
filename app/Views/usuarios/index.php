@@ -25,8 +25,8 @@ if ($reabrirModal === 'edicion') {
 }
 
 $mensajeEdicion = $usuarioEdicion !== null
-    ? 'Modifique los datos personales de ' . $usuarioEdicion->nombre . ' ' . $usuarioEdicion->apellido . '. El usuario, el rol y la contraseña no se modifican desde aquí.'
-    : 'Modifique los datos personales del usuario seleccionado. El usuario, el rol y la contraseña no se modifican desde aquí.';
+    ? 'Modifique los datos personales de ' . $usuarioEdicion->nombre . ' ' . $usuarioEdicion->apellido . '. El rol y la contraseña no se modifican desde aquí.'
+    : 'Modifique los datos personales del usuario seleccionado. El rol y la contraseña no se modifican desde aquí.';
 ?>
 
 <div class="usuarios-page">
@@ -99,7 +99,7 @@ $mensajeEdicion = $usuarioEdicion !== null
                             <td>
                                 <div class="usuarios-rol-cell">
                                     <?php foreach ($usuario->roles as $rol): ?>
-                                        <span class="badge badge-rol"><?= esc($rol) ?></span>
+                                        <span class="badge badge-rol badge-rol-<?= esc(strtolower(str_replace(' ', '-', $rol)), 'attr') ?>"><?= esc($rol) ?></span>
                                     <?php endforeach; ?>
                                 </div>
                             </td>
@@ -118,20 +118,21 @@ $mensajeEdicion = $usuarioEdicion !== null
                                         Mis Datos
                                     </a>
                                 <?php else: ?>
-                                    <button type="button"
-                                            class="usuarios-btn-accion"
-                                            data-accion="editar"
-                                            data-id="<?= (int) $usuario->id ?>"
-                                            data-nombre="<?= esc($usuario->nombre, 'attr') ?>"
-                                            data-apellido="<?= esc($usuario->apellido, 'attr') ?>"
-                                            data-email="<?= esc((string) ($usuario->email ?? ''), 'attr') ?>"
-                                            data-activo="<?= $usuario->activo ? '1' : '0' ?>"
-                                            aria-haspopup="dialog"
-                                            aria-controls="modalEditarUsuario"
-                                            title="Editar usuario">
-                                        <i class="bi bi-pencil" aria-hidden="true"></i>
-                                        Editar
-                                    </button>
+                                            <button type="button"
+                                                    class="usuarios-btn-accion"
+                                                    data-accion="editar"
+                                                    data-id="<?= (int) $usuario->id ?>"
+                                                    data-nombre="<?= esc($usuario->nombre, 'attr') ?>"
+                                                    data-apellido="<?= esc($usuario->apellido, 'attr') ?>"
+                                                    data-usuario="<?= esc($usuario->usuario, 'attr') ?>"
+                                                    data-email="<?= esc((string) ($usuario->email ?? ''), 'attr') ?>"
+                                                    data-activo="<?= $usuario->activo ? '1' : '0' ?>"
+                                                    aria-haspopup="dialog"
+                                                    aria-controls="modalEditarUsuario"
+                                                    title="Editar usuario">
+                                                <i class="bi bi-pencil" aria-hidden="true"></i>
+                                                Editar
+                                            </button>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -169,6 +170,22 @@ $mensajeEdicion = $usuarioEdicion !== null
             <?= csrf_field('csrf_editar_usuario') ?>
 
             <input type="hidden" name="usuario_id" id="editar_usuario_id" value="<?= esc(old('usuario_id', '')) ?>">
+
+            <?php if (! empty($es_superadmin)): ?>
+                <div class="form-group">
+                    <label for="editar_usuario">
+                        Nombre de usuario <span class="usuarios-requerido" aria-hidden="true">*</span>
+                    </label>
+                    <input type="text"
+                           id="editar_usuario"
+                           name="usuario"
+                           class="form-control"
+                           maxlength="100"
+                           autocomplete="off"
+                           value="<?= esc(old('usuario', '')) ?>">
+                    <span class="field-error" role="alert" aria-live="polite"></span>
+                </div>
+            <?php endif; ?>
 
             <div class="form-group">
                 <label for="editar_nombre">

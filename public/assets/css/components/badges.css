@@ -18,6 +18,26 @@
     color: var(--color-text-on-primary);
 }
 
+.badge-rol-superadministrador {
+    background-color: #B8862F;
+    color: var(--color-text-on-primary);
+}
+
+.badge-rol-administrador {
+    background-color: #B84A4A;
+    color: var(--color-text-on-primary);
+}
+
+.badge-rol-inspector {
+    background-color: #3B6E9E;
+    color: var(--color-text-on-primary);
+}
+
+.badge-rol-consulta {
+    background-color: #3F7D5A;
+    color: var(--color-text-on-primary);
+}
+
 @media (max-width: 580px) {
     .badge {
         font-size: 0.72rem;
