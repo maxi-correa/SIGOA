@@ -215,6 +215,13 @@
     overflow-wrap: anywhere;
 }
 
+.ficha-representante-titulo {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+}
+
 .ficha-btn-cambio-inspector {
     width: auto;
     max-width: 100%;

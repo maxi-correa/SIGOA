@@ -62,6 +62,14 @@
     --color-cancel-bg: #B84A4A;
     --color-cancel-bg-hover: #983B3B;
 
+    /* Títulos profesionales */
+    --color-title-ingeniero-bg: #F0F5FA;
+    --color-title-ingeniero: #3B6E9E;
+    --color-title-arquitecto-bg: #FBF0EC;
+    --color-title-arquitecto: #A94F3F;
+    --color-title-maestro-bg: #F0F6F0;
+    --color-title-maestro: #477A55;
+
     /* Tipografía */
     --font-family: 'Inter', Arial, sans-serif;
     --font-size-base: 1rem;

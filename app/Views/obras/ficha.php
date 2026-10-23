@@ -1,6 +1,7 @@
 <?php use App\Libraries\CertificacionObra; ?>
 <?php use App\Libraries\MontoObra; ?>
 <?php use App\Libraries\PlazoObra; ?>
+<?php helper('titulo_profesional'); ?>
 <?= $this->extend('layouts/auth') ?>
 
 <?= $this->section('styles') ?>
@@ -699,10 +700,12 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
                 <p class="ficha-valor ficha-valor-calculado">
                     <?= esc($representante_vigente->representante_apellido . ', ' . $representante_vigente->representante_nombre) ?>
                 </p>
-                <p class="ficha-inspector-desde">
-                    <?= esc($representante_vigente->titulo_profesional_nombre) ?>
+                <p class="ficha-inspector-desde ficha-representante-titulo">
+                    <span class="badge badge-titulo <?= esc(titulo_profesional_badge_clase($representante_vigente->titulo_profesional_nombre)) ?>">
+                        <?= esc($representante_vigente->titulo_profesional_nombre) ?>
+                    </span>
                     <?php if ($representante_vigente->representante_matricula): ?>
-                        · Mat. <?= esc($representante_vigente->representante_matricula) ?>
+                        <span>· Mat. <?= esc($representante_vigente->representante_matricula) ?></span>
                     <?php endif; ?>
                 </p>
                 <p class="ficha-inspector-desde">

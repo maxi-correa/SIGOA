@@ -1,3 +1,4 @@
+<?php helper('titulo_profesional'); ?>
 <?= $this->extend('layouts/auth') ?>
 
 <?= $this->section('styles') ?>
@@ -74,7 +75,9 @@
                                 <?= esc($representante->apellido . ', ' . $representante->nombre) ?>
                             </td>
                             <td>
-                                <span class="representantes-titulo"><?= esc($representante->titulo_profesional_nombre) ?></span>
+                                <span class="badge badge-titulo <?= esc(titulo_profesional_badge_clase($representante->titulo_profesional_nombre)) ?>">
+                                    <?= esc($representante->titulo_profesional_nombre) ?>
+                                </span>
                             </td>
                             <td>
                                 <?php if (! empty($representante->matricula)): ?>

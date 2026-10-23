@@ -1923,6 +1923,22 @@ En la tabla de Gestión de Usuarios y en los componentes que muestran el rol, se
 * Se reutilizará el componente de insignias existente. No se modificarán los colores globales de la paleta para este fin.
 * Únicamente se aplicará en los lugares directamente relacionados con la gestión/visualización de roles solicitados; no se realizará un cambio masivo en otras pantallas sin justificación.
 
+# 49b. Identificación visual de los títulos profesionales
+
+En las etiquetas que muestran el título profesional del representante técnico se utilizarán las siguientes variantes cromáticas:
+
+| Título profesional | Fondo | Texto y borde |
+|---|---|---|
+| Ingeniero | `#F0F5FA` | `#3B6E9E` |
+| Arquitecto | `#FBF0EC` | `#A94F3F` |
+| Maestro Mayor de Obras | `#F0F6F0` | `#477A55` |
+
+* Se reutiliza el componente de insignias existente mediante las clases `.badge`, `.badge-titulo` y la variante correspondiente al título.
+* El borde será de `1px`, las esquinas redondeadas y el peso tipográfico medio.
+* El nombre textual del título **debe seguir siendo visible**. El color es un mecanismo complementario de identificación visual.
+* Las etiquetas son identificadores visuales, no controles interactivos.
+* Estos colores no se aplican a los roles de usuario ni a los botones de navegación, cancelación o acciones secundarias.
+
 # 50. Principio fundamental
 
 El diseño visual de SIGOA deberá respetar el siguiente principio:
@@ -1958,6 +1974,7 @@ Las definiciones visuales principales se consideran establecidas.
 | NEUTRALIZADA                       | Definido        |
 | EN PLAZO DE CONSERVACIÓN           | Definido        |
 | FINALIZADA                         | Definido        |
+| Títulos profesionales              | Definidos       |
 | Tipografía Inter                   | Definida        |
 | Biblioteca de iconos               | Bootstrap Icons |
 | Organización CSS                   | Definida        |

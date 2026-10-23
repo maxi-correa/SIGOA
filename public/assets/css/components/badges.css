@@ -13,6 +13,31 @@
     white-space: nowrap;
 }
 
+.badge-titulo {
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    background-color: var(--color-background);
+    border: 1px solid var(--color-border);
+}
+
+.badge-titulo-ingeniero {
+    color: var(--color-title-ingeniero);
+    background-color: var(--color-title-ingeniero-bg);
+    border-color: var(--color-title-ingeniero);
+}
+
+.badge-titulo-arquitecto {
+    color: var(--color-title-arquitecto);
+    background-color: var(--color-title-arquitecto-bg);
+    border-color: var(--color-title-arquitecto);
+}
+
+.badge-titulo-maestro-mayor-obra {
+    color: var(--color-title-maestro);
+    background-color: var(--color-title-maestro-bg);
+    border-color: var(--color-title-maestro);
+}
+
 .badge-rol {
     background-color: var(--color-primary);
     color: var(--color-text-on-primary);
