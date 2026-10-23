@@ -47,6 +47,12 @@
     color: var(--color-text-on-primary);
 }
 
+/* --- Insignia del rol --- */
+.topbar .topbar-role-badge {
+    flex-shrink: 0;
+    margin-left: var(--space-md);
+}
+
 /* --- Responsive --- */
 @media (max-width: 640px) {
     .topbar {
@@ -56,5 +62,19 @@
 
     .topbar .user-info {
         font-size: 0.8rem;
+    }
+
+    .topbar .topbar-role-badge {
+        margin-left: var(--space-sm);
+    }
+
+    .topbar .topbar-role-badge--hide-mobile {
+        display: none;
+    }
+}
+
+@media (max-width: 580px) {
+    .topbar .topbar-role-badge {
+        display: none;
     }
 }

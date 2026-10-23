@@ -603,6 +603,15 @@ La navegación móvil utiliza el mismo sidebar en modalidad **off-canvas/drawer*
 
 En pantallas de escritorio el sidebar permanece fijo/lateral sin desplazarse junto con el contenido.
 
+## 13.1 Insignia del rol en el topbar
+
+* El rol del usuario autenticado se muestra en el topbar mediante la misma insignia utilizada en Gestión de Usuarios (`.badge`, `.badge-rol` y la variante cromática del rol definida en §49).
+* En escritorio, la insignia se ubica junto a la identidad del usuario (nombre y usuario) y separada de los enlaces de navegación del sidebar.
+* Cuando la sesión tiene más de un rol, se muestra el rol principal según la jerarquía vigente: SUPERADMINISTRADOR → ADMINISTRADOR → INSPECTOR → CONSULTA.
+* En el topbar móvil de los inspectores, la insignia se oculta para preservar el espacio de navegación y la identidad del usuario.
+* En los demás perfiles móviles, la insignia se muestra únicamente cuando el ancho disponible permite conservar la legibilidad y la distribución existente; cuando no hay espacio suficiente, se aplica el mismo criterio de ocultación.
+* El rol mostrado procede exclusivamente de la sesión autenticada y del mecanismo de autorización del servidor. No se determina a partir de parámetros de URL, campos de formulario ni datos manipulables del cliente.
+
 ---
 
 # 14. Botones

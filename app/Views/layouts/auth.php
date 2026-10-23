@@ -1,3 +1,24 @@
+<?php
+$rolesNav       = session()->get('roles') ?? [];
+$jerarquiaRoles = ['SUPERADMINISTRADOR', 'ADMINISTRADOR', 'INSPECTOR', 'CONSULTA'];
+$rolPrincipal   = '';
+
+foreach ($jerarquiaRoles as $rolJerarquia) {
+    if (in_array($rolJerarquia, $rolesNav, true)) {
+        $rolPrincipal = $rolJerarquia;
+        break;
+    }
+}
+
+if ($rolPrincipal === '') {
+    $rolPrincipal = (string) ($rolesNav[0] ?? '');
+}
+
+$rolBadgeClase       = $rolPrincipal !== ''
+    ? 'badge-rol-' . strtolower(str_replace(' ', '-', $rolPrincipal))
+    : '';
+$rolBadgeOcultoMovil = $rolPrincipal === 'INSPECTOR';
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -63,6 +84,9 @@
             <span class="user-info">
                 Sesión: <strong><?= esc($user_name) ?></strong> (<?= esc($username) ?>)
             </span>
+            <?php if ($rolPrincipal !== ''): ?>
+                <span class="badge badge-rol topbar-role-badge <?= esc($rolBadgeClase, 'attr') ?><?= $rolBadgeOcultoMovil ? ' topbar-role-badge--hide-mobile' : '' ?>"><?= esc($rolPrincipal) ?></span>
+            <?php endif; ?>
         </div>
     </header>
 
