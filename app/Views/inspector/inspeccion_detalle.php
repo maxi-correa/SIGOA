@@ -52,7 +52,7 @@ $totalFotos  = count($fotografias);
 <div class="iid-page">
 
     <div class="iid-barra-acciones">
-        <a href="<?= site_url($base . '/ver/' . (int) $obra->id) ?>" class="btn btn-secondary">
+        <a href="<?= site_url($base . '/ver/' . (int) $obra->id) ?>" class="btn btn-volver">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
             Volver a inspecciones
         </a>

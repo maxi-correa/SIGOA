@@ -55,7 +55,7 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
 
                         <?php if ($puede_modificar_datos): ?>
                             <button type="button"
-                                    class="btn-accion-inline btn-editar-dato"
+                                    class="btn-accion-secundaria btn-accion-inline btn-editar-dato"
                                     data-campo="nombre"
                                     data-valor="<?= esc($usuario->nombre, 'attr') ?>"
                                     aria-label="Modificar nombre">
@@ -74,7 +74,7 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
 
                         <?php if ($puede_modificar_datos): ?>
                             <button type="button"
-                                    class="btn-accion-inline btn-editar-dato"
+                                    class="btn-accion-secundaria btn-accion-inline btn-editar-dato"
                                     data-campo="apellido"
                                     data-valor="<?= esc($usuario->apellido, 'attr') ?>"
                                     aria-label="Modificar apellido">
@@ -108,7 +108,7 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
 
                         <?php if ($puede_modificar_datos): ?>
                             <button type="button"
-                                    class="btn-accion-inline btn-editar-dato"
+                                    class="btn-accion-secundaria btn-accion-inline btn-editar-dato"
                                     data-campo="email"
                                     data-valor="<?= esc((string) ($usuarioEmail ?? ''), 'attr') ?>"
                                     aria-label="Modificar correo electrónico">
@@ -127,7 +127,7 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
                         <span class="password-mask" id="passwordMask">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span>
 
                         <button type="button"
-                                class="btn-accion-inline"
+                                class="btn-accion-secundaria btn-accion-inline"
                                 id="btnVerContrasena"
                                 aria-label="Ver contraseña">
                             <i class="bi bi-eye" id="iconoVerificar"></i>
@@ -139,7 +139,7 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
 
                         <?php if ($puede_modificar_email): ?>
                             <button type="button"
-                                    class="btn-accion-inline btn-cambiar-contrasena"
+                                    class="btn-accion-secundaria btn-accion-inline btn-cambiar-contrasena"
                                     id="btnCambiarContrasena"
                                     disabled
                                     aria-label="Cambiar contraseña">
@@ -180,7 +180,7 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
                 <span class="field-error" role="alert" aria-live="polite"></span>
             </div>
             <div class="datos-form-acciones">
-                <button type="button" class="btn btn-secondary" id="btnCancelarDato">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarDato">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-success">
@@ -193,7 +193,7 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
         <div class="card-footer-acciones" id="accionesCard">
             <?php if (! $puede_modificar_email): ?>
                 <button type="button"
-                        class="btn btn-secondary btn-cambiar-contrasena"
+                        class="btn btn-accion-secundaria btn-cambiar-contrasena"
                         id="btnCambiarContrasenaBottom"
                         disabled
                         aria-label="Cambiar contraseña">
@@ -201,7 +201,7 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
                 </button>
             <?php endif; ?>
 
-            <a href="<?= esc($dashboard_url) ?>" class="btn btn-secondary">
+            <a href="<?= esc($dashboard_url) ?>" class="btn btn-volver">
                 <i class="bi bi-arrow-left"></i> Volver
             </a>
         </div>
@@ -247,7 +247,7 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
                 </div>
             </div>
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarVerificar">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarVerificar">
                     Volver
                 </button>
                 <button type="submit" class="btn btn-success">
@@ -319,7 +319,7 @@ $avatarLast    = mb_strtoupper(mb_substr($usuario->apellido ?? '', 0, 1));
             </div>
 
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarCambiar">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarCambiar">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-success">

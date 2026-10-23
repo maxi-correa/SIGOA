@@ -22,9 +22,62 @@
     user-select: none;
 }
 
+.btn:focus-visible {
+    outline: 2px solid var(--color-border-focus);
+    outline-offset: 2px;
+}
+
 .btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+.btn-volver {
+    background-color: var(--color-back-bg);
+    color: var(--color-back-text);
+    border: 1px solid var(--color-back-border);
+}
+
+.btn-volver:hover:not(:disabled) {
+    background-color: var(--color-back-bg-hover);
+}
+
+.btn-volver:focus-visible {
+    outline: 2px solid var(--color-back-text);
+    outline-offset: 2px;
+}
+
+.btn-cancelar {
+    background-color: var(--color-cancel-bg);
+    color: var(--color-text-on-primary);
+    border: 1px solid var(--color-cancel-bg);
+}
+
+.btn-cancelar:hover:not(:disabled) {
+    background-color: var(--color-cancel-bg-hover);
+    border-color: var(--color-cancel-bg-hover);
+}
+
+.btn-cancelar:focus-visible {
+    outline: 2px solid var(--color-cancel-bg);
+    outline-offset: 2px;
+}
+
+.btn-accion-secundaria {
+    background-color: var(--color-surface);
+    color: var(--color-action-secondary);
+    border: 1px solid var(--color-action-secondary);
+}
+
+.btn-accion-secundaria:hover:not(:disabled) {
+    background-color: var(--color-action-secondary-bg-hover);
+    border-color: var(--color-action-secondary-border-hover);
+    color: var(--color-action-secondary);
+}
+
+.btn-accion-secundaria:focus-visible {
+    outline: 2px solid var(--color-action-secondary-border-hover);
+    outline-offset: 2px;
 }
 
 /* Primario — azul institucional */

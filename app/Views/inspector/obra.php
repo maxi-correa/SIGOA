@@ -32,7 +32,7 @@ $puedeInspeccionar = (bool) ($puede_inspeccionar ?? false);
          6. sincronización: cola pendiente de este dispositivo.
          ============================================================ -->
     <div class="io-barra-acciones">
-        <a href="<?= site_url('/inspector/dashboard') ?>" class="btn btn-secondary io-btn-volver">
+        <a href="<?= site_url('/inspector/dashboard') ?>" class="btn btn-volver io-btn-volver">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
             Mis obras
         </a>
@@ -50,7 +50,7 @@ $puedeInspeccionar = (bool) ($puede_inspeccionar ?? false);
          ============================================================ -->
     <section class="io-consulta">
         <a href="<?= site_url('/inspector/inspecciones/ver/' . (int) $obra->id) ?>"
-           class="btn btn-secondary io-btn-consulta">
+           class="btn btn-accion-secundaria io-btn-consulta">
             <i class="bi bi-journal-text" aria-hidden="true"></i>
             Historial de inspecciones
         </a>
@@ -67,7 +67,7 @@ $puedeInspeccionar = (bool) ($puede_inspeccionar ?? false);
          ============================================================ -->
     <section class="io-consulta">
         <a href="<?= site_url('/inspector/documentacion/' . (int) $obra->id) ?>"
-           class="btn btn-secondary io-btn-consulta">
+           class="btn btn-accion-secundaria io-btn-consulta">
             <i class="bi bi-folder2-open" aria-hidden="true"></i>
             Documentación disponible
         </a>

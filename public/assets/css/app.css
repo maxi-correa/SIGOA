@@ -47,6 +47,21 @@
     --color-border: #D5D3D0;
     --color-border-focus: var(--color-primary);
 
+    /* Navegación de regreso */
+    --color-back-bg: #F8E9E7;
+    --color-back-text: #A94442;
+    --color-back-border: #E5B9B5;
+    --color-back-bg-hover: #F1D8D5;
+
+    /* Acciones secundarias */
+    --color-action-secondary: #3B6E9E;
+    --color-action-secondary-bg-hover: #EAF1F8;
+    --color-action-secondary-border-hover: #315D85;
+
+    /* Cancelación de operaciones */
+    --color-cancel-bg: #B84A4A;
+    --color-cancel-bg-hover: #983B3B;
+
     /* Tipografía */
     --font-family: 'Inter', Arial, sans-serif;
     --font-size-base: 1rem;

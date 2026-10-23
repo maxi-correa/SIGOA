@@ -28,11 +28,11 @@ $estadoClase = match ($estadoNombre) {
 
 <div class="ficha-obra-page documentacion-page">
     <div class="ficha-barra-acciones">
-        <a href="<?= site_url('/dashboard') ?>" class="btn btn-secondary ficha-btn-volver">
+        <a href="<?= site_url('/dashboard') ?>" class="btn btn-volver ficha-btn-volver">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
             Volver al dashboard
         </a>
-        <a href="<?= site_url('/obras/ver/' . (int) $obra->id) ?>" class="btn btn-secondary">
+        <a href="<?= site_url('/obras/ver/' . (int) $obra->id) ?>" class="btn btn-volver">
             <i class="bi bi-file-text" aria-hidden="true"></i>
             Volver a la ficha
         </a>
@@ -183,14 +183,14 @@ $estadoClase = match ($estadoNombre) {
                                         <a href="<?= site_url('/obras/documentacion/ver/' . (int) $doc->id) ?>"
                                            target="_blank"
                                            rel="noopener"
-                                           class="btn-accion-icon"
+                                           class="btn-accion-secundaria btn-accion-icon"
                                            title="Abrir o visualizar PDF"
                                            aria-label="Abrir o visualizar PDF">
                                             <i class="bi bi-file-pdf" aria-hidden="true"></i>
                                         </a>
                                         <?php if ($puedeEditar): ?>
                                             <button type="button"
-                                                    class="btn-accion-icon"
+                                                    class="btn-accion-secundaria btn-accion-icon"
                                                     data-accion="ubicacion"
                                                     data-doc-id="<?= (int) $doc->id ?>"
                                                     data-url="<?= site_url('/obras/documentacion/ubicacion/' . (int) $doc->id) ?>"
@@ -199,7 +199,7 @@ $estadoClase = match ($estadoNombre) {
                                                 <i class="bi bi-folder2-open" aria-hidden="true"></i>
                                             </button>
                                             <button type="button"
-                                                    class="btn-accion-icon"
+                                                    class="btn-accion-secundaria btn-accion-icon"
                                                     data-accion="reemplazar"
                                                     data-doc-id="<?= (int) $doc->id ?>"
                                                     data-nombre="<?= esc($doc->nombre_archivo) ?>"
@@ -235,7 +235,7 @@ $estadoClase = match ($estadoNombre) {
                                                         <a href="<?= site_url('/obras/documentacion/ver/' . (int) $ant->id) ?>"
                                                            target="_blank"
                                                            rel="noopener"
-                                                           class="btn-accion-icon"
+                                                           class="btn-accion-secundaria btn-accion-icon"
                                                            title="Abrir o visualizar PDF"
                                                            aria-label="Abrir o visualizar PDF">
                                                             <i class="bi bi-file-pdf" aria-hidden="true"></i>
@@ -357,7 +357,7 @@ $estadoClase = match ($estadoNombre) {
                     </div>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="btnCancelarAgregar">
+                    <button type="button" class="btn btn-cancelar" id="btnCancelarAgregar">
                         Cancelar
                     </button>
                     <button type="submit" class="btn btn-success">
@@ -436,7 +436,7 @@ $estadoClase = match ($estadoNombre) {
                     <textarea class="form-control" id="reemplazar_observaciones" name="observaciones" rows="2"></textarea>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="btnCancelarReemplazar">
+                    <button type="button" class="btn btn-cancelar" id="btnCancelarReemplazar">
                         Cancelar
                     </button>
                     <button type="submit" class="btn btn-primary">

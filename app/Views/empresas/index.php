@@ -149,7 +149,7 @@
                             </td>
                             <td class="empresas-acciones-cell">
                                 <a href="<?= site_url('/empresas/editar/' . (int) $empresa->id) ?>"
-                                   class="empresas-btn-accion"
+                                   class="btn-accion-secundaria empresas-btn-accion"
                                    title="Editar empresa">
                                     <i class="bi bi-pencil" aria-hidden="true"></i>
                                     Editar
@@ -182,7 +182,7 @@
             <?= csrf_field() ?>
             <input type="hidden" name="empresa_id" id="eliminar_empresa_id" value="">
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarEliminarLogo">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarEliminarLogo">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-danger">

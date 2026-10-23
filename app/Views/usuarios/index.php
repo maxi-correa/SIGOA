@@ -112,14 +112,14 @@ $mensajeEdicion = $usuarioEdicion !== null
                             <td class="usuarios-acciones-cell">
                                 <?php if ((int) $usuario->id === (int) $user_id): ?>
                                     <a href="<?= site_url('/mis-datos') ?>"
-                                       class="usuarios-btn-accion"
+                                       class="btn-accion-secundaria usuarios-btn-accion"
                                        title="Modificar sus datos personales">
                                         <i class="bi bi-person" aria-hidden="true"></i>
                                         Mis Datos
                                     </a>
                                 <?php else: ?>
                                             <button type="button"
-                                                    class="usuarios-btn-accion"
+                                                    class="btn-accion-secundaria usuarios-btn-accion"
                                                     data-accion="editar"
                                                     data-id="<?= (int) $usuario->id ?>"
                                                     data-nombre="<?= esc($usuario->nombre, 'attr') ?>"
@@ -237,7 +237,7 @@ $mensajeEdicion = $usuarioEdicion !== null
             </div>
 
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarEditarUsuario">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarEditarUsuario">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-success">
@@ -407,7 +407,7 @@ $mensajeEdicion = $usuarioEdicion !== null
             </div>
 
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarAltaUsuario">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarAltaUsuario">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-success">

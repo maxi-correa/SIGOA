@@ -98,14 +98,14 @@
                             </td>
                             <td class="representantes-acciones-cell">
                                 <a href="<?= site_url('/representantes/editar/' . (int) $representante->id) ?>"
-                                   class="representantes-btn-accion"
+                                   class="btn-accion-secundaria representantes-btn-accion"
                                    title="Editar representante técnico">
                                     <i class="bi bi-pencil" aria-hidden="true"></i>
                                     Editar
                                 </a>
                                 <?php if ((int) $representante->activo === 1): ?>
                                     <button type="button"
-                                            class="representantes-btn-accion representantes-btn-desactivar"
+                                            class="btn-accion-secundaria representantes-btn-accion representantes-btn-desactivar"
                                             data-representante-id="<?= (int) $representante->id ?>"
                                             data-representante-nombre="<?= esc($representante->apellido . ', ' . $representante->nombre, 'attr') ?>"
                                             data-representante-activo="0"
@@ -115,7 +115,7 @@
                                     </button>
                                 <?php else: ?>
                                     <button type="button"
-                                            class="representantes-btn-accion representantes-btn-activar"
+                                            class="btn-accion-secundaria representantes-btn-accion representantes-btn-activar"
                                             data-representante-id="<?= (int) $representante->id ?>"
                                             data-representante-nombre="<?= esc($representante->apellido . ', ' . $representante->nombre, 'attr') ?>"
                                             data-representante-activo="1"
@@ -148,7 +148,7 @@
             <input type="hidden" name="representante_id" id="estado_representante_id" value="">
             <input type="hidden" name="activo" id="estado_representante_activo" value="">
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarEstadoRepresentante">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarEstadoRepresentante">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-danger" id="btnConfirmarEstadoRepresentante">

@@ -327,7 +327,7 @@
 
         var acciones = crear('div', 'modal-actions');
 
-        var cancelar = crear('button', 'btn btn-secondary', 'Cancelar');
+        var cancelar = crear('button', 'btn btn-cancelar', 'Cancelar');
         cancelar.type = 'button';
         cancelar.addEventListener('click', cerrar);
 
@@ -649,11 +649,11 @@
         acciones.appendChild(ver);
 
         if (entrada.estado === ESTADOS.ACTUALIZACION) {
-            acciones.appendChild(boton('Actualizar', 'btn-secondary', 'bi bi-arrow-repeat', function (nodo) {
+            acciones.appendChild(boton('Actualizar', 'btn-accion-secundaria', 'bi bi-arrow-repeat', function (nodo) {
                 descargar(entrada, nodo);
             }));
         } else if (entrada.estado === ESTADOS.PENDIENTE) {
-            acciones.appendChild(boton('Descargar', 'btn-secondary', 'bi bi-download', function (nodo) {
+            acciones.appendChild(boton('Descargar', 'btn-accion-secundaria', 'bi bi-download', function (nodo) {
                 descargar(entrada, nodo);
             }));
         }

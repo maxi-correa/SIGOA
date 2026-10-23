@@ -37,7 +37,7 @@ $estadoClase = match ($estadoNombre) {
 <div class="did-page" id="documentacionDisponible">
 
     <div class="did-barra-acciones">
-        <a href="<?= site_url('/inspector/obras/ver/' . (int) ($obra->id ?? 0)) ?>" class="btn btn-secondary">
+        <a href="<?= site_url('/inspector/obras/ver/' . (int) ($obra->id ?? 0)) ?>" class="btn btn-volver">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
             Volver a la obra
         </a>

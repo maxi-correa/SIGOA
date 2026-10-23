@@ -43,7 +43,7 @@ $fechaTexto = static fn($fecha): string => PlazoObra::formatearFecha($fecha) ?? 
      data-abierta-inicio="<?= esc((string) ($abierta->fecha_inicio ?? ''), 'attr') ?>">
 
     <div class="ficha-barra-acciones">
-        <a href="<?= site_url('/obras/ver/' . (int) $obra->id) ?>" class="btn btn-secondary ficha-btn-volver">
+        <a href="<?= site_url('/obras/ver/' . (int) $obra->id) ?>" class="btn btn-volver ficha-btn-volver">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
             Volver
         </a>
@@ -186,7 +186,7 @@ $fechaTexto = static fn($fecha): string => PlazoObra::formatearFecha($fecha) ?? 
                                         <?php if ($periodoAbierto && $permiteReiniciar): ?>
                                             <div class="neutralizaciones-acciones">
                                                 <button type="button"
-                                                        class="btn-icon"
+                                                        class="btn-accion-secundaria btn-icon"
                                                         data-accion="reiniciar"
                                                         title="Registrar reinicio"
                                                         aria-label="Registrar reinicio"
@@ -265,7 +265,7 @@ $fechaTexto = static fn($fecha): string => PlazoObra::formatearFecha($fecha) ?? 
             </div>
 
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarNeutralizacion">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarNeutralizacion">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-success">
@@ -320,7 +320,7 @@ $fechaTexto = static fn($fecha): string => PlazoObra::formatearFecha($fecha) ?? 
             </div>
 
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarReiniciar">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarReiniciar">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-success">

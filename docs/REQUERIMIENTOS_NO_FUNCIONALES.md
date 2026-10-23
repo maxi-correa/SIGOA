@@ -614,8 +614,14 @@ La interfaz deberá diferenciar claramente entre:
 * acción principal;
 * acción positiva;
 * acción secundaria;
+* acción de navegación de regreso;
+* acción de cancelación;
 * acción destructiva;
 * acción de advertencia.
+
+La apariencia de los botones se centraliza en `public/assets/css/components/buttons.css`. Las clases compartidas permiten distinguir la navegación de regreso, las acciones secundarias, las cancelaciones y las acciones principales sin duplicar estilos en cada pantalla.
+
+Las acciones principales conservan sus estilos destacados. Las acciones secundarias utilizan fondo blanco y borde azul. Los botones de navegación «Volver» utilizan el esquema de rojo suave. Los botones de cancelación utilizan rojo intenso. Las acciones destructivas mantienen su tratamiento diferenciado. Ninguna de estas categorías debe asimilarse automáticamente a otra.
 
 ---
 
@@ -670,16 +676,20 @@ El verde deberá contrastar correctamente con el azul institucional sin resultar
 
 ---
 
-# 17. Botón secundario / volver
+# 17. Botones de navegación y acciones secundarias
 
-No deberá utilizar un color fuerte.
+## 17.1 Botón de navegación «Volver»
+
+Los botones cuya función sea regresar a una pantalla anterior o salir de una vista para retornar a otra pantalla deberán utilizar el esquema de rojo suave.
 
 Características:
 
-* fondo blanco `#FFFFFF`;
-* borde gris;
-* texto grafito `#2C3036`;
-* icono opcional.
+* fondo normal `#F8E9E7`;
+* texto `#A94442`;
+* borde `#E5B9B5`;
+* fondo al pasar el cursor `#F1D8D5`;
+* icono opcional;
+* foco visible para navegación mediante teclado.
 
 Ejemplo:
 
@@ -694,19 +704,73 @@ Uso:
 * Volver;
 * Regresar;
 * Atrás;
-* cancelar una navegación sin modificar información.
+* abandonar una vista para retornar a la pantalla anterior.
+
+La convención se aplica a las pantallas principales, formularios, fichas de obra, administración, gestión de usuarios, documentación, certificados, resoluciones, neutralizaciones y reinicios, y a los botones de regreso dentro de ventanas modales cuando su función sea efectivamente navegar o retornar.
+
+La clase compartida es `.btn-volver`.
+
+## 17.2 Botón de acción secundaria
+
+Los botones que permiten consultar, ver detalles, editar, configurar, gestionar o acceder a otras funcionalidades deberán identificarse como controles interactivos mediante fondo blanco y borde azul.
+
+Características:
+
+* fondo normal `#FFFFFF`;
+* texto `#3B6E9E`;
+* borde `1px solid #3B6E9E`;
+* fondo al pasar el cursor `#EAF1F8`;
+* borde al pasar el cursor `#315D85`;
+* foco visible para navegación mediante teclado.
+
+Ejemplo:
+
+```text
+┌──────────────────────┐
+│      VER DETALLE     │
+└──────────────────────┘
+```
+
+Uso:
+
+* Ver detalles;
+* Editar;
+* Consultar;
+* Configurar;
+* Gestionar;
+* acceder a otras funcionalidades;
+* acciones secundarias equivalentes.
+
+La clase compartida es `.btn-accion-secundaria`. Los estilos particulares de cada página conservan únicamente las dimensiones y la disposición propias del control.
+
+## 17.3 Jerarquía visual de botones
+
+La jerarquía visual se define en el siguiente orden:
+
+1. **Acciones principales:** conservan los estilos destacados existentes.
+2. **Acciones secundarias:** fondo blanco, texto azul y borde azul.
+3. **Volver:** rojo suave, destinado a la navegación de regreso.
+4. **Cancelar:** rojo intenso, destinado a cancelar operaciones en curso.
+5. **Acciones destructivas:** conservan un tratamiento diferenciado según las convenciones existentes.
+
+Los colores y estilos deben aplicarse de forma coherente en las distintas funcionalidades del sistema y en todos los tamaños de pantalla.
+
+No deberá aplicarse el estilo de acción secundaria de forma indiscriminada a todos los botones. Las acciones principales, de confirmación, de cancelación, destructivas o de advertencia conservan el tratamiento que les corresponde.
 
 ---
 
 # 18. Botón cancelar
 
-El botón cancelar será secundario.
+Los botones cuya función real sea cancelar una operación en curso deberán utilizar un rojo intenso, claramente diferenciado del rojo suave de los botones «Volver».
 
-Podrá utilizar el mismo patrón visual que el botón volver:
+Características:
 
-* fondo blanco `#FFFFFF`;
-* borde gris;
-* texto grafito `#2C3036`.
+* fondo normal `#B84A4A`;
+* texto `#FFFFFF`;
+* borde `1px solid #B84A4A`;
+* fondo al pasar el cursor `#983B3B`;
+* borde al pasar el cursor `#983B3B`;
+* foco visible para navegación mediante teclado.
 
 Ejemplo:
 
@@ -716,11 +780,13 @@ Ejemplo:
 └──────────────────────┘
 ```
 
-No deberá competir visualmente con:
+Se utiliza para abandonar una operación en curso, descartar cambios o cerrar una ventana modal sin confirmar, tanto en formularios como en ventanas modales y demás componentes de la interfaz.
 
-* Guardar;
-* Confirmar;
-* Eliminar.
+La clasificación se basa en la función real del control, no únicamente en su texto. Un botón rotulado «Cancelar» que navegue a otra pantalla se trata como navegación de regreso; un botón rotulado «Volver» que descarte una operación en curso se trata como cancelación.
+
+No debe asimilarse a la navegación de regreso ni a una acción destructiva. Eliminar registros, quitar copias, reiniciar o descartar datos de forma permanente conservan el tratamiento destructivo existente.
+
+La clase compartida es `.btn-cancelar`. La clase `.btn-secondary` se conserva para controles neutrales que no correspondan a navegación, acción secundaria, cancelación ni acción destructiva, como limpiar filtros o copiar una ruta.
 
 ---
 
@@ -1389,6 +1455,8 @@ sidebar.css
 Cuando un componente se utilice en varias pantallas deberá existir un único patrón visual.
 
 No deberá copiarse y modificarse individualmente en cada View.
+
+`buttons.css` centraliza las clases compartidas de botones: `.btn`, `.btn-primary`, `.btn-success`, `.btn-secondary`, `.btn-danger`, `.btn-volver`, `.btn-cancelar` y `.btn-accion-secundaria`. Los estilos específicos de página pueden conservar dimensiones y disposición, pero no deben duplicar los colores ni los estados de interacción definidos para esas clases.
 
 ---
 

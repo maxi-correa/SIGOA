@@ -47,7 +47,7 @@ $anioTexto   = static fn($anio): string => $anio === null ? '—' : (string) $an
      data-url-actualizar="<?= site_url('/obras/resoluciones/actualizar') ?>">
 
     <div class="ficha-barra-acciones">
-        <a href="<?= site_url('/obras/ver/' . (int) $obra->id) ?>" class="btn btn-secondary ficha-btn-volver">
+        <a href="<?= site_url('/obras/ver/' . (int) $obra->id) ?>" class="btn btn-volver ficha-btn-volver">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
             Volver
         </a>
@@ -169,7 +169,7 @@ $anioTexto   = static fn($anio): string => $anio === null ? '—' : (string) $an
                                         <?php if (! $confirmada): ?>
                                             <div class="resoluciones-acciones">
                                                 <button type="button"
-                                                        class="btn-icon"
+                                                        class="btn-accion-secundaria btn-icon"
                                                         data-accion="editar"
                                                         title="Modificar"
                                                         aria-label="Modificar resolución"
@@ -185,7 +185,7 @@ $anioTexto   = static fn($anio): string => $anio === null ? '—' : (string) $an
                                                 </button>
                                                 <?php if ($completa): ?>
                                                     <button type="button"
-                                                            class="btn-icon"
+                                                            class="btn-accion-secundaria btn-icon"
                                                             data-accion="confirmar"
                                                             title="Confirmar"
                                                             aria-label="Confirmar resolución"
@@ -194,7 +194,7 @@ $anioTexto   = static fn($anio): string => $anio === null ? '—' : (string) $an
                                                     </button>
                                                 <?php else: ?>
                                                     <button type="button"
-                                                            class="btn-icon"
+                                                            class="btn-accion-secundaria btn-icon"
                                                             disabled
                                                             title="<?= esc($motivoIncompleta, 'attr') ?>">
                                                         <i class="bi bi-check-lg" aria-hidden="true"></i>
@@ -340,7 +340,7 @@ $anioTexto   = static fn($anio): string => $anio === null ? '—' : (string) $an
             </div>
 
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarResolucion">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarResolucion">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-success">
@@ -366,7 +366,7 @@ $anioTexto   = static fn($anio): string => $anio === null ? '—' : (string) $an
             <input type="hidden" name="obra_id" value="<?= (int) $obra->id ?>">
             <input type="hidden" name="resolucion_id" id="resolucion_id_confirmar" value="">
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarConfirmarResolucion">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarConfirmarResolucion">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-success">
@@ -392,7 +392,7 @@ $anioTexto   = static fn($anio): string => $anio === null ? '—' : (string) $an
             <input type="hidden" name="obra_id" value="<?= (int) $obra->id ?>">
             <input type="hidden" name="resolucion_id" id="resolucion_id_eliminar" value="">
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarEliminarResolucion">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarEliminarResolucion">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-danger">

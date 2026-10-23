@@ -88,9 +88,6 @@
     font-size: var(--font-size-xs);
     font-weight: 600;
     line-height: 1.4;
-    color: var(--color-primary);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     cursor: pointer;
     text-decoration: none;
@@ -99,9 +96,6 @@
 }
 
 .empresas-btn-accion:hover {
-    background-color: var(--color-primary);
-    color: var(--color-text-on-primary);
-    border-color: var(--color-primary);
     text-decoration: none;
 }
 

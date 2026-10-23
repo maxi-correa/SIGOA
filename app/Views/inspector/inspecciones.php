@@ -50,7 +50,7 @@ $total  = (int) ($total ?? 0);
 <div class="iis-page">
 
     <div class="iis-barra-acciones">
-        <a href="<?= site_url($volverUrl) ?>" class="btn btn-secondary">
+        <a href="<?= site_url($volverUrl) ?>" class="btn btn-volver">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
             <?= esc($volverTexto) ?>
         </a>

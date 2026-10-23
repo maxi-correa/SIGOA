@@ -33,7 +33,7 @@ $obras       = is_array($obras ?? null) ? $obras : [];
 <div class="ico-page">
 
     <div class="ico-barra-acciones">
-        <a href="<?= site_url($volverUrl) ?>" class="btn btn-secondary">
+        <a href="<?= site_url($volverUrl) ?>" class="btn btn-volver">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
             <?= esc($volverTexto) ?>
         </a>

@@ -83,7 +83,7 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
 <div class="ficha-obra-page">
 
     <div class="ficha-barra-acciones">
-        <a href="<?= site_url('/dashboard') ?>" class="btn btn-secondary ficha-btn-volver">
+        <a href="<?= site_url('/dashboard') ?>" class="btn btn-volver ficha-btn-volver">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
             Volver a obras
         </a>
@@ -94,32 +94,32 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
                     con el mismo criterio de autorización resuelto en backend. */ ?>
             <?php if ($puede_consultar_inspecciones ?? false): ?>
                 <a href="<?= site_url('/inspecciones/ver/' . (int) $obra->id) ?>"
-                   class="btn btn-secondary ficha-btn-inspecciones">
+                   class="btn btn-accion-secundaria ficha-btn-inspecciones">
                     <i class="bi bi-clipboard-check" aria-hidden="true"></i>
                     Ver Inspecciones
                 </a>
             <?php endif; ?>
 
             <a href="<?= site_url('/obras/certificados/' . (int) $obra->id) ?>"
-               class="btn btn-secondary ficha-btn-certificados">
+               class="btn btn-accion-secundaria ficha-btn-certificados">
                 <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
                 Ver Certificados
             </a>
 
             <a href="<?= site_url('/obras/resoluciones/' . (int) $obra->id) ?>"
-               class="btn btn-secondary ficha-btn-resoluciones">
+               class="btn btn-accion-secundaria ficha-btn-resoluciones">
                 <i class="bi bi-file-earmark-check" aria-hidden="true"></i>
                 Ver Resoluciones
             </a>
 
             <a href="<?= site_url('/obras/neutralizaciones/' . (int) $obra->id) ?>"
-               class="btn btn-secondary ficha-btn-neutralizaciones">
+               class="btn btn-accion-secundaria ficha-btn-neutralizaciones">
                 <i class="bi bi-pause-circle" aria-hidden="true"></i>
                 Ver Neutralizaciones
             </a>
 
             <a href="<?= site_url('/obras/documentacion/' . (int) $obra->id) ?>"
-               class="btn btn-secondary ficha-btn-documentacion">
+               class="btn btn-accion-secundaria ficha-btn-documentacion">
                 <i class="bi bi-folder2-open" aria-hidden="true"></i>
                 Documentación
             </a>
@@ -676,7 +676,7 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
 
         <?php if ($puedeEditar): ?>
             <button type="button"
-                    class="btn btn-secondary ficha-btn-cambio-inspector"
+                    class="btn btn-accion-secundaria ficha-btn-cambio-inspector"
                     id="btnCambioInspector"
                     aria-haspopup="dialog"
                     aria-controls="modalInspector">
@@ -715,7 +715,7 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
 
         <?php if ($puedeEditar): ?>
             <button type="button"
-                    class="btn btn-secondary ficha-btn-cambio-inspector"
+                    class="btn btn-accion-secundaria ficha-btn-cambio-inspector"
                     id="btnCambioRepresentante"
                     aria-haspopup="dialog"
                     aria-controls="modalRepresentante">
@@ -802,7 +802,7 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
             </div>
 
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarInspector">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarInspector">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-success">
@@ -889,7 +889,7 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
             </div>
 
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarRepresentante">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarRepresentante">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-success">
@@ -928,7 +928,7 @@ $valorFechaCambioRep      = old('fecha_cambio', '');
         </dl>
 
         <div class="modal-actions">
-            <button type="button" class="btn btn-secondary" id="btnCancelarConfirmarPlazo">
+            <button type="button" class="btn btn-cancelar" id="btnCancelarConfirmarPlazo">
                 Cancelar
             </button>
             <button type="submit"

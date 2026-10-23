@@ -24,7 +24,7 @@ $estadoClase = match ($estadoNombre) {
      data-inspector-id="<?= (int) $inspector_id ?>">
 
     <div class="nin-barra-acciones">
-        <a href="<?= site_url('/inspector/obras/ver/' . (int) $obra_id) ?>" class="btn btn-secondary nin-btn-volver">
+        <a href="<?= site_url('/inspector/obras/ver/' . (int) $obra_id) ?>" class="btn btn-volver nin-btn-volver">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
             Volver a la obra
         </a>
@@ -137,7 +137,7 @@ $estadoClase = match ($estadoNombre) {
     </section>
 
     <div class="nin-pie" id="tituloPie" hidden>
-        <a href="<?= site_url('/inspector/obras/ver/' . (int) $obra_id) ?>" class="btn btn-secondary nin-btn-volver">
+        <a href="<?= site_url('/inspector/obras/ver/' . (int) $obra_id) ?>" class="btn btn-volver nin-btn-volver">
             <i class="bi bi-check-circle" aria-hidden="true"></i>
             Finalizar y volver a la obra
         </a>

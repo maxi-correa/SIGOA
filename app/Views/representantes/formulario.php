@@ -35,7 +35,7 @@ $accionFormulario = $esEdicion
             <p class="representantes-subtitulo"><?= esc($descripcion) ?></p>
         </div>
 
-        <a href="<?= site_url('/representantes') ?>" class="btn btn-secondary representantes-btn-volver">
+        <a href="<?= site_url('/representantes') ?>" class="btn btn-volver representantes-btn-volver">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
             Volver al listado
         </a>
@@ -124,7 +124,7 @@ $accionFormulario = $esEdicion
             </div>
 
             <div class="representantes-card-acciones">
-                <a href="<?= site_url('/representantes') ?>" class="btn btn-secondary">
+                <a href="<?= site_url('/representantes') ?>" class="btn btn-cancelar">
                     Cancelar
                 </a>
                 <button type="submit" class="btn btn-success">

@@ -103,7 +103,7 @@ $celdaImporte = static function (mixed $valor, bool $deduccion = false): string 
      data-puede-editar="<?= $editable ? '1' : '0' ?>">
 
     <div class="ficha-barra-acciones">
-        <a href="<?= site_url('/obras/ver/' . (int) $obra->id) ?>" class="btn btn-secondary ficha-btn-volver">
+        <a href="<?= site_url('/obras/ver/' . (int) $obra->id) ?>" class="btn btn-volver ficha-btn-volver">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>
             Volver
         </a>
@@ -456,7 +456,7 @@ $celdaImporte = static function (mixed $valor, bool $deduccion = false): string 
         </p>
         <dl class="cert-resumen" id="resumenConfigEconomica"></dl>
         <div class="modal-actions">
-            <button type="button" class="btn btn-secondary" id="btnCancelarConfirmacionConfig">
+            <button type="button" class="btn btn-cancelar" id="btnCancelarConfirmacionConfig">
                 Cancelar
             </button>
             <button type="submit" class="btn btn-success" form="formConfigEconomica">
@@ -544,7 +544,7 @@ $celdaImporte = static function (mixed $valor, bool $deduccion = false): string 
             </div>
 
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarCertificado">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarCertificado">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-success">

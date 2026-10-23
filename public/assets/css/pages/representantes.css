@@ -100,9 +100,6 @@
     font-size: var(--font-size-xs);
     font-weight: 600;
     line-height: 1.4;
-    color: var(--color-primary);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     cursor: pointer;
     text-decoration: none;
@@ -111,9 +108,6 @@
 }
 
 .representantes-btn-accion:hover {
-    background-color: var(--color-primary);
-    color: var(--color-text-on-primary);
-    border-color: var(--color-primary);
     text-decoration: none;
 }
 
@@ -122,7 +116,7 @@
     border-color: var(--color-danger-border);
 }
 
-.representantes-btn-desactivar:hover {
+.representantes-btn-desactivar:hover:not(:disabled) {
     background-color: var(--color-danger);
     color: var(--color-text-on-primary);
     border-color: var(--color-danger);
@@ -133,7 +127,7 @@
     border-color: var(--color-success-border);
 }
 
-.representantes-btn-activar:hover {
+.representantes-btn-activar:hover:not(:disabled) {
     background-color: var(--color-success);
     color: var(--color-text-on-primary);
     border-color: var(--color-success);

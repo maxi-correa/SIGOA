@@ -146,9 +146,6 @@
     align-items: center;
     justify-content: center;
     gap: 0.3rem;
-    background: var(--color-surface);
-    color: var(--color-primary);
-    border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     padding: 0.3rem 0.6rem;
     font-family: var(--font-family);
@@ -158,17 +155,6 @@
     cursor: pointer;
     white-space: nowrap;
     transition: background-color 0.2s, color 0.2s, border-color 0.2s;
-}
-
-.btn-accion-inline:hover:not(:disabled) {
-    background-color: var(--color-primary);
-    color: var(--color-text-on-primary);
-    border-color: var(--color-primary);
-}
-
-.btn-accion-inline:focus {
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(36, 52, 76, 0.2);
 }
 
 .btn-accion-inline:disabled {

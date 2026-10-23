@@ -233,14 +233,14 @@ $urlLimpiar = current_url();
                             </td>
                             <td class="obras-acciones-cell">
                                 <div class="obras-acciones">
-                                    <a class="obras-btn-accion"
+                                    <a class="btn-accion-secundaria obras-btn-accion"
                                        href="<?= site_url('/obras/ver/' . (int) $obra->id) ?>"
                                        title="Ver obra">
                                         <i class="bi bi-eye" aria-hidden="true"></i>
                                         Ver obra
                                     </a>
 
-                                    <a class="obras-btn-accion"
+                                    <a class="btn-accion-secundaria obras-btn-accion"
                                        href="<?= site_url('/obras/documentacion/' . (int) $obra->id) ?>"
                                        title="Documentación">
                                         <i class="bi bi-folder" aria-hidden="true"></i>
@@ -249,7 +249,7 @@ $urlLimpiar = current_url();
 
                                     <?php if ($puedeEditarObras): ?>
                                         <button type="button"
-                                                class="obras-btn-accion"
+                                                class="btn-accion-secundaria obras-btn-accion"
                                                 data-accion="editar"
                                                 data-id="<?= (int) $obra->id ?>"
                                                 data-codigo="<?= esc($obra->codigo) ?>"
@@ -478,7 +478,7 @@ $codigoEdicion = (string) (session()->getFlashdata('obra_edicion_codigo') ?? '')
             </div>
 
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelarObra">
+                <button type="button" class="btn btn-cancelar" id="btnCancelarObra">
                     Cancelar
                 </button>
                 <button type="submit" class="btn btn-success" id="btnGuardarObra">
