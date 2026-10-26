@@ -46,6 +46,35 @@ class EstadoObraModel extends Model
     /** Estado posterior a la recepción definitiva. */
     public const ESTADO_FINALIZADA = 'FINALIZADA';
 
+    /**
+     * Estados que admiten registrar la recepción provisoria.
+     *
+     * EN PLAZO y FINALIZADA permiten completar obras históricas que ya
+     * tenían un estado posterior sin la recepción registrada.
+     */
+    public const PERMITEN_RECEPCION_PROVISORIA = [
+        'EN EJECUCIÓN',
+        'EN PLAZO DE CONSERVACIÓN',
+        'FINALIZADA',
+    ];
+
+    /**
+     * Estados que admiten registrar la recepción definitiva.
+     */
+    public const PERMITEN_RECEPCION_DEFINITIVA = [
+        'EN PLAZO DE CONSERVACIÓN',
+        'FINALIZADA',
+    ];
+
+    /**
+     * Estados que admiten corregir la recepción provisoria mientras no
+     * exista la recepción definitiva.
+     */
+    public const PERMITEN_CORREGIR_RECEPCION_PROVISORIA = [
+        'EN PLAZO DE CONSERVACIÓN',
+        'FINALIZADA',
+    ];
+
     protected $table = 'estados_obra';
 
     protected $primaryKey = 'id';
@@ -143,5 +172,46 @@ class EstadoObraModel extends Model
     public function permiteReiniciarNeutralizacion(string $estadoNombre): bool
     {
         return mb_strtoupper(trim($estadoNombre)) === mb_strtoupper(self::ESTADO_NEUTRALIZADA);
+    }
+
+    /**
+     * Indica si el estado permite registrar la recepción provisoria.
+     */
+    public function permiteRegistrarRecepcionProvisoria(string $estadoNombre): bool
+    {
+        return $this->estadoEnLista($estadoNombre, self::PERMITEN_RECEPCION_PROVISORIA);
+    }
+
+    /**
+     * Indica si el estado permite registrar la recepción definitiva.
+     */
+    public function permiteRegistrarRecepcionDefinitiva(string $estadoNombre): bool
+    {
+        return $this->estadoEnLista($estadoNombre, self::PERMITEN_RECEPCION_DEFINITIVA);
+    }
+
+    /**
+     * Indica si el estado permite corregir los datos de la recepción
+     * provisoria existente.
+     */
+    public function permiteCorregirRecepcionProvisoria(string $estadoNombre): bool
+    {
+        return $this->estadoEnLista($estadoNombre, self::PERMITEN_CORREGIR_RECEPCION_PROVISORIA);
+    }
+
+    /**
+     * @param list<string> $permitidos
+     */
+    private function estadoEnLista(string $estadoNombre, array $permitidos): bool
+    {
+        $estado = mb_strtoupper(trim($estadoNombre));
+
+        foreach ($permitidos as $permitido) {
+            if (mb_strtoupper($permitido) === $estado) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

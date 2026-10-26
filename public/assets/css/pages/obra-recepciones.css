@@ -1,0 +1,209 @@
+/* ===================================================================
+   SIGOA — Página: Recepciones de obra (BLOQUE 3 RP/RD)
+   =================================================================== */
+
+.recepciones-requerido {
+    color: var(--color-danger);
+    font-weight: 700;
+}
+
+.recepciones-aviso {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    margin: 0 0 var(--space-md);
+}
+
+.recepciones-aviso i {
+    margin-right: 0.3rem;
+}
+
+.recepciones-aviso-alerta {
+    color: var(--color-warning);
+    background-color: var(--color-warning-bg);
+    border: 1px solid var(--color-warning-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-md);
+}
+
+.recepciones-aviso-error {
+    color: var(--color-danger);
+    background-color: var(--color-danger-bg);
+    border: 1px solid var(--color-danger-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-md);
+}
+
+.recepciones-seccion {
+    margin-top: var(--space-lg);
+}
+
+.recepciones-resumen {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: var(--space-md);
+    margin: 0 0 var(--space-lg);
+}
+
+.recepciones-resumen-dato {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+}
+
+.recepciones-resumen-dato dt {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: var(--space-xs);
+}
+
+.recepciones-resumen-dato dd {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.recepciones-bloque {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    background-color: var(--color-surface);
+    margin-bottom: var(--space-lg);
+}
+
+.recepciones-bloque:last-child {
+    margin-bottom: 0;
+}
+
+.recepciones-bloque-encabezado {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-md);
+}
+
+.recepciones-subtitulo {
+    margin: 0;
+    font-size: var(--font-size-base);
+    color: var(--color-text);
+}
+
+.recepciones-bloque-nota {
+    margin: 0.25rem 0 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.recepcion-estado {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.recepcion-estado-pendiente {
+    background-color: var(--color-warning-bg);
+    color: var(--color-warning);
+    border: 1px solid var(--color-warning-border);
+}
+
+.recepcion-estado-registrada {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid var(--color-success-border);
+}
+
+.recepciones-detalle {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: var(--space-md);
+    margin: 0 0 var(--space-md);
+}
+
+.recepciones-detalle dt {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: var(--space-xs);
+}
+
+.recepciones-detalle dd {
+    margin: 0;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
+.recepciones-detalle-observaciones {
+    grid-column: 1 / -1;
+}
+
+.recepciones-nota-estado {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    margin: 0 0 var(--space-md);
+}
+
+.recepciones-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-md);
+}
+
+.recepciones-form-acciones {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: var(--space-md);
+}
+
+.recepciones-form-acciones .btn {
+    width: auto;
+}
+
+.recepciones-editar {
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-md);
+    margin-top: var(--space-md);
+}
+
+.recepciones-editar summary {
+    cursor: pointer;
+    color: var(--color-primary);
+    font-weight: 600;
+    margin-bottom: var(--space-sm);
+}
+
+.recepciones-editar summary:focus-visible {
+    outline: 2px solid var(--color-border-focus);
+    outline-offset: 2px;
+}
+
+@media (max-width: 580px) {
+    .recepciones-form-grid {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+
+    .recepciones-form-acciones .btn {
+        width: 100%;
+    }
+
+    .recepciones-bloque-encabezado {
+        align-items: stretch;
+    }
+}

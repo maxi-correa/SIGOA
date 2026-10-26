@@ -110,6 +110,22 @@ $routes->post('/obras/neutralizaciones/reiniciar', 'Neutralizaciones::reiniciar'
 ]);
 
 // =============================================
+// RECEPCIONES DE OBRA — consulta y gestión (ADMIN y SUPERADMIN; consulta solo lectura)
+// =============================================
+$routes->get('/obras/recepciones/(:num)', 'Recepciones::index/$1', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR,CONSULTA'],
+]);
+$routes->post('/obras/recepciones/provisoria', 'Recepciones::registrarProvisoria', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->post('/obras/recepciones/provisoria/actualizar', 'Recepciones::actualizarProvisoria', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->post('/obras/recepciones/definitiva', 'Recepciones::registrarDefinitiva', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+
+// =============================================
 // REPRESENTANTES TÉCNICOS — CRUD (ADMIN y SUPERADMIN)
 // =============================================
 $routes->get('/representantes', 'RepresentantesTecnicos::index', [

@@ -48,6 +48,7 @@ class ObraModel extends Model
         'plazo_original_unidad',
         'plazo_original_dias',
         'plazo_inicial_confirmado',
+        'plazo_conservacion_dias',
         'estado_obra_id',
         'observacion_general',
         'created_at',
@@ -372,6 +373,21 @@ class ObraModel extends Model
             'plazo_original_dias'      => $datos['plazo_original_dias'],
             'plazo_inicial_confirmado' => 1,
             'updated_at'               => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
+     * Persiste el plazo de conservación por defecto de la obra.
+     *
+     * La recepción provisoria conserva además su propio snapshot del plazo
+     * aplicado. Este valor queda como referencia para la pantalla de
+     * recepciones y para futuras altas.
+     */
+    public function fijarPlazoConservacion(int $id, int $dias): bool
+    {
+        return $this->update($id, [
+            'plazo_conservacion_dias' => $dias,
+            'updated_at'              => date('Y-m-d H:i:s'),
         ]);
     }
 
