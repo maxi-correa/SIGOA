@@ -92,9 +92,9 @@ class PlazoObra
             return null;
         }
 
-        $objeto = DateTime::createFromFormat('Y-m-d', $fecha);
+        $objeto = DateTime::createFromFormat('!Y-m-d', $fecha);
 
-        if ($objeto === false) {
+        if ($objeto === false || $objeto->format('Y-m-d') !== $fecha) {
             return null;
         }
 
@@ -206,6 +206,47 @@ class PlazoObra
         }
 
         return self::sumarDias($fechaInicio, $plazoVigenteDias + $diasNeutralizados);
+    }
+
+    /**
+     * Fecha prevista para la recepción definitiva.
+     *
+     * La recepción provisoria es el día 0 del plazo de conservación: la
+     * fecha prevista se obtiene sumando los días corridos del plazo a la
+     * fecha de recepción provisoria. Por ejemplo, una recepción provisoria
+     * del 23/10/2026 con 180 días de conservación prevé la definitiva para
+     * el 21/04/2027.
+     *
+     * Devuelve null si la fecha es inválida o si el plazo no es positivo.
+     */
+    public static function fechaPrevistaDefinitiva(string $fechaProvisoria, int $plazoConservacionDias): ?string
+    {
+        if ($plazoConservacionDias <= 0 || self::formatearFecha($fechaProvisoria) === null) {
+            return null;
+        }
+
+        return self::sumarDias($fechaProvisoria, $plazoConservacionDias);
+    }
+
+    /**
+     * Indica si una recepción definitiva puede registrarse en la fecha dada.
+     *
+     * La definitiva se habilita desde la fecha prevista inclusive; antes de
+     * ese día la recepción no corresponde. Devuelve false si alguna fecha es
+     * inválida o si el plazo de conservación no es positivo.
+     */
+    public static function permiteRecepcionDefinitiva(
+        string $fechaProvisoria,
+        int $plazoConservacionDias,
+        string $fechaDefinitiva
+    ): bool {
+        $fechaPrevista = self::fechaPrevistaDefinitiva($fechaProvisoria, $plazoConservacionDias);
+
+        if ($fechaPrevista === null || self::formatearFecha($fechaDefinitiva) === null) {
+            return false;
+        }
+
+        return strcmp($fechaDefinitiva, $fechaPrevista) >= 0;
     }
 
     /**

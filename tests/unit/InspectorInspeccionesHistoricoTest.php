@@ -535,9 +535,9 @@ final class InspectorInspeccionesHistoricoTest extends CIUnitTestCase
         $ultima = end($nombres);
 
         $this->assertSame(
-            '2026-10-16-140100_AddForeignKeysToDocumentos.php',
+            '2026-10-26-120300_AddRelacionesPendientesToDocumentos.php',
             $ultima,
-            'El cambio de esquema más reciente del proyecto es el de neutralizaciones (BLOQUE 5).'
+            'El cambio de esquema más reciente del proyecto corresponde a recepciones provisorias/definitivas (RP/RD).'
         );
     }
 

@@ -11,6 +11,8 @@ use App\Models\InspectoresObrasModel;
 use App\Models\NeutralizacionModel;
 use App\Models\ObraModel;
 use App\Models\ObrasRepresentantesTecnicosModel;
+use App\Models\RecepcionDefinitivaModel;
+use App\Models\RecepcionProvisoriaModel;
 use App\Models\RepresentanteTecnicoModel;
 use App\Models\ResolucionModel;
 use App\Models\TipoLicitacionModel;
@@ -101,18 +103,30 @@ class Obras extends BaseController
 
         $errores = $this->validarDatosObra($datos, $obraId);
 
-        $estadoDestino = ($estadoId === null) ? null : (new EstadoObraModel())->find($estadoId);
+        $estadoModel   = new EstadoObraModel();
+        $estadoActual  = $estadoModel->find((int) $obra->estado_obra_id);
+        $estadoDestino = ($estadoId === null) ? null : $estadoModel->find($estadoId);
 
         if ($estadoDestino === null) {
             $errores[] = 'El estado seleccionado no existe.';
         } else {
-            $errorTransicion = $this->validarTransicionEstadoNeutralizacion(
+            $errorNeutralizacion = $this->validarTransicionEstadoNeutralizacion(
                 $obraId,
                 (string) $estadoDestino->estado
             );
 
-            if ($errorTransicion !== null) {
-                $errores[] = $errorTransicion;
+            if ($errorNeutralizacion !== null) {
+                $errores[] = $errorNeutralizacion;
+            }
+
+            $errorConservacion = $this->validarTransicionEstadoConservacion(
+                $obraId,
+                (string) ($estadoActual->estado ?? ''),
+                (string) $estadoDestino->estado
+            );
+
+            if ($errorConservacion !== null) {
+                $errores[] = $errorConservacion;
             }
         }
 
@@ -572,6 +586,54 @@ class Obras extends BaseController
 
         if ($destino !== mb_strtoupper(EstadoObraModel::ESTADO_NEUTRALIZADA) && $tieneAbierta) {
             return 'La obra tiene una neutralización abierta: registre el reinicio antes de cambiar su estado.';
+        }
+
+        return null;
+    }
+
+    /**
+     * Impide transiciones de estado que eludan el ciclo de recepciones.
+     *
+     * El ingreso a EN PLAZO DE CONSERVACIÓN exige la recepción provisoria y
+     * el ingreso a FINALIZADA exige la recepción definitiva. Una vez que la
+     * obra ingresó al plazo de conservación solo puede avanzar a FINALIZADA,
+     * y una obra FINALIZADA no puede volver a un estado anterior.
+     *
+     * Las obras históricas que ya están en un estado posterior sin la
+     * recepción correspondiente pueden conservar ese estado: la guardia solo
+     * se aplica cuando se intenta una transición real.
+     *
+     * @return string|null mensaje de error, o `null` si la transición es admisible
+     */
+    private function validarTransicionEstadoConservacion(
+        int $obraId,
+        string $estadoActual,
+        string $estadoDestino
+    ): ?string {
+        $actual  = mb_strtoupper(trim($estadoActual));
+        $destino = mb_strtoupper(trim($estadoDestino));
+
+        if ($actual === $destino) {
+            return null;
+        }
+
+        $enPlazo    = mb_strtoupper(EstadoObraModel::ESTADO_EN_PLAZO_CONSERVACION);
+        $finalizada = mb_strtoupper(EstadoObraModel::ESTADO_FINALIZADA);
+
+        if ($actual === $finalizada) {
+            return 'La obra está FINALIZADA y no puede volver a un estado anterior.';
+        }
+
+        if ($actual === $enPlazo && $destino !== $finalizada) {
+            return 'La obra está EN PLAZO DE CONSERVACIÓN y no puede volver a un estado anterior.';
+        }
+
+        if ($destino === $enPlazo && ! (new RecepcionProvisoriaModel())->tienePorObra($obraId)) {
+            return 'No puede pasar a EN PLAZO DE CONSERVACIÓN sin registrar la recepción provisoria.';
+        }
+
+        if ($destino === $finalizada && ! (new RecepcionDefinitivaModel())->tienePorObra($obraId)) {
+            return 'No puede pasar a FINALIZADA sin registrar la recepción definitiva.';
         }
 
         return null;

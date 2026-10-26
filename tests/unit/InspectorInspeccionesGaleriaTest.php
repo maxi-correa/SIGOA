@@ -362,9 +362,9 @@ final class InspectorInspeccionesGaleriaTest extends CIUnitTestCase
         sort($nombres);
 
         $this->assertSame(
-            '2026-10-16-140100_AddForeignKeysToDocumentos.php',
+            '2026-10-26-120300_AddRelacionesPendientesToDocumentos.php',
             end($nombres),
-            'El cambio de esquema más reciente del proyecto es el de neutralizaciones (BLOQUE 5).'
+            'El cambio de esquema más reciente del proyecto corresponde a recepciones provisorias/definitivas (RP/RD).'
         );
 
         $sincronizador = $this->leerApp('Controllers/Inspector/Sincronizar.php');

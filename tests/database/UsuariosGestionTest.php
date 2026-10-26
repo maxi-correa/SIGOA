@@ -97,9 +97,7 @@ final class UsuariosGestionTest extends CIUnitTestCase
     private function limpiarTablas(): void
     {
         foreach (['usuarios_roles', 'usuarios', 'roles'] as $tabla) {
-            if ($this->conn->tableExists($tabla)) {
-                $this->conn->query('DELETE FROM ' . $this->tabla($tabla));
-            }
+            $this->conn->query('DELETE FROM ' . $this->tabla($tabla));
         }
     }
 

@@ -325,7 +325,16 @@ La neutralización representa una situación especial durante la ejecución:
 
 `EN EJECUCIÓN ↔ NEUTRALIZADA`
 
-El sistema deberá impedir transiciones inválidas cuando se implemente la lógica correspondiente. El ciclo `EN EJECUCIÓN ↔ NEUTRALIZADA` ya está protegido (Bloque 5, §69.5): no puede forzarse ni eludirse desde la edición general de la obra. El resto de las transiciones permanece como edición libre por ahora.
+El ciclo `EN EJECUCIÓN ↔ NEUTRALIZADA` está protegido (Bloque 5, §69.5): no puede forzarse ni eludirse desde la edición general de la obra.
+
+Las transiciones posteriores a la ejecución también están protegidas (RP/RD, §25):
+
+* no se puede ingresar a `EN PLAZO DE CONSERVACIÓN` sin recepción provisoria;
+* no se puede ingresar a `FINALIZADA` sin recepción definitiva;
+* una vez en `EN PLAZO DE CONSERVACIÓN` solo se puede avanzar a `FINALIZADA`;
+* una obra `FINALIZADA` no puede volver a un estado anterior.
+
+Las obras históricas que ya se encuentran en un estado posterior sin la recepción correspondiente conservan ese estado mientras no intenten una transición; sus demás datos siguen siendo editables.
 
 ---
 
@@ -691,6 +700,23 @@ El sistema contempla:
 Las recepciones forman parte de la historia administrativa de la obra.
 
 La recepción definitiva también constituye un hito relevante para alertas y seguimiento.
+
+## 25.1 Reglas de fechas y transiciones (RP/RD)
+
+La recepción provisoria es el día 0 del plazo de conservación. La fecha prevista de la recepción definitiva se obtiene sumando los días corridos del plazo a la fecha de la recepción provisoria:
+
+`fecha_prevista_definitiva = fecha_recepcion_provisoria + plazo_conservacion_dias`
+
+La recepción definitiva se habilita desde esa fecha prevista, inclusive. El cálculo se centraliza en `PlazoObra::fechaPrevistaDefinitiva()` y `PlazoObra::permiteRecepcionDefinitiva()`.
+
+En la edición general de la obra:
+
+* no se puede ingresar a `EN PLAZO DE CONSERVACIÓN` sin recepción provisoria;
+* no se puede ingresar a `FINALIZADA` sin recepción definitiva;
+* desde `EN PLAZO DE CONSERVACIÓN` solo se puede avanzar a `FINALIZADA`;
+* una obra `FINALIZADA` no puede retroceder.
+
+La guardia solo se aplica ante una transición real: una obra histórica que ya está en `EN PLAZO DE CONSERVACIÓN` o `FINALIZADA` sin la recepción correspondiente conserva su estado. La pantalla y el alta de recepciones continúan pendientes.
 
 ---
 
@@ -1469,15 +1495,13 @@ Código de obra: OBR-000023
 
 Visualmente deshabilitado, no se envía al backend como campo modificable. La obra se identifica mediante su `id` interno. No se regenera el código al editar.
 
-## 48.5 Estado: edición libre
+## 48.5 Estado: edición con transiciones protegidas
 
-En esta etapa inicial del sistema, el **estado sí puede modificarse libremente**.
+La primera carga de SIGOA requiere registrar obras existentes que pueden encontrarse en cualquier estado. Por eso el backend acepta cualquier `estado_obra_id` válido del catálogo durante la edición, salvo las transiciones que tienen reglas propias.
 
-La primera carga de SIGOA requiere registrar obras existentes que pueden encontrarse en cualquier estado. Por eso el backend acepta cualquier `estado_obra_id` válido del catálogo durante la edición.
+> **Ciclo de neutralización (Bloque 5, §69.5):** no puede forzarse **NEUTRALIZADA** sin un período abierto ni abandonarse ese estado mientras exista un período abierto; eso se resuelve registrando el reinicio.
 
-> **Excepción (Bloque 5, §69.5):** las transiciones que involucran **NEUTRALIZADA** quedan sujetas al ciclo de neutralización. No puede forzarse NEUTRALIZADA sin un período abierto ni abandonarse ese estado mientras exista un período abierto; eso se resuelve registrando el reinicio. El resto de los estados sigue siendo de edición libre.
-
-Esto puede cambiar en fases futuras cuando se implementen transiciones controladas con actas.
+> **Ciclo de recepciones (RP/RD, §25):** no se puede pasar a **EN PLAZO DE CONSERVACIÓN** sin recepción provisoria ni a **FINALIZADA** sin recepción definitiva. Desde **EN PLAZO DE CONSERVACIÓN** solo se avanza a **FINALIZADA**, y una obra **FINALIZADA** no retrocede. Las obras históricas sin recepciones conservan su estado y pueden editar sus demás datos.
 
 Los estados disponibles son: `PREVIO INICIO`, `EN EJECUCIÓN`, `NEUTRALIZADA`, `EN PLAZO DE CONSERVACIÓN`, `FINALIZADA`.
 

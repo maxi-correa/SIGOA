@@ -31,11 +31,20 @@ class EstadoObraModel extends Model
         'NEUTRALIZADA',
     ];
 
+    /** Estado inicial de toda obra nueva. */
+    public const ESTADO_PREVIO_INICIO = 'PREVIO INICIO';
+
     /** Estado desde el que puede iniciarse una neutralización (BLOQUE 5). */
     public const ESTADO_EN_EJECUCION = 'EN EJECUCIÓN';
 
     /** Estado en el que puede registrarse el reinicio de una obra (BLOQUE 5). */
     public const ESTADO_NEUTRALIZADA = 'NEUTRALIZADA';
+
+    /** Estado posterior a la recepción provisoria. */
+    public const ESTADO_EN_PLAZO_CONSERVACION = 'EN PLAZO DE CONSERVACIÓN';
+
+    /** Estado posterior a la recepción definitiva. */
+    public const ESTADO_FINALIZADA = 'FINALIZADA';
 
     protected $table = 'estados_obra';
 
@@ -73,7 +82,7 @@ class EstadoObraModel extends Model
      */
     public function findPrevioInicio(): ?object
     {
-        return $this->findByEstado('PREVIO INICIO');
+        return $this->findByEstado(self::ESTADO_PREVIO_INICIO);
     }
 
     /**

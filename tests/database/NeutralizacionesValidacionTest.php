@@ -195,13 +195,13 @@ final class NeutralizacionesValidacionTest extends CIUnitTestCase
         $resultado = $this->postComoAdmin('/obras/actualizar', [
             'obra_id'             => $this->obraId,
             'expediente_municipal' => 'EXP-001',
-            'nombre'              => 'Obra en conservación',
-            'estado_obra_id'      => $this->estados['EN PLAZO DE CONSERVACIÓN'],
+            'nombre'              => 'Obra previa al inicio',
+            'estado_obra_id'      => $this->estados['PREVIO INICIO'],
         ]);
 
         $resultado->assertRedirectTo('/admin/dashboard');
 
-        $this->assertSame($this->estados['EN PLAZO DE CONSERVACIÓN'], $this->estadoActual());
+        $this->assertSame($this->estados['PREVIO INICIO'], $this->estadoActual());
     }
 
     // ------------------------------------------------------------------

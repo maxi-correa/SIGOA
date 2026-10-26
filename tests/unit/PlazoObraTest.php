@@ -56,6 +56,7 @@ final class PlazoObraTest extends CIUnitTestCase
     public function testFormatearFecha(): void
     {
         $this->assertSame('15/03/2026', PlazoObra::formatearFecha('2026-03-15'));
+        $this->assertNull(PlazoObra::formatearFecha('2026-02-31'));
         $this->assertNull(PlazoObra::formatearFecha(''));
         $this->assertNull(PlazoObra::formatearFecha(null));
     }
@@ -64,6 +65,47 @@ final class PlazoObraTest extends CIUnitTestCase
     {
         $this->assertSame('2026-07-11', PlazoObra::sumarDias('2026-03-15', 118));
         $this->assertSame('2026-03-15', PlazoObra::sumarDias('2026-03-15', 0));
+    }
+
+    public function testFechaPrevistaDefinitivaSumaElPlazoALaRecepcionProvisoria(): void
+    {
+        $this->assertSame(
+            '2027-04-21',
+            PlazoObra::fechaPrevistaDefinitiva('2026-10-23', 180)
+        );
+    }
+
+    public function testFechaPrevistaDefinitivaConDatosInvalidosDevuelveNull(): void
+    {
+        $this->assertNull(PlazoObra::fechaPrevistaDefinitiva('2026-10-23', -1));
+        $this->assertNull(PlazoObra::fechaPrevistaDefinitiva('2026-02-31', 180));
+        $this->assertNull(PlazoObra::fechaPrevistaDefinitiva('', 180));
+    }
+
+    public function testLaRecepcionDefinitivaSeHabilitaDesdeLaFechaPrevistaInclusive(): void
+    {
+        $this->assertFalse(
+            PlazoObra::permiteRecepcionDefinitiva('2026-10-23', 180, '2027-04-20')
+        );
+        $this->assertTrue(
+            PlazoObra::permiteRecepcionDefinitiva('2026-10-23', 180, '2027-04-21')
+        );
+        $this->assertTrue(
+            PlazoObra::permiteRecepcionDefinitiva('2026-10-23', 180, '2027-04-22')
+        );
+    }
+
+    public function testLaRecepcionDefinitivaConDatosInvalidosNoSeHabilita(): void
+    {
+        $this->assertFalse(
+            PlazoObra::permiteRecepcionDefinitiva('2026-10-23', 0, '2026-10-23')
+        );
+        $this->assertFalse(
+            PlazoObra::permiteRecepcionDefinitiva('2026-02-31', 180, '2027-04-21')
+        );
+        $this->assertFalse(
+            PlazoObra::permiteRecepcionDefinitiva('2026-10-23', 180, '2027-02-31')
+        );
     }
 
     public function testDiasEntreCuentaDiasCorridosSinIncluirExtremos(): void
