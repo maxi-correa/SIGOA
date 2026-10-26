@@ -52,11 +52,11 @@ class RecepcionDefinitivaModel extends Model
      *
      * @param array<string, mixed> $datos
      */
-    public function crear(int $obraId, array $datos): bool
+    public function crear(int $obraId, array $datos): ?int
     {
         $ahora = date('Y-m-d H:i:s');
 
-        return (bool) $this->insert([
+        $id = $this->insert([
             'obra_id'         => $obraId,
             'fecha_recepcion' => $datos['fecha_recepcion'],
             'documento_id'    => $datos['documento_id'] ?? null,
@@ -64,6 +64,8 @@ class RecepcionDefinitivaModel extends Model
             'created_at'      => $ahora,
             'updated_at'      => $ahora,
         ], true);
+
+        return $id === false ? null : (int) $id;
     }
 
     /**

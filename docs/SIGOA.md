@@ -734,19 +734,21 @@ Reglas de alta y edición:
 * **Fechas:** la fecha de recepción no puede ser futura; la provisoria no puede ser anterior a `obras.fecha_inicio` cuando existe. El plazo de conservación debe ser un entero entre `1` y `36500` días.
 * **Plazo de la obra:** al registrar o corregir la provisoria se actualiza `obras.plazo_conservacion_dias`.
 * **Unicidad y transacción:** cada obra admite una sola RP y una sola RD; las altas y correcciones se ejecutan en transacción y bloquean la obra (`SELECT ... FOR UPDATE`, omitido en SQLite para pruebas).
-* **Actas documentales:** la carga de las actas se realizará en bloques posteriores. Hasta entonces `documento_id` permanece nullable y la pantalla no selecciona documentos.
+* **Vínculo opcional con el acta de recepción definitiva:** al registrar la RD puede seleccionarse una versión vigente (`es_version_actual = 1`) del tipo `ACTA DE RECEPCIÓN DEFINITIVA` de la misma obra; si no se selecciona, `documento_id` queda en null. Un acta ajena, no vigente o de otro tipo se rechaza. La carga de las actas en sí se realizará en bloques posteriores.
+* **Alta de la RD (`Services/RecepcionDefinitivaService`):** valida fecha (no futura y no anterior a la fecha prevista), existencia de provisoria y ausencia de definitiva. En una única transacción con bloqueo de la obra inserta la RD, pasa la obra a `FINALIZADA` si estaba `EN PLAZO DE CONSERVACIÓN` y registra la auditoría. Si falla cualquier paso, se revierte todo. El vencimiento del plazo no crea la RD: solo la crea esta acción.
+* **Auditoría de la RD:** se registra una fila `ALTA` sobre `recepciones_definitivas` (con fecha, documento vinculado y usuario) y, si hubo transición, una fila `CAMBIO_ESTADO` sobre `obras` con `estado_obra_id` anterior y nuevo, mediante `Models/AuditoriaModel`.
 * **Bloqueo de obra FINALIZADA con acta definitiva (decisión de negocio, pendiente de implementación):** una obra `FINALIZADA` queda bloqueada para cualquier edición de sus datos cuando existe un documento vigente de tipo `ACTA DE RECEPCIÓN DEFINITIVA` asociado a la obra. Mientras esa acta no esté cargada, la obra conserva editable lo que ya era editable. Esta regla depende de la carga de actas, prevista en bloques posteriores, y aún no está implementada en las rutas de edición.
 * **Alta de la recepción definitiva:** solo SUPERADMINISTRADOR y ADMINISTRADOR.
 
 Versionado y trazabilidad:
 
 * **Actas:** el versionado de actas ya existe en `documentos` (`version`, `es_version_actual`, `documento_padre_id`) y se resuelve con `DocumentoModel::crearVersionDe()`. La versión reemplazada se conserva con `es_version_actual = 0`. No requiere migración.
-* **Correcciones de RP:** la fila vigente se corrige en su lugar y cada cambio de campo debe registrarse en `auditoria` (`entidad`, `registro_id`, `campo`, `valor_anterior`, `valor_nuevo`, usuario, fecha). La tabla ya existe y tiene el índice `idx_auditoria_entidad_registro_fecha`; no requiere migración. Su implementación en el código queda pendiente, porque hoy ningún modelo escribe en `auditoria`.
+* **Correcciones de RP:** la fila vigente se corrige en su lugar y cada cambio de campo debe registrarse en `auditoria` (`entidad`, `registro_id`, `campo`, `valor_anterior`, `valor_nuevo`, usuario, fecha). La tabla ya existe y tiene el índice `idx_auditoria_entidad_registro_fecha`; no requiere migración. Su implementación para las correcciones queda pendiente (Bloque de correcciones e historial); el alta de la RD ya escribe en `auditoria`.
 * **RD:** es inmutable. Si en el futuro se requiere una nueva versión de la RD, la restricción `UNIQUE(obra_id)` impide hoy insertar otra fila; ese cambio sí requerirá una migración nueva que siga el patrón de `documentos`.
 
 Permisos: la consulta (`GET`) está disponible para `SUPERADMINISTRADOR`, `ADMINISTRADOR` y `CONSULTA`; las altas y correcciones (`POST`) solo para `SUPERADMINISTRADOR` y `ADMINISTRADOR`. `INSPECTOR` no accede a esta pantalla, lo cual es correcto según la definición del negocio.
 
-Pruebas: `tests/unit/RecepcionesPantallaTest.php` (contratos de vista, rutas y bloqueos) y `tests/database/RecepcionesGestionTest.php` (reglas de servidor, fechas, estados y permisos de render).
+Pruebas: `tests/unit/RecepcionesPantallaTest.php` (contratos de vista, rutas, controlador y servicio) y `tests/database/RecepcionesGestionTest.php` (reglas de servidor, fechas, estados, acta vinculada, auditoría, atomicidad y permisos de render).
 
 ---
 

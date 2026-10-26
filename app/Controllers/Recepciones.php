@@ -7,6 +7,9 @@ use App\Models\EstadoObraModel;
 use App\Models\ObraModel;
 use App\Models\RecepcionDefinitivaModel;
 use App\Models\RecepcionProvisoriaModel;
+use App\Models\DocumentoModel;
+use App\Models\TipoDocumentoModel;
+use App\Services\RecepcionDefinitivaService;
 
 /**
  * Recepciones provisoria y definitiva de una obra (BLOQUE 3 RP/RD).
@@ -75,7 +78,13 @@ class Recepciones extends BaseController
                 date('Y-m-d')
             );
 
+        $tipoActa   = (new TipoDocumentoModel())->findByNombre(RecepcionDefinitivaService::TIPO_ACTA);
+        $actasDefinitiva = $tipoActa === null
+            ? []
+            : (new DocumentoModel())->listarVigentesPorTipo($id, (int) $tipoActa->id);
+
         return view('obras/recepciones', [
+            'actas_definitiva'             => $actasDefinitiva,
             'titulo'                       => 'Recepciones de obra',
             'user_name'                    => session()->get('user_name'),
             'username'                     => session()->get('username'),
@@ -338,7 +347,9 @@ class Recepciones extends BaseController
     }
 
     /**
-     * Registra la recepción definitiva y, si corresponde, finaliza la obra.
+     * Registra la recepción definitiva. Las reglas, la transición a
+     * FINALIZADA y la auditoría se resuelven en RecepcionDefinitivaService,
+     * dentro de una única transacción.
      */
     public function registrarDefinitiva()
     {
@@ -355,94 +366,16 @@ class Recepciones extends BaseController
                 ->with('error', 'No tiene autorización para registrar recepciones.');
         }
 
-        if (! (new EstadoObraModel())->permiteRegistrarRecepcionDefinitiva($obra->estado_nombre ?? '')) {
-            return redirect()->to($destino)
-                ->with('error', 'El estado actual de la obra no permite registrar la recepción definitiva.');
-        }
+        $resultado = (new RecepcionDefinitivaService())->registrar(
+            (int) $obra->id,
+            $this->tomarDatosDefinitiva(),
+            $this->usuarioId()
+        );
 
-        $provisoria = (new RecepcionProvisoriaModel())->porObra((int) $obra->id);
-
-        if ($provisoria === null) {
-            return redirect()->to($destino)
-                ->with('error', 'Debe registrar la recepción provisoria antes de la definitiva.');
-        }
-
-        if ((new RecepcionDefinitivaModel())->tienePorObra((int) $obra->id)) {
-            return redirect()->to($destino)
-                ->with('error', 'La obra ya tiene una recepción definitiva registrada.');
-        }
-
-        $datos   = $this->tomarDatosDefinitiva();
-        $errores = $this->validarDefinitiva($provisoria, $datos);
-
-        if ($errores !== []) {
+        if (! $resultado['registrada']) {
             return redirect()->to($destino)
                 ->withInput()
-                ->with('errores_recepcion', $errores);
-        }
-
-        $db = db_connect();
-        $db->transStart();
-
-        $registrada = false;
-        $erroresTx  = [];
-
-        try {
-            $this->bloquearObra((int) $obra->id);
-
-            $actual          = (new ObraModel())->findDetalle((int) $obra->id);
-            $provisoriaModel = new RecepcionProvisoriaModel();
-            $provisoriaActual = $provisoriaModel->porObra((int) $obra->id);
-            $definitivaModel = new RecepcionDefinitivaModel();
-
-            if (
-                $actual !== null
-                && $provisoriaActual !== null
-                && ! $definitivaModel->tienePorObra((int) $obra->id)
-                && (new EstadoObraModel())->permiteRegistrarRecepcionDefinitiva($actual->estado_nombre ?? '')
-            ) {
-                $erroresTx = $this->validarDefinitiva($provisoriaActual, $datos);
-
-                if ($erroresTx === []) {
-                    $registrada = $definitivaModel->crear((int) $obra->id, $datos);
-
-                    if (
-                        $registrada
-                        && mb_strtoupper(trim((string) ($actual->estado_nombre ?? '')))
-                            === mb_strtoupper(EstadoObraModel::ESTADO_EN_PLAZO_CONSERVACION)
-                    ) {
-                        $registrada = $this->cambiarEstado(
-                            (int) $obra->id,
-                            EstadoObraModel::ESTADO_FINALIZADA
-                        );
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            $db->transRollback();
-
-            return redirect()->to($destino)
-                ->with('error', 'No se pudo registrar la recepción definitiva. Verifique el estado de la obra.');
-        }
-
-        if (! $registrada) {
-            $db->transRollback();
-
-            if ($erroresTx !== []) {
-                return redirect()->to($destino)
-                    ->withInput()
-                    ->with('errores_recepcion', $erroresTx);
-            }
-
-            return redirect()->to($destino)
-                ->with('error', 'No se pudo registrar la recepción definitiva. Verifique el estado de la obra.');
-        }
-
-        $db->transComplete();
-
-        if (! $db->transStatus()) {
-            return redirect()->to($destino)
-                ->with('error', 'No se pudo registrar la recepción definitiva.');
+                ->with('errores_recepcion', $resultado['errores']);
         }
 
         return redirect()->to($destino)
@@ -534,10 +467,20 @@ class Recepciones extends BaseController
      */
     private function tomarDatosDefinitiva(): array
     {
+        $documento = trim((string) $this->request->getPost('documento_id'));
+
         return [
             'fecha_recepcion' => $this->parseFecha($this->request->getPost('fecha_recepcion')),
             'observaciones'   => $this->textoOpcional($this->request->getPost('observaciones')),
+            'documento_id'    => ctype_digit($documento) ? (int) $documento : null,
         ];
+    }
+
+    private function usuarioId(): ?int
+    {
+        $id = session()->get('user_id');
+
+        return $id === null ? null : (int) $id;
     }
 
     /**
@@ -587,47 +530,6 @@ class Recepciones extends BaseController
         }
 
         return $errores;
-    }
-
-    /**
-     * Valida la recepción definitiva contra la provisoria y la fecha
-     * prevista de habilitación.
-     *
-     * @param array<string, mixed> $datos
-     *
-     * @return list<string>
-     */
-    private function validarDefinitiva(object $provisoria, array $datos): array
-    {
-        if ($datos['fecha_recepcion'] === null) {
-            return ['La fecha de recepción definitiva no es válida.'];
-        }
-
-        if (strcmp((string) $datos['fecha_recepcion'], date('Y-m-d')) > 0) {
-            return ['La fecha de recepción definitiva no puede ser posterior a la fecha actual.'];
-        }
-
-        $fechaProvisoria = (string) $provisoria->fecha_recepcion;
-        $plazo           = (int) $provisoria->plazo_conservacion_dias;
-        $fechaPrevista   = PlazoObra::fechaPrevistaDefinitiva($fechaProvisoria, $plazo);
-
-        if ($fechaPrevista === null) {
-            return ['La recepción provisoria registrada no tiene una fecha prevista válida.'];
-        }
-
-        if (! PlazoObra::permiteRecepcionDefinitiva(
-            $fechaProvisoria,
-            $plazo,
-            (string) $datos['fecha_recepcion']
-        )) {
-            return [
-                'La recepción definitiva no puede registrarse antes de la fecha prevista ('
-                . (PlazoObra::formatearFecha($fechaPrevista) ?? $fechaPrevista)
-                . ').',
-            ];
-        }
-
-        return [];
     }
 
     /**

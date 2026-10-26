@@ -351,6 +351,18 @@ $fechaDefinitivaDefault = ($definitivaHabilitada && $fechaPrevista !== null && $
                         <dt>Fecha de recepción</dt>
                         <dd><?= esc($fechaTexto($definitiva->fecha_recepcion)) ?></dd>
                     </div>
+                    <div>
+                        <dt>Acta vinculada</dt>
+                        <dd><?php
+                            $nombreActa = '—';
+                            foreach ($actas_definitiva ?? [] as $acta) {
+                                if ((int) $acta->id === (int) ($definitiva->documento_id ?? 0)) {
+                                    $nombreActa = (string) ($acta->nombre_archivo_original ?? ('Acta #' . (int) $acta->id));
+                                }
+                            }
+                            echo esc($nombreActa);
+                        ?></dd>
+                    </div>
                     <div class="recepciones-detalle-observaciones">
                         <dt>Observaciones</dt>
                         <dd><?= esc($definitiva->observaciones ?? '—') ?></dd>
@@ -400,6 +412,19 @@ $fechaDefinitivaDefault = ($definitivaHabilitada && $fechaPrevista !== null && $
                                    max="<?= esc($fechaHoy, 'attr') ?>"
                                    value="<?= esc($valorFormulario('definitiva', 'fecha_recepcion', $fechaDefinitivaDefault), 'attr') ?>">
                         </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="documento_definitiva">Acta de recepción definitiva (opcional)</label>
+                        <select id="documento_definitiva" name="documento_id" class="form-control">
+                            <option value="">Sin acta vinculada</option>
+                            <?php foreach ($actas_definitiva ?? [] as $acta): ?>
+                                <option value="<?= (int) $acta->id ?>"
+                                        <?= (string) $valorFormulario('definitiva', 'documento_id') === (string) $acta->id ? 'selected' : '' ?>>
+                                    <?= esc($acta->nombre_archivo_original ?? ('Acta #' . (int) $acta->id)) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
 
                     <div class="form-group">

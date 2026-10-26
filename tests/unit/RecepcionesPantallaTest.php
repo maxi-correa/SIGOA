@@ -56,21 +56,31 @@ final class RecepcionesPantallaTest extends CIUnitTestCase
         $this->assertStringContainsString('ficha-btn-volver', $vista);
     }
 
-    public function testElControladorAplicaTransaccionYRolas(): void
+    public function testElControladorAplicaRolesYDelegaLaDefinitivaEnElServicio(): void
     {
         $controlador = $this->leerApp('Controllers/Recepciones.php');
 
         $this->assertStringContainsString('ROLES_EDICION', $controlador);
         $this->assertStringContainsString('permiteRegistrarRecepcionProvisoria', $controlador);
-        $this->assertStringContainsString('permiteRegistrarRecepcionDefinitiva', $controlador);
         $this->assertStringContainsString('permiteCorregirRecepcionProvisoria', $controlador);
         $this->assertStringContainsString('PlazoObra::fechaPrevistaDefinitiva', $controlador);
-        $this->assertStringContainsString('PlazoObra::permiteRecepcionDefinitiva', $controlador);
         $this->assertStringContainsString('transStart', $controlador);
-        $this->assertStringContainsString('transComplete', $controlador);
         $this->assertStringContainsString('bloquearObra', $controlador);
-        $this->assertStringContainsString('ESTADO_EN_PLAZO_CONSERVACION', $controlador);
-        $this->assertStringContainsString('ESTADO_FINALIZADA', $controlador);
+        $this->assertStringContainsString('RecepcionDefinitivaService', $controlador);
+    }
+
+    public function testElServicioDeLaDefinitivaAplicaTransaccionYAuditoria(): void
+    {
+        $servicio = $this->leerApp('Services/RecepcionDefinitivaService.php');
+
+        $this->assertStringContainsString('transStart', $servicio);
+        $this->assertStringContainsString('transComplete', $servicio);
+        $this->assertStringContainsString('transRollback', $servicio);
+        $this->assertStringContainsString('bloquearObra', $servicio);
+        $this->assertStringContainsString('permiteRegistrarRecepcionDefinitiva', $servicio);
+        $this->assertStringContainsString('ESTADO_FINALIZADA', $servicio);
+        $this->assertStringContainsString('AuditoriaModel', $servicio);
+        $this->assertStringContainsString('ACTA DE RECEPCIÓN DEFINITIVA', $servicio);
     }
 
     public function testLosModelosBloqueanLaEdicionYLaEliminacionDirectas(): void

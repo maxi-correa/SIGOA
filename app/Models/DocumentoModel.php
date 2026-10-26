@@ -75,6 +75,22 @@ class DocumentoModel extends Model
     }
 
     /**
+     * Versiones vigentes de un tipo de documento dentro de una obra.
+     *
+     * Se usa para ofrecer como vínculo las actas de recepción vigentes.
+     *
+     * @return list<object>
+     */
+    public function listarVigentesPorTipo(int $obraId, int $tipoDocumentoId): array
+    {
+        return $this->where('obra_id', $obraId)
+            ->where('tipo_documento_id', $tipoDocumentoId)
+            ->where('es_version_actual', 1)
+            ->orderBy('created_at', 'ASC')
+            ->findAll();
+    }
+
+    /**
      * Consulta base de los documentos de una obra, con los datos de tipo,
      * usuario de carga y evento vinculado ya resueltos.
      */
