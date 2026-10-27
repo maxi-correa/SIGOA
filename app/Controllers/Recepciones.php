@@ -16,7 +16,7 @@ use App\Services\RecepcionProvisoriaService;
 use App\Services\RecepcionValidacion;
 
 /**
- * Recepciones provisoria y definitiva de una obra (BLOQUES 3 a 5).
+ * Recepciones provisoria y definitiva de una obra (RP/RD).
  *
  * El controlador valida la autorización, normaliza la entrada y muestra los
  * resultados. Las reglas, las transacciones y la auditoría viven en los
@@ -82,6 +82,7 @@ class Recepciones extends BaseController
             'fecha_hoy'                   => date('Y-m-d'),
             'actas_provisoria'            => $this->actasVigentes(RecepcionValidacion::TIPO_ACTA_PROVISORIA, $id),
             'actas_definitiva'            => $this->actasVigentes(RecepcionValidacion::TIPO_ACTA_DEFINITIVA, $id),
+            'estados_nombres'             => $this->nombresDeEstados(),
             'historial'                   => (new AuditoriaModel())->historialRecepciones(
                 $id,
                 $provisoria?->id !== null ? (int) $provisoria->id : null,
@@ -294,6 +295,23 @@ class Recepciones extends BaseController
             'observaciones'   => $this->textoOpcional($src['observaciones'] ?? null),
             'documento_id'    => $this->idOpcional($src['documento_id'] ?? null),
         ];
+    }
+
+    /**
+     * Nombre de cada estado del catálogo, indexado por id, para mostrar el
+     * historial de cambios de estado en lenguaje de negocio.
+     *
+     * @return array<string, string>
+     */
+    private function nombresDeEstados(): array
+    {
+        $nombres = [];
+
+        foreach ((new EstadoObraModel())->findAll() as $estado) {
+            $nombres[(string) $estado->id] = (string) $estado->estado;
+        }
+
+        return $nombres;
     }
 
     /**

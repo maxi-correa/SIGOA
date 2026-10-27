@@ -10,7 +10,7 @@ use App\Models\RecepcionDefinitivaModel;
 use App\Models\RecepcionProvisoriaModel;
 
 /**
- * Corrección in situ de recepciones (BLOQUE 5).
+ * Corrección in situ de recepciones (RP/RD).
  *
  * Permite corregir la provisoria, la definitiva o ambas en una misma
  * operación atómica. Reglas:

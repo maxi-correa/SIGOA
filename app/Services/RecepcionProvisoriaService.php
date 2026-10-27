@@ -10,7 +10,7 @@ use App\Models\RecepcionDefinitivaModel;
 use App\Models\RecepcionProvisoriaModel;
 
 /**
- * Alta de la recepción provisoria (BLOQUES 3 y 5).
+ * Alta de la recepción provisoria (RP/RD).
  *
  * Sirve tanto para el registro normal como para la regularización de una
  * obra cuya acta de recepción provisoria ya existe como documento pero no

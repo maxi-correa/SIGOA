@@ -8,7 +8,7 @@ use App\Models\TipoDocumentoModel;
 
 /**
  * Reglas de validación compartidas por el alta y la corrección de
- * recepciones (BLOQUES 3 a 5). Devuelven el mensaje de error o null.
+ * recepciones (RP/RD). Devuelven el mensaje de error o null.
  */
 final class RecepcionValidacion
 {

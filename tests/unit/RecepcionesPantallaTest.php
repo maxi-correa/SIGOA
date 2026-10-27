@@ -4,7 +4,7 @@ use CodeIgniter\Test\CIUnitTestCase;
 
 /**
  * Contratos estructurales de la pantalla y servicios de recepciones
- * (BLOQUES 3 a 5).
+ * (RP/RD).
  *
  * @internal
  */

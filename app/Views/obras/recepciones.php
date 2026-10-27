@@ -68,12 +68,16 @@ $etiquetasCampo = [
     'fecha_prevista_definitiva' => 'Fecha prevista de la definitiva',
     'observaciones'             => 'Observaciones',
     'documento_id'              => 'Acta vinculada',
-    'estado_obra_id'            => 'Estado de la obra (id)',
+    'estado_obra_id'            => 'Estado de la obra',
 ];
 
-$valorHistorial = static function (string $campo, ?string $valor): string {
+$valorHistorial = static function (string $campo, ?string $valor) use ($estados_nombres): string {
     if ($valor === null || $valor === '') {
         return '—';
+    }
+
+    if ($campo === 'estado_obra_id') {
+        return $estados_nombres[$valor] ?? ("Estado #" . $valor);
     }
 
     if ($campo === 'documento_id') {

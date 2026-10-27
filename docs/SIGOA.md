@@ -122,7 +122,7 @@ Adicionalmente, se encuentra implementada la infraestructura de autenticación y
 * **Bloque 3 — plazo contractual vigente** — cálculo derivado del plazo vigente (plazo inicial confirmado más días de ampliaciones confirmadas) y de la fecha de finalización, con desglose en Ver Obra; la fecha de finalización queda sin calcular mientras exista una neutralización abierta — ver §67.
 * **Bloque 4 — monto contractual vigente** — cálculo derivado del monto vigente (monto de contrato original más ajustes económicos de cuadros comparativos confirmados), **porcentaje de aumento o disminución** respecto del contrato original, persistencia consistente al confirmar resoluciones y desglose en Ver Obra y Ver Certificados; los certificados ya emitidos conservan sus importes almacenados — ver §68.
 * **Bloque 5 — neutralizaciones y reinicios** — registro transaccional de una neutralización (nace confirmada e inmutable y pasa la obra a NEUTRALIZADA) y de su reinicio (vuelve la obra a EN EJECUCIÓN), cómputo derivado de los días neutralizados, suma de esos días a la fecha de finalización, una sola neutralización abierta por obra garantizada por restricción de base de datos, períodos sin superposición y un ciclo que no puede eludirse desde la edición general de la obra — ver §69.
-* **Recepción provisoria y definitiva (RP/RD)** — pantalla de gestión de recepciones desde Ver Obra: alta de la provisoria (con regularización de actas existentes) y de la definitiva, correcciones de RP, RD o conjuntas validadas contra la definitiva, auditoría campo a campo, historial y actualización de `obras.plazo_conservacion_dias` — ver §25.1.
+* **Recepción provisoria y definitiva (RP/RD)** — pantalla de gestión de recepciones desde Ver Obra: alta de la provisoria (con regularización de actas existentes) y de la definitiva, correcciones de RP, RD o conjuntas validadas contra la definitiva, auditoría campo a campo, historial y actualización de `obras.plazo_conservacion_dias`; verificada en SQLite y en MySQL real — ver §25.1.
 
 ---
 
@@ -730,7 +730,7 @@ Reglas de alta y edición:
 * **Correcciones:** la provisoria, la definitiva o ambas (corrección conjunta) pueden corregirse en su lugar mientras la obra esté `EN PLAZO DE CONSERVACIÓN` o `FINALIZADA`. Son corrección de fecha, plazo, observaciones y acta vinculada. Cambiar la provisoria recalcula `fecha_prevista_definitiva` y, si se modifica el plazo, también `obras.plazo_conservacion_dias`.
 * **Validación contra la definitiva:** una corrección se valida con los valores resultantes de la operación. Si la definitiva resulta anterior a la fecha prevista recalculada, o si el acta no es válida, la corrección se rechaza y no se modifica ningún dato.
 * **Atomicidad:** la corrección conjunta se ejecuta en una sola transacción con bloqueo de la obra. Si falla cualquier parte, incluida la auditoría, se revierte todo.
-* **Auditoría:** cada campo modificado genera una fila en `auditoria` con `accion` (`ALTA`, `CORRECCION`, `CAMBIO`, `CAMBIO_ESTADO`), `entidad`, `registro_id`, `campo`, `valor_anterior`, `valor_nuevo`, usuario y fecha; los campos sin cambio no generan filas. Las altas y el cambio de estado de la obra también quedan registrados. No existe borrado de auditoría.
+* **Auditoría:** cada campo modificado genera una fila en `auditoria` con `accion` (`ALTA`, `CORRECCION`, `CAMBIO`, `CAMBIO_ESTADO`), `entidad`, `registro_id`, `campo`, `valor_anterior`, `valor_nuevo`, usuario y fecha; los campos sin cambio no generan filas. Las altas y el cambio de estado de la obra también quedan registrados. `AuditoriaModel` no expone métodos de actualización ni borrado; la inmutabilidad de la tabla depende de ese uso y no de un permiso de base de datos.
 * **Historial:** la pantalla muestra el historial de la obra: altas, correcciones y cambios de plazo o estado vinculados a las recepciones, más reciente primero, con el usuario que lo realizó.
 * **Sin anulación ni eliminación:** no existen anulaciones de recepciones ni se eliminan filas. Las correcciones son en situ con trazabilidad en `auditoria`; no se crean versiones de recepciones ni hace falta una migración para ello.
 * **Fechas:** la fecha de recepción no puede ser futura; la provisoria no puede ser anterior a `obras.fecha_inicio` cuando existe. El plazo de conservación debe ser un entero entre `1` y `36500` días (`Services/RecepcionValidacion`).
@@ -744,7 +744,18 @@ Versionado de actas: el versionado de actas ya existe en `documentos` (`version`
 
 Servicios: `Services/RecepcionProvisoriaService` (alta RP), `Services/RecepcionDefinitivaService` (alta RD), `Services/RecepcionCorreccionService` (correcciones RP/RD y conjunta) y `Services/RecepcionValidacion` (reglas compartidas).
 
-Pruebas: `tests/unit/RecepcionesPantallaTest.php` (contratos de vista, rutas, controlador, servicios y auditoría) y `tests/database/RecepcionesGestionTest.php` (reglas de servidor, fechas, estados, actas, correcciones, atomicidad, regularización, auditoría, historial y permisos de render).
+Pruebas: `tests/unit/RecepcionesPantallaTest.php` (contratos de vista, rutas, controlador, servicios y auditoría), `tests/database/RecepcionesGestionTest.php` (reglas de servidor sobre SQLite: fechas, estados, actas, correcciones, atomicidad, regularización, auditoría, historial y permisos de render) y `tests/database/RecepcionesMysqlRealTest.php` (grupo `mysql-real`, sobre MySQL real).
+
+Verificación contra MySQL real (cierre RP/RD): `RecepcionesMysqlRealTest` crea una base descartable (`sigoa_b6_descartable`) en el mismo servidor, ejecuta las migraciones reales del proyecto y la elimina al terminar. Antes de cualquier borrado comprueba que la conexión apunte a la base descartable. Verifica en MySQL 8.4:
+
+* las restricciones reales: `UNIQUE` por obra en RP y RD, `CHECK` de plazo positivo y FK de `documento_id`;
+* el alta de RP y RD por HTTP, con auditoría, cambio de plazo de la obra y transiciones de estado;
+* la regularización de la RP desde un acta existente, sin cerrar la obra;
+* el comportamiento frente a una transacción concurrente que retiene la obra: el alta no se completa y no deja datos parciales. Esta prueba confirma el bloqueo efectivo, pero **no aísla el `SELECT ... FOR UPDATE`**: al retirar esa sentencia la prueba sigue pasando, porque el `UPDATE` sobre `obras` también queda bloqueado por el lock de fila de InnoDB. El `FOR UPDATE` se mantiene como guarda explícita del patrón lectura-verificación-escritura;
+* la atomicidad de la corrección conjunta: un fallo real de auditoría (trigger con `SIGNAL`) revierte también la RP;
+* el historial con el usuario resuelto y la pantalla.
+
+Resultado de la última verificación: suite completa en SQLite y MySQL real en verde (802 tests, 3438 assertions). La base de la aplicación no se modificó.
 
 ---
 

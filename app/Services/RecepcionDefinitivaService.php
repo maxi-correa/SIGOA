@@ -9,7 +9,7 @@ use App\Models\RecepcionDefinitivaModel;
 use App\Models\RecepcionProvisoriaModel;
 
 /**
- * Alta de la recepción definitiva (BLOQUE 4).
+ * Alta de la recepción definitiva (RP/RD).
  *
  * Reglas de servidor:
  *  - la obra debe tener recepción provisoria y no tener definitiva;

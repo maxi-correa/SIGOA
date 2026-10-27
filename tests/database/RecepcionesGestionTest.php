@@ -6,7 +6,7 @@ use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\FeatureTestTrait;
 
 /**
- * Reglas de servidor de la gestión de recepciones (BLOQUE 3 RP/RD).
+ * Reglas de servidor de la gestión de recepciones (RP/RD).
  *
  * Cubre el alta y la corrección de la recepción provisoria, el alta de la
  * definitiva, la habilitación por fecha prevista y las transiciones de
