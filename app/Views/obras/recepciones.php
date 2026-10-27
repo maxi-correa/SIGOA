@@ -2,14 +2,19 @@
 
 use App\Libraries\PlazoObra;
 
-$puedeEditar                 = $puede_editar ?? false;
-$permiteProvisoria           = $permite_provisoria ?? false;
-$permiteCorregirProvisoria   = $permite_corregir_provisoria ?? false;
-$permiteDefinitiva           = $permite_definitiva ?? false;
-$definitivaHabilitada        = $definitiva_habilitada ?? false;
-$fechaPrevista               = $fecha_prevista_definitiva ?? null;
-$fechaHoy                   = $fecha_hoy ?? date('Y-m-d');
-$plazoDefault               = (int) ($plazo_conservacion_default ?? 180);
+$puedeEditar              = $puede_editar ?? false;
+$permiteProvisoria        = $permite_provisoria ?? false;
+$permiteCorregirProv      = $permite_corregir_provisoria ?? false;
+$permiteCorregirDef       = $permite_corregir_definitiva ?? false;
+$permiteCorregirConjunta  = $permite_corregir_conjunta ?? false;
+$permiteDefinitiva        = $permite_definitiva ?? false;
+$definitivaHabilitada     = $definitiva_habilitada ?? false;
+$fechaPrevista            = $fecha_prevista_definitiva ?? null;
+$fechaHoy                 = $fecha_hoy ?? date('Y-m-d');
+$plazoDefault             = (int) ($plazo_conservacion_default ?? 180);
+$actasProvisoria          = $actas_provisoria ?? [];
+$actasDefinitiva          = $actas_definitiva ?? [];
+$historial                = $historial ?? [];
 
 $errores    = session()->getFlashdata('errores_recepcion');
 $hayErrores = is_array($errores) && $errores !== [];
@@ -26,21 +31,74 @@ $valorFormulario = static function (string $tipo, string $campo, string $defecto
 };
 
 $fechaTexto = static fn($fecha): string => PlazoObra::formatearFecha($fecha) ?? '—';
-$editandoProvisoria = $tipoError === 'actualizar_provisoria';
 
-$fechaProvisoriaDefault = $provisoria !== null
-    ? (string) $provisoria->fecha_recepcion
-    : '';
+$nombreActa = static function (?int $documentoId, array $actas): string {
+    foreach ($actas as $acta) {
+        if ((int) $acta->id === (int) $documentoId) {
+            return (string) ($acta->nombre_archivo_original ?? ('Acta #' . (int) $acta->id));
+        }
+    }
+
+    return $documentoId === null ? 'Sin acta vinculada' : 'Acta #' . $documentoId . ' (no vigente)';
+};
+
+$selectActa = static function (string $id, string $nombre, array $actas, ?string $seleccionado, string $vacio): string {
+    $html = '<select id="' . esc($id, 'attr') . '" name="' . esc($nombre, 'attr') . '" class="form-control">';
+    $html .= '<option value="">' . esc($vacio) . '</option>';
+
+    foreach ($actas as $acta) {
+        $valor = (string) (int) $acta->id;
+        $texto = (string) ($acta->nombre_archivo_original ?? ('Acta #' . $valor));
+        $marca = $seleccionado === $valor ? ' selected' : '';
+        $html .= '<option value="' . esc($valor, 'attr') . '"' . $marca . '>' . esc($texto) . '</option>';
+    }
+
+    return $html . '</select>';
+};
+
+$etiquetasEntidad = [
+    'recepciones_provisorias' => 'Recepción provisoria',
+    'recepciones_definitivas' => 'Recepción definitiva',
+    'obras'                   => 'Obra',
+];
+
+$etiquetasCampo = [
+    'fecha_recepcion'           => 'Fecha de recepción',
+    'plazo_conservacion_dias'   => 'Plazo de conservación (días)',
+    'fecha_prevista_definitiva' => 'Fecha prevista de la definitiva',
+    'observaciones'             => 'Observaciones',
+    'documento_id'              => 'Acta vinculada',
+    'estado_obra_id'            => 'Estado de la obra (id)',
+];
+
+$valorHistorial = static function (string $campo, ?string $valor): string {
+    if ($valor === null || $valor === '') {
+        return '—';
+    }
+
+    if ($campo === 'documento_id') {
+        return 'Acta #' . $valor;
+    }
+
+    if (in_array($campo, ['fecha_recepcion', 'fecha_prevista_definitiva'], true)) {
+        return PlazoObra::formatearFecha($valor) ?? $valor;
+    }
+
+    return $valor;
+};
+
+$fechaProvisoriaDefault = $provisoria !== null ? (string) $provisoria->fecha_recepcion : '';
 $plazoProvisorioDefault = $provisoria !== null
     ? (string) (int) $provisoria->plazo_conservacion_dias
     : (string) $plazoDefault;
-$observacionesProvisoriasDefault = $provisoria !== null
-    ? (string) ($provisoria->observaciones ?? '')
-    : '';
+$observacionesProvisoriasDefault = $provisoria !== null ? (string) ($provisoria->observaciones ?? '') : '';
+$actaProvisoriaDefault = $provisoria !== null && $provisoria->documento_id !== null ? (string) (int) $provisoria->documento_id : '';
 
 $fechaDefinitivaDefault = ($definitivaHabilitada && $fechaPrevista !== null && $fechaPrevista <= $fechaHoy)
     ? $fechaPrevista
     : '';
+$observacionesDefinitivasDefault = $definitiva !== null ? (string) ($definitiva->observaciones ?? '') : '';
+$actaDefinitivaDefault = $definitiva !== null && $definitiva->documento_id !== null ? (string) (int) $definitiva->documento_id : '';
 ?>
 <?= $this->extend('layouts/auth') ?>
 
@@ -146,9 +204,7 @@ $fechaDefinitivaDefault = ($definitivaHabilitada && $fechaPrevista !== null && $
             <div class="recepciones-bloque-encabezado">
                 <div>
                     <h3 class="recepciones-subtitulo">Recepción provisoria</h3>
-                    <p class="recepciones-bloque-nota">
-                        Día 0 del plazo de conservación.
-                    </p>
+                    <p class="recepciones-bloque-nota">Día 0 del plazo de conservación.</p>
                 </div>
                 <?php if ($provisoria !== null): ?>
                     <span class="recepcion-estado recepcion-estado-registrada">
@@ -168,6 +224,7 @@ $fechaDefinitivaDefault = ($definitivaHabilitada && $fechaPrevista !== null && $
                     <p class="recepciones-nota-estado">
                         Al registrar la recepción provisoria, la obra pasará a
                         <strong>EN PLAZO DE CONSERVACIÓN</strong> si aún está en ejecución.
+                        Si el acta ya fue cargada como documento, selecciónela y confirme la fecha de recepción.
                     </p>
 
                     <form method="post"
@@ -205,6 +262,17 @@ $fechaDefinitivaDefault = ($definitivaHabilitada && $fechaPrevista !== null && $
                                        step="1"
                                        value="<?= esc($valorFormulario('provisoria', 'plazo_conservacion_dias', (string) $plazoDefault), 'attr') ?>">
                             </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="documento_provisoria">Acta de recepción provisoria (opcional)</label>
+                            <?= $selectActa(
+                                'documento_provisoria',
+                                'documento_id',
+                                $actasProvisoria,
+                                $valorFormulario('provisoria', 'documento_id'),
+                                'Sin acta vinculada'
+                            ) ?>
                         </div>
 
                         <div class="form-group">
@@ -247,24 +315,22 @@ $fechaDefinitivaDefault = ($definitivaHabilitada && $fechaPrevista !== null && $
                         <dt>Fecha prevista de la definitiva</dt>
                         <dd><?= esc($fechaTexto($provisoria->fecha_prevista_definitiva)) ?></dd>
                     </div>
+                    <div>
+                        <dt>Acta vinculada</dt>
+                        <dd><?= esc($nombreActa($provisoria->documento_id !== null ? (int) $provisoria->documento_id : null, $actasProvisoria)) ?></dd>
+                    </div>
                     <div class="recepciones-detalle-observaciones">
                         <dt>Observaciones</dt>
                         <dd><?= esc($provisoria->observaciones ?? '—') ?></dd>
                     </div>
                 </dl>
 
-                <?php if ($definitiva !== null): ?>
-                    <p class="recepciones-aviso">
-                        <i class="bi bi-lock" aria-hidden="true"></i>
-                        La recepción definitiva ya fue registrada: los datos de la
-                        recepción provisoria no pueden modificarse.
-                    </p>
-                <?php elseif ($puedeEditar && $permiteCorregirProvisoria): ?>
-                    <details class="recepciones-editar" <?= $editandoProvisoria ? 'open' : '' ?>>
-                        <summary>Corregir datos de la recepción provisoria</summary>
+                <?php if ($puedeEditar && $permiteCorregirProv): ?>
+                    <details class="recepciones-editar">
+                        <summary>Corregir recepción provisoria</summary>
                         <p class="recepciones-nota-estado">
-                            La fecha prevista de la definitiva se recalcula con la
-                            fecha y el plazo guardados.
+                            La fecha prevista de la definitiva se recalcula con la fecha y el plazo guardados.
+                            Cada cambio queda registrado en el historial.
                         </p>
 
                         <form method="post"
@@ -305,6 +371,17 @@ $fechaDefinitivaDefault = ($definitivaHabilitada && $fechaPrevista !== null && $
                             </div>
 
                             <div class="form-group">
+                                <label for="documento_provisoria_editar">Acta de recepción provisoria (opcional)</label>
+                                <?= $selectActa(
+                                    'documento_provisoria_editar',
+                                    'documento_id',
+                                    $actasProvisoria,
+                                    $valorFormulario('actualizar_provisoria', 'documento_id', $actaProvisoriaDefault),
+                                    'Sin acta vinculada'
+                                ) ?>
+                            </div>
+
+                            <div class="form-group">
                                 <label for="observaciones_provisoria_editar">Observaciones</label>
                                 <textarea id="observaciones_provisoria_editar"
                                           name="observaciones"
@@ -328,9 +405,7 @@ $fechaDefinitivaDefault = ($definitivaHabilitada && $fechaPrevista !== null && $
             <div class="recepciones-bloque-encabezado">
                 <div>
                     <h3 class="recepciones-subtitulo">Recepción definitiva</h3>
-                    <p class="recepciones-bloque-nota">
-                        Cierra el plazo de conservación y finaliza la obra.
-                    </p>
+                    <p class="recepciones-bloque-nota">Cierra el plazo de conservación y finaliza la obra.</p>
                 </div>
                 <?php if ($definitiva !== null): ?>
                     <span class="recepcion-estado recepcion-estado-registrada">
@@ -353,15 +428,7 @@ $fechaDefinitivaDefault = ($definitivaHabilitada && $fechaPrevista !== null && $
                     </div>
                     <div>
                         <dt>Acta vinculada</dt>
-                        <dd><?php
-                            $nombreActa = '—';
-                            foreach ($actas_definitiva ?? [] as $acta) {
-                                if ((int) $acta->id === (int) ($definitiva->documento_id ?? 0)) {
-                                    $nombreActa = (string) ($acta->nombre_archivo_original ?? ('Acta #' . (int) $acta->id));
-                                }
-                            }
-                            echo esc($nombreActa);
-                        ?></dd>
+                        <dd><?= esc($nombreActa($definitiva->documento_id !== null ? (int) $definitiva->documento_id : null, $actasDefinitiva)) ?></dd>
                     </div>
                     <div class="recepciones-detalle-observaciones">
                         <dt>Observaciones</dt>
@@ -369,10 +436,63 @@ $fechaDefinitivaDefault = ($definitivaHabilitada && $fechaPrevista !== null && $
                     </div>
                 </dl>
 
-                <p class="recepciones-aviso">
-                    <i class="bi bi-lock" aria-hidden="true"></i>
-                    La recepción definitiva es inmutable y no puede modificarse ni eliminarse.
-                </p>
+                <?php if ($puedeEditar && $permiteCorregirDef): ?>
+                    <details class="recepciones-editar">
+                        <summary>Corregir recepción definitiva</summary>
+                        <p class="recepciones-nota-estado">
+                            La fecha no puede ser anterior a la fecha prevista calculada con la recepción provisoria.
+                            Cada cambio queda registrado en el historial.
+                        </p>
+
+                        <form method="post"
+                              action="<?= site_url('/obras/recepciones/definitiva/actualizar') ?>"
+                              class="recepciones-form"
+                              novalidate>
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="obra_id" value="<?= (int) $obra->id ?>">
+                            <input type="hidden" name="tipo_recepcion" value="actualizar_definitiva">
+
+                            <div class="form-group">
+                                <label for="fecha_recepcion_definitiva_editar">
+                                    Fecha de recepción
+                                    <span class="recepciones-requerido" aria-hidden="true">*</span>
+                                </label>
+                                <input type="date"
+                                       id="fecha_recepcion_definitiva_editar"
+                                       name="fecha_recepcion"
+                                       class="form-control"
+                                       max="<?= esc($fechaHoy, 'attr') ?>"
+                                       value="<?= esc($valorFormulario('actualizar_definitiva', 'fecha_recepcion', (string) $definitiva->fecha_recepcion), 'attr') ?>">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="documento_definitiva_editar">Acta de recepción definitiva (opcional)</label>
+                                <?= $selectActa(
+                                    'documento_definitiva_editar',
+                                    'documento_id',
+                                    $actasDefinitiva,
+                                    $valorFormulario('actualizar_definitiva', 'documento_id', $actaDefinitivaDefault),
+                                    'Sin acta vinculada'
+                                ) ?>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="observaciones_definitiva_editar">Observaciones</label>
+                                <textarea id="observaciones_definitiva_editar"
+                                          name="observaciones"
+                                          class="form-control"
+                                          rows="3"><?= esc($valorFormulario('actualizar_definitiva', 'observaciones', $observacionesDefinitivasDefault)) ?></textarea>
+                            </div>
+
+                            <div class="recepciones-form-acciones">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="bi bi-check-lg" aria-hidden="true"></i>
+                                    Guardar cambios
+                                </button>
+                            </div>
+                        </form>
+                    </details>
+                <?php endif; ?>
             <?php elseif ($provisoria === null): ?>
                 <p class="recepciones-aviso">
                     <i class="bi bi-info-circle" aria-hidden="true"></i>
@@ -386,8 +506,7 @@ $fechaDefinitivaDefault = ($definitivaHabilitada && $fechaPrevista !== null && $
                 </p>
             <?php elseif ($puedeEditar && $permiteDefinitiva): ?>
                 <p class="recepciones-nota-estado">
-                    Al registrar la recepción definitiva, la obra pasará a
-                    <strong>FINALIZADA</strong>.
+                    Al registrar la recepción definitiva, la obra pasará a <strong>FINALIZADA</strong>.
                 </p>
 
                 <form method="post"
@@ -416,15 +535,13 @@ $fechaDefinitivaDefault = ($definitivaHabilitada && $fechaPrevista !== null && $
 
                     <div class="form-group">
                         <label for="documento_definitiva">Acta de recepción definitiva (opcional)</label>
-                        <select id="documento_definitiva" name="documento_id" class="form-control">
-                            <option value="">Sin acta vinculada</option>
-                            <?php foreach ($actas_definitiva ?? [] as $acta): ?>
-                                <option value="<?= (int) $acta->id ?>"
-                                        <?= (string) $valorFormulario('definitiva', 'documento_id') === (string) $acta->id ? 'selected' : '' ?>>
-                                    <?= esc($acta->nombre_archivo_original ?? ('Acta #' . (int) $acta->id)) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <?= $selectActa(
+                            'documento_definitiva',
+                            'documento_id',
+                            $actasDefinitiva,
+                            $valorFormulario('definitiva', 'documento_id'),
+                            'Sin acta vinculada'
+                        ) ?>
                     </div>
 
                     <div class="form-group">
@@ -452,6 +569,118 @@ $fechaDefinitivaDefault = ($definitivaHabilitada && $fechaPrevista !== null && $
                     <i class="bi bi-lock" aria-hidden="true"></i>
                     La recepción definitiva aún no fue registrada.
                 </p>
+            <?php endif; ?>
+        </div>
+
+        <?php if ($puedeEditar && $permiteCorregirConjunta): ?>
+            <div class="recepciones-bloque">
+                <details class="recepciones-editar">
+                    <summary>Corregir recepción provisoria y definitiva juntas</summary>
+                    <p class="recepciones-nota-estado">
+                        Ambas recepciones se validan con los valores resultantes. Si una corrección es incompatible
+                        con la otra, no se guarda ningún cambio.
+                    </p>
+
+                    <form method="post"
+                          action="<?= site_url('/obras/recepciones/correccion') ?>"
+                          class="recepciones-form"
+                          novalidate>
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="obra_id" value="<?= (int) $obra->id ?>">
+
+                        <h4 class="recepciones-subtitulo">Recepción provisoria</h4>
+                        <div class="recepciones-form-grid">
+                            <div class="form-group">
+                                <label for="conjunta_rp_fecha">Fecha de recepción</label>
+                                <input type="date" id="conjunta_rp_fecha" name="rp[fecha_recepcion]" class="form-control"
+                                       max="<?= esc($fechaHoy, 'attr') ?>"
+                                       value="<?= esc($fechaProvisoriaDefault, 'attr') ?>">
+                            </div>
+                            <div class="form-group">
+                                <label for="conjunta_rp_plazo">Plazo de conservación (días)</label>
+                                <input type="number" id="conjunta_rp_plazo" name="rp[plazo_conservacion_dias]" class="form-control"
+                                       min="1" step="1" value="<?= esc($plazoProvisorioDefault, 'attr') ?>">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="conjunta_rp_acta">Acta de recepción provisoria</label>
+                            <?= $selectActa('conjunta_rp_acta', 'rp[documento_id]', $actasProvisoria, $actaProvisoriaDefault, 'Sin acta vinculada') ?>
+                        </div>
+                        <div class="form-group">
+                            <label for="conjunta_rp_obs">Observaciones</label>
+                            <textarea id="conjunta_rp_obs" name="rp[observaciones]" class="form-control" rows="2"><?= esc($observacionesProvisoriasDefault) ?></textarea>
+                        </div>
+
+                        <h4 class="recepciones-subtitulo">Recepción definitiva</h4>
+                        <div class="form-group">
+                            <label for="conjunta_rd_fecha">Fecha de recepción</label>
+                            <input type="date" id="conjunta_rd_fecha" name="rd[fecha_recepcion]" class="form-control"
+                                   max="<?= esc($fechaHoy, 'attr') ?>"
+                                   value="<?= esc((string) $definitiva->fecha_recepcion, 'attr') ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="conjunta_rd_acta">Acta de recepción definitiva</label>
+                            <?= $selectActa('conjunta_rd_acta', 'rd[documento_id]', $actasDefinitiva, $actaDefinitivaDefault, 'Sin acta vinculada') ?>
+                        </div>
+                        <div class="form-group">
+                            <label for="conjunta_rd_obs">Observaciones</label>
+                            <textarea id="conjunta_rd_obs" name="rd[observaciones]" class="form-control" rows="2"><?= esc($observacionesDefinitivasDefault) ?></textarea>
+                        </div>
+
+                        <div class="recepciones-form-acciones">
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-check-lg" aria-hidden="true"></i>
+                                Guardar correcciones
+                            </button>
+                        </div>
+                    </form>
+                </details>
+            </div>
+        <?php endif; ?>
+
+        <div class="recepciones-bloque">
+            <div class="recepciones-bloque-encabezado">
+                <div>
+                    <h3 class="recepciones-subtitulo">Historial de recepciones</h3>
+                    <p class="recepciones-bloque-nota">Altas, correcciones y cambios de plazo o estado vinculados a las recepciones.</p>
+                </div>
+            </div>
+
+            <?php if ($historial === []): ?>
+                <p class="recepciones-aviso">Todavía no hay cambios registrados.</p>
+            <?php else: ?>
+                <div class="sigoa-table-wrap">
+                    <table class="sigoa-table recepciones-historial">
+                        <thead>
+                            <tr>
+                                <th scope="col">Fecha y hora</th>
+                                <th scope="col">Entidad</th>
+                                <th scope="col">Acción</th>
+                                <th scope="col">Campo</th>
+                                <th scope="col">Valor anterior</th>
+                                <th scope="col">Valor nuevo</th>
+                                <th scope="col">Usuario</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($historial as $fila): ?>
+                                <?php
+                                    $campo = (string) ($fila->campo ?? '');
+                                    $usuario = trim((string) ($fila->usuario_nombre ?? '') . ' ' . (string) ($fila->usuario_apellido ?? ''));
+                                ?>
+                                <tr>
+                                    <td><?= esc(date('d/m/Y H:i', strtotime((string) $fila->fecha_hora))) ?></td>
+                                    <td><?= esc($etiquetasEntidad[$fila->entidad] ?? $fila->entidad) ?></td>
+                                    <td><?= esc($fila->accion) ?></td>
+                                    <td><?= esc($etiquetasCampo[$campo] ?? ($campo !== '' ? $campo : '—')) ?></td>
+                                    <td><?= esc($campo !== '' ? $valorHistorial($campo, $fila->valor_anterior) : '—') ?></td>
+                                    <td><?= esc($campo !== '' ? $valorHistorial($campo, $fila->valor_nuevo) : (string) ($fila->valor_nuevo ?? '—')) ?></td>
+                                    <td><?= esc($usuario !== '' ? $usuario : '—') ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
             <?php endif; ?>
         </div>
     </section>

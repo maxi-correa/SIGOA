@@ -124,6 +124,12 @@ $routes->post('/obras/recepciones/provisoria/actualizar', 'Recepciones::actualiz
 $routes->post('/obras/recepciones/definitiva', 'Recepciones::registrarDefinitiva', [
     'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
 ]);
+$routes->post('/obras/recepciones/definitiva/actualizar', 'Recepciones::actualizarDefinitiva', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
+$routes->post('/obras/recepciones/correccion', 'Recepciones::corregirConjunta', [
+    'filter' => ['auth', 'role:SUPERADMINISTRADOR,ADMINISTRADOR'],
+]);
 
 // =============================================
 // REPRESENTANTES TÉCNICOS — CRUD (ADMIN y SUPERADMIN)

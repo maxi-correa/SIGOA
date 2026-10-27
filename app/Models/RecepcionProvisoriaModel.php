@@ -92,6 +92,7 @@ class RecepcionProvisoriaModel extends Model
             ->where('id', $id)
             ->update([
                 'fecha_recepcion'           => $datos['fecha_recepcion'],
+                'documento_id'              => $datos['documento_id'] ?? null,
                 'observaciones'             => $datos['observaciones'] ?? null,
                 'plazo_conservacion_dias'   => (int) $datos['plazo_conservacion_dias'],
                 'fecha_prevista_definitiva' => $datos['fecha_prevista_definitiva'],

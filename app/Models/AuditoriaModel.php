@@ -67,6 +67,91 @@ class AuditoriaModel extends Model
         ], true);
     }
 
+    /**
+     * Registra una fila por cada campo cuyo valor cambió entre `$antes` y
+     * `$despues`. Los campos sin cambio no generan filas.
+     *
+     * @param array<string, scalar|null> $antes
+     * @param array<string, scalar|null> $despues
+     *
+     * @return int Cantidad de filas registradas.
+     */
+    public function registrarCambios(
+        string $accion,
+        string $entidad,
+        int $registroId,
+        ?int $usuarioId,
+        array $antes,
+        array $despues,
+        ?string $observaciones = null,
+    ): int {
+        $registradas = 0;
+
+        foreach ($despues as $campo => $valorNuevo) {
+            $valorAnterior = $antes[$campo] ?? null;
+
+            if ((string) $valorAnterior === (string) $valorNuevo) {
+                continue;
+            }
+
+            $this->registrar(
+                $accion,
+                $entidad,
+                $registroId,
+                $usuarioId,
+                (string) $campo,
+                $valorAnterior === null ? null : (string) $valorAnterior,
+                $valorNuevo === null ? null : (string) $valorNuevo,
+                $observaciones,
+            );
+
+            $registradas++;
+        }
+
+        return $registradas;
+    }
+
+    /**
+     * Historial de recepciones de una obra: altas y correcciones de la
+     * provisoria y de la definitiva, y cambios de plazo o estado de la obra
+     * ligados a ellas. Más reciente primero, con el usuario resuelto.
+     *
+     * @return list<object>
+     */
+    public function historialRecepciones(int $obraId, ?int $provisoriaId, ?int $definitivaId): array
+    {
+        $builder = $this->db->table($this->table . ' a')
+            ->select('a.*, u.nombre AS usuario_nombre, u.apellido AS usuario_apellido')
+            ->join('usuarios u', 'u.id = a.usuario_id', 'left')
+            ->groupStart()
+                ->groupStart()
+                    ->where('a.entidad', 'obras')
+                    ->where('a.registro_id', $obraId)
+                    ->whereIn('a.campo', ['plazo_conservacion_dias', 'estado_obra_id'])
+                ->groupEnd();
+
+        if ($provisoriaId !== null) {
+            $builder->orGroupStart()
+                ->where('a.entidad', 'recepciones_provisorias')
+                ->where('a.registro_id', $provisoriaId)
+            ->groupEnd();
+        }
+
+        if ($definitivaId !== null) {
+            $builder->orGroupStart()
+                ->where('a.entidad', 'recepciones_definitivas')
+                ->where('a.registro_id', $definitivaId)
+            ->groupEnd();
+        }
+
+        return $builder
+            ->groupEnd()
+            ->orderBy('a.fecha_hora', 'DESC')
+            ->orderBy('a.id', 'DESC')
+            ->get()
+            ->getResultObject();
+    }
+
     private function dispositivo(): ?string
     {
         $agente = service('request')->getUserAgent()->getAgentString();

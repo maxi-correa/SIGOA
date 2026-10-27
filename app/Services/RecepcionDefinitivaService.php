@@ -2,14 +2,11 @@
 
 namespace App\Services;
 
-use App\Libraries\PlazoObra;
 use App\Models\AuditoriaModel;
-use App\Models\DocumentoModel;
 use App\Models\EstadoObraModel;
 use App\Models\ObraModel;
 use App\Models\RecepcionDefinitivaModel;
 use App\Models\RecepcionProvisoriaModel;
-use App\Models\TipoDocumentoModel;
 
 /**
  * Alta de la recepción definitiva (BLOQUE 4).
@@ -26,7 +23,7 @@ use App\Models\TipoDocumentoModel;
  */
 class RecepcionDefinitivaService
 {
-    public const TIPO_ACTA = 'ACTA DE RECEPCIÓN DEFINITIVA';
+    public const TIPO_ACTA = RecepcionValidacion::TIPO_ACTA_DEFINITIVA;
 
     /**
      * Registra la recepción definitiva de una obra.
@@ -175,64 +172,23 @@ class RecepcionDefinitivaService
      */
     private function validarFecha(object $provisoria, array $datos): array
     {
-        if ($datos['fecha_recepcion'] === null) {
-            return ['La fecha de recepción definitiva no es válida.'];
-        }
-
-        if (strcmp((string) $datos['fecha_recepcion'], date('Y-m-d')) > 0) {
-            return ['La fecha de recepción definitiva no puede ser posterior a la fecha actual.'];
-        }
-
-        $fechaPrevista = PlazoObra::fechaPrevistaDefinitiva(
+        $error = RecepcionValidacion::fechaDefinitiva(
+            $datos['fecha_recepcion'],
             (string) $provisoria->fecha_recepcion,
             (int) $provisoria->plazo_conservacion_dias
         );
 
-        if ($fechaPrevista === null) {
-            return ['La recepción provisoria registrada no tiene una fecha prevista válida.'];
-        }
-
-        if (! PlazoObra::permiteRecepcionDefinitiva(
-            (string) $provisoria->fecha_recepcion,
-            (int) $provisoria->plazo_conservacion_dias,
-            (string) $datos['fecha_recepcion']
-        )) {
-            return [
-                'La recepción definitiva no puede registrarse antes de la fecha prevista ('
-                . (PlazoObra::formatearFecha($fechaPrevista) ?? $fechaPrevista)
-                . ').',
-            ];
-        }
-
-        return [];
+        return $error === null ? [] : [$error];
     }
 
     /**
-     * Un acta vinculada debe ser la versión vigente del tipo de acta de
-     * recepción definitiva de la misma obra.
-     *
      * @return list<string>
      */
     private function validarDocumento(int $obraId, ?int $documentoId): array
     {
-        if ($documentoId === null) {
-            return [];
-        }
+        $error = RecepcionValidacion::acta($obraId, $documentoId, RecepcionValidacion::TIPO_ACTA_DEFINITIVA);
 
-        $tipo      = (new TipoDocumentoModel())->findByNombre(self::TIPO_ACTA);
-        $documento = (new DocumentoModel())->find($documentoId);
-
-        if (
-            $tipo === null
-            || $documento === null
-            || (int) $documento->obra_id !== $obraId
-            || (int) $documento->tipo_documento_id !== (int) $tipo->id
-            || (int) $documento->es_version_actual !== 1
-        ) {
-            return ['El acta seleccionada no corresponde a una versión vigente de la recepción definitiva de esta obra.'];
-        }
-
-        return [];
+        return $error === null ? [] : [$error];
     }
 
     /**

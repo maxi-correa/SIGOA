@@ -122,7 +122,7 @@ Adicionalmente, se encuentra implementada la infraestructura de autenticación y
 * **Bloque 3 — plazo contractual vigente** — cálculo derivado del plazo vigente (plazo inicial confirmado más días de ampliaciones confirmadas) y de la fecha de finalización, con desglose en Ver Obra; la fecha de finalización queda sin calcular mientras exista una neutralización abierta — ver §67.
 * **Bloque 4 — monto contractual vigente** — cálculo derivado del monto vigente (monto de contrato original más ajustes económicos de cuadros comparativos confirmados), **porcentaje de aumento o disminución** respecto del contrato original, persistencia consistente al confirmar resoluciones y desglose en Ver Obra y Ver Certificados; los certificados ya emitidos conservan sus importes almacenados — ver §68.
 * **Bloque 5 — neutralizaciones y reinicios** — registro transaccional de una neutralización (nace confirmada e inmutable y pasa la obra a NEUTRALIZADA) y de su reinicio (vuelve la obra a EN EJECUCIÓN), cómputo derivado de los días neutralizados, suma de esos días a la fecha de finalización, una sola neutralización abierta por obra garantizada por restricción de base de datos, períodos sin superposición y un ciclo que no puede eludirse desde la edición general de la obra — ver §69.
-* **Recepción provisoria y definitiva (RP/RD)** — pantalla de gestión de recepciones desde Ver Obra, con alta y corrección controlada de la provisoria, alta inmutable de la definitiva, reglas de fecha y plazo de conservación, transiciones de estado y actualización de `obras.plazo_conservacion_dias` — ver §25.1.
+* **Recepción provisoria y definitiva (RP/RD)** — pantalla de gestión de recepciones desde Ver Obra: alta de la provisoria (con regularización de actas existentes) y de la definitiva, correcciones de RP, RD o conjuntas validadas contra la definitiva, auditoría campo a campo, historial y actualización de `obras.plazo_conservacion_dias` — ver §25.1.
 
 ---
 
@@ -142,7 +142,6 @@ Quedan pendientes, entre otras:
 * sincronización;
 * gestión documental;
 * carga de actas documentales de recepción (provisoria y definitiva) y bloqueo de edición de obras FINALIZADAS con acta definitiva cargada;
-* versionado de recepciones (no hay anulaciones; las correcciones generan nuevas versiones);
 * certificados;
 * auditoría;
 * alertas;
@@ -726,29 +725,26 @@ La pantalla se abre desde el botón **Ver Recepciones** de la ficha de obra (`GE
 
 Reglas de alta y edición:
 
-* **Recepción provisoria:** se permite en `EN EJECUCIÓN`, `EN PLAZO DE CONSERVACIÓN` y `FINALIZADA`. Solo desde `EN EJECUCIÓN` produce la transición a `EN PLAZO DE CONSERVACIÓN`; en los otros estados completa datos históricos sin cambiar el estado.
-* **Recepción definitiva:** se permite en `EN PLAZO DE CONSERVACIÓN` y `FINALIZADA`. Solo desde `EN PLAZO DE CONSERVACIÓN` produce la transición a `FINALIZADA`; en `FINALIZADA` completa datos históricos sin cambiar el estado, siempre que la fecha prevista ya esté habilitada.
-* **Corrección de la provisoria:** solo mientras no exista recepción definitiva y el estado sea `EN PLAZO DE CONSERVACIÓN` o `FINALIZADA`. Al corregirla se recalcula `fecha_prevista_definitiva`.
-* **Recepción definitiva inmutable:** no se edita ni se elimina.
-* **Sin anulación ni eliminación:** no existen anulaciones de recepciones. Las correcciones se conservan como nuevas versiones y su trazabilidad se registra en `auditoria` (ver «Versionado y trazabilidad» más abajo).
-* **Fechas:** la fecha de recepción no puede ser futura; la provisoria no puede ser anterior a `obras.fecha_inicio` cuando existe. El plazo de conservación debe ser un entero entre `1` y `36500` días.
-* **Plazo de la obra:** al registrar o corregir la provisoria se actualiza `obras.plazo_conservacion_dias`.
-* **Unicidad y transacción:** cada obra admite una sola RP y una sola RD; las altas y correcciones se ejecutan en transacción y bloquean la obra (`SELECT ... FOR UPDATE`, omitido en SQLite para pruebas).
-* **Vínculo opcional con el acta de recepción definitiva:** al registrar la RD puede seleccionarse una versión vigente (`es_version_actual = 1`) del tipo `ACTA DE RECEPCIÓN DEFINITIVA` de la misma obra; si no se selecciona, `documento_id` queda en null. Un acta ajena, no vigente o de otro tipo se rechaza. La carga de las actas en sí se realizará en bloques posteriores.
-* **Alta de la RD (`Services/RecepcionDefinitivaService`):** valida fecha (no futura y no anterior a la fecha prevista), existencia de provisoria y ausencia de definitiva. En una única transacción con bloqueo de la obra inserta la RD, pasa la obra a `FINALIZADA` si estaba `EN PLAZO DE CONSERVACIÓN` y registra la auditoría. Si falla cualquier paso, se revierte todo. El vencimiento del plazo no crea la RD: solo la crea esta acción.
-* **Auditoría de la RD:** se registra una fila `ALTA` sobre `recepciones_definitivas` (con fecha, documento vinculado y usuario) y, si hubo transición, una fila `CAMBIO_ESTADO` sobre `obras` con `estado_obra_id` anterior y nuevo, mediante `Models/AuditoriaModel`.
-* **Bloqueo de obra FINALIZADA con acta definitiva (decisión de negocio, pendiente de implementación):** una obra `FINALIZADA` queda bloqueada para cualquier edición de sus datos cuando existe un documento vigente de tipo `ACTA DE RECEPCIÓN DEFINITIVA` asociado a la obra. Mientras esa acta no esté cargada, la obra conserva editable lo que ya era editable. Esta regla depende de la carga de actas, prevista en bloques posteriores, y aún no está implementada en las rutas de edición.
+* **Recepción provisoria:** se permite en `EN EJECUCIÓN`, `EN PLAZO DE CONSERVACIÓN` y `FINALIZADA`. Solo desde `EN EJECUCIÓN` produce la transición a `EN PLAZO DE CONSERVACIÓN`; en los otros estados completa datos históricos sin cambiar el estado. Puede vincularse a una versión vigente del acta `ACTA DE RECEPCIÓN PROVISORIA` de la misma obra; esto también sirve para **regularizar** un acta ya cargada: la fecha la confirma el usuario y nunca se toma de la fecha de carga del documento. Nunca crea la definitiva ni finaliza la obra.
+* **Recepción definitiva:** se permite en `EN PLAZO DE CONSERVACIÓN` y `FINALIZADA`. Solo desde `EN PLAZO DE CONSERVACIÓN` produce la transición a `FINALIZADA`; en `FINALIZADA` completa datos históricos sin cambiar el estado, siempre que la fecha prevista ya esté habilitada. Puede vincularse opcionalmente a una versión vigente del acta `ACTA DE RECEPCIÓN DEFINITIVA` de la misma obra.
+* **Correcciones:** la provisoria, la definitiva o ambas (corrección conjunta) pueden corregirse en su lugar mientras la obra esté `EN PLAZO DE CONSERVACIÓN` o `FINALIZADA`. Son corrección de fecha, plazo, observaciones y acta vinculada. Cambiar la provisoria recalcula `fecha_prevista_definitiva` y, si se modifica el plazo, también `obras.plazo_conservacion_dias`.
+* **Validación contra la definitiva:** una corrección se valida con los valores resultantes de la operación. Si la definitiva resulta anterior a la fecha prevista recalculada, o si el acta no es válida, la corrección se rechaza y no se modifica ningún dato.
+* **Atomicidad:** la corrección conjunta se ejecuta en una sola transacción con bloqueo de la obra. Si falla cualquier parte, incluida la auditoría, se revierte todo.
+* **Auditoría:** cada campo modificado genera una fila en `auditoria` con `accion` (`ALTA`, `CORRECCION`, `CAMBIO`, `CAMBIO_ESTADO`), `entidad`, `registro_id`, `campo`, `valor_anterior`, `valor_nuevo`, usuario y fecha; los campos sin cambio no generan filas. Las altas y el cambio de estado de la obra también quedan registrados. No existe borrado de auditoría.
+* **Historial:** la pantalla muestra el historial de la obra: altas, correcciones y cambios de plazo o estado vinculados a las recepciones, más reciente primero, con el usuario que lo realizó.
+* **Sin anulación ni eliminación:** no existen anulaciones de recepciones ni se eliminan filas. Las correcciones son en situ con trazabilidad en `auditoria`; no se crean versiones de recepciones ni hace falta una migración para ello.
+* **Fechas:** la fecha de recepción no puede ser futura; la provisoria no puede ser anterior a `obras.fecha_inicio` cuando existe. El plazo de conservación debe ser un entero entre `1` y `36500` días (`Services/RecepcionValidacion`).
+* **Unicidad y transacción:** cada obra admite una sola RP y una sola RD. Las altas y correcciones se ejecutan en transacción y bloquean la obra (`SELECT ... FOR UPDATE`, omitido en SQLite para pruebas).
+* **Bloqueo de obra FINALIZADA con acta definitiva (decisión de negocio, pendiente de implementación):** una obra `FINALIZADA` queda bloqueada para cualquier edición de sus datos cuando existe un documento vigente de tipo `ACTA DE RECEPCIÓN DEFINITIVA` asociado a la obra. Depende de la carga de actas, prevista en bloques posteriores, y aún no está implementado en las rutas de edición.
 * **Alta de la recepción definitiva:** solo SUPERADMINISTRADOR y ADMINISTRADOR.
-
-Versionado y trazabilidad:
-
-* **Actas:** el versionado de actas ya existe en `documentos` (`version`, `es_version_actual`, `documento_padre_id`) y se resuelve con `DocumentoModel::crearVersionDe()`. La versión reemplazada se conserva con `es_version_actual = 0`. No requiere migración.
-* **Correcciones de RP:** la fila vigente se corrige en su lugar y cada cambio de campo debe registrarse en `auditoria` (`entidad`, `registro_id`, `campo`, `valor_anterior`, `valor_nuevo`, usuario, fecha). La tabla ya existe y tiene el índice `idx_auditoria_entidad_registro_fecha`; no requiere migración. Su implementación para las correcciones queda pendiente (Bloque de correcciones e historial); el alta de la RD ya escribe en `auditoria`.
-* **RD:** es inmutable. Si en el futuro se requiere una nueva versión de la RD, la restricción `UNIQUE(obra_id)` impide hoy insertar otra fila; ese cambio sí requerirá una migración nueva que siga el patrón de `documentos`.
 
 Permisos: la consulta (`GET`) está disponible para `SUPERADMINISTRADOR`, `ADMINISTRADOR` y `CONSULTA`; las altas y correcciones (`POST`) solo para `SUPERADMINISTRADOR` y `ADMINISTRADOR`. `INSPECTOR` no accede a esta pantalla, lo cual es correcto según la definición del negocio.
 
-Pruebas: `tests/unit/RecepcionesPantallaTest.php` (contratos de vista, rutas, controlador y servicio) y `tests/database/RecepcionesGestionTest.php` (reglas de servidor, fechas, estados, acta vinculada, auditoría, atomicidad y permisos de render).
+Versionado de actas: el versionado de actas ya existe en `documentos` (`version`, `es_version_actual`, `documento_padre_id`) y se resuelve con `DocumentoModel::crearVersionDe()`. La versión reemplazada se conserva con `es_version_actual = 0`. No requiere migración.
+
+Servicios: `Services/RecepcionProvisoriaService` (alta RP), `Services/RecepcionDefinitivaService` (alta RD), `Services/RecepcionCorreccionService` (correcciones RP/RD y conjunta) y `Services/RecepcionValidacion` (reglas compartidas).
+
+Pruebas: `tests/unit/RecepcionesPantallaTest.php` (contratos de vista, rutas, controlador, servicios y auditoría) y `tests/database/RecepcionesGestionTest.php` (reglas de servidor, fechas, estados, actas, correcciones, atomicidad, regularización, auditoría, historial y permisos de render).
 
 ---
 

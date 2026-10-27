@@ -27,6 +27,8 @@ final class RecepcionesGestionTest extends CIUnitTestCase
 
     private int $tipoActaId = 0;
 
+    private int $tipoActaProvisoriaId = 0;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -45,6 +47,7 @@ final class RecepcionesGestionTest extends CIUnitTestCase
             'tipos_documento',
             'documentos',
             'auditoria',
+            'usuarios',
         ] as $tabla) {
             $this->conn->query('DROP TABLE IF EXISTS ' . $this->tabla($tabla));
         }
@@ -134,6 +137,12 @@ final class RecepcionesGestionTest extends CIUnitTestCase
             updated_at DATETIME NULL
         )');
 
+        $this->conn->query('CREATE TABLE ' . $this->tabla('usuarios') . ' (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre VARCHAR(120) NULL,
+            apellido VARCHAR(120) NULL
+        )');
+
         $this->conn->query('CREATE TABLE ' . $this->tabla('auditoria') . ' (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             usuario_id INTEGER NULL,
@@ -150,6 +159,9 @@ final class RecepcionesGestionTest extends CIUnitTestCase
 
         $this->conn->table('tipos_documento')->insert(['tipo_documento' => 'ACTA DE RECEPCIÓN DEFINITIVA', 'activo' => 1]);
         $this->tipoActaId = (int) $this->conn->insertID();
+
+        $this->conn->table('tipos_documento')->insert(['tipo_documento' => 'ACTA DE RECEPCIÓN PROVISORIA', 'activo' => 1]);
+        $this->tipoActaProvisoriaId = (int) $this->conn->insertID();
 
         foreach (['PREVIO INICIO', 'EN EJECUCIÓN', 'NEUTRALIZADA', 'EN PLAZO DE CONSERVACIÓN', 'FINALIZADA'] as $estado) {
             $this->conn->table('estados_obra')->insert(['estado' => $estado, 'activo' => 1]);
@@ -172,6 +184,7 @@ final class RecepcionesGestionTest extends CIUnitTestCase
             'tipos_documento',
             'documentos',
             'auditoria',
+            'usuarios',
         ] as $tabla) {
             $this->conn->query('DROP TABLE IF EXISTS ' . $this->tabla($tabla));
         }
@@ -326,7 +339,7 @@ final class RecepcionesGestionTest extends CIUnitTestCase
         $this->assertSame($this->estados['EN PLAZO DE CONSERVACIÓN'], $this->estadoActual());
     }
 
-    public function testNoCorrigeLaProvisoriaDespuesDeLaDefinitiva(): void
+    public function testRechazaLaCorreccionIncompatibleConLaDefinitiva(): void
     {
         $this->crearProvisoria('2025-01-01', 180);
         $this->crearDefinitiva('2025-06-30');
@@ -554,6 +567,240 @@ final class RecepcionesGestionTest extends CIUnitTestCase
         $this->assertSame($this->estados['EN PLAZO DE CONSERVACIÓN'], $this->estadoActual());
     }
 
+    public function testCorrigeLaProvisoriaYRegistraCadaCampoModificadoConValorAnteriorYNuevo(): void
+    {
+        $this->crearProvisoria('2026-01-10', 180);
+        $this->cambiarEstado($this->estados['EN PLAZO DE CONSERVACIÓN']);
+        $actaId = $this->crearDocumento($this->obraId, $this->tipoActaProvisoriaId, 1);
+
+        $this->postComoAdmin('/obras/recepciones/provisoria/actualizar', [
+            'obra_id'                 => $this->obraId,
+            'fecha_recepcion'         => '2026-01-15',
+            'plazo_conservacion_dias' => '90',
+            'observaciones'           => 'Corrección',
+            'documento_id'            => (string) $actaId,
+        ])->assertRedirectTo('/obras/recepciones/' . $this->obraId);
+
+        $fila = $this->conn->table('recepciones_provisorias')->get()->getRow();
+
+        $this->assertSame('2026-01-15', $fila->fecha_recepcion);
+        $this->assertSame(90, (int) $fila->plazo_conservacion_dias);
+        $this->assertSame('2026-04-15', $fila->fecha_prevista_definitiva);
+        $this->assertSame($actaId, (int) $fila->documento_id);
+
+        $cambios = $this->auditoriaDe('CORRECCION', 'recepciones_provisorias');
+        $porCampo = [];
+
+        foreach ($cambios as $c) {
+            $porCampo[$c->campo] = $c;
+        }
+
+        $this->assertSame('2026-01-10', $porCampo['fecha_recepcion']->valor_anterior);
+        $this->assertSame('2026-01-15', $porCampo['fecha_recepcion']->valor_nuevo);
+        $this->assertSame('2026-07-09', $porCampo['fecha_prevista_definitiva']->valor_anterior);
+        $this->assertSame('2026-04-15', $porCampo['fecha_prevista_definitiva']->valor_nuevo);
+        $this->assertSame('180', $porCampo['plazo_conservacion_dias']->valor_anterior);
+        $this->assertSame('90', $porCampo['plazo_conservacion_dias']->valor_nuevo);
+        $this->assertSame(1, (int) $porCampo['fecha_recepcion']->usuario_id);
+        $this->assertNotEmpty($porCampo['fecha_recepcion']->fecha_hora);
+        $this->assertSame(null, $porCampo['documento_id']->valor_anterior);
+        $this->assertSame((string) $actaId, $porCampo['documento_id']->valor_nuevo);
+
+        $obra = $this->auditoriaDe('CAMBIO', 'obras');
+        $this->assertCount(1, $obra);
+        $this->assertSame('plazo_conservacion_dias', $obra[0]->campo);
+        $this->assertSame('180', $obra[0]->valor_anterior);
+        $this->assertSame('90', $obra[0]->valor_nuevo);
+    }
+
+    public function testCorrigeLaDefinitivaEnSituConAuditoria(): void
+    {
+        $this->crearProvisoria('2025-01-01', 180);
+        $this->crearDefinitiva('2025-06-30');
+        $this->cambiarEstado($this->estados['FINALIZADA']);
+
+        $this->postComoAdmin('/obras/recepciones/definitiva/actualizar', [
+            'obra_id'         => $this->obraId,
+            'fecha_recepcion' => '2025-07-15',
+            'observaciones'   => 'Ajuste de fecha',
+        ])->assertRedirectTo('/obras/recepciones/' . $this->obraId);
+
+        $fila = $this->conn->table('recepciones_definitivas')->get()->getRow();
+
+        $this->assertSame('2025-07-15', $fila->fecha_recepcion);
+        $this->assertSame('Ajuste de fecha', $fila->observaciones);
+        $this->assertSame(1, $this->conn->table('recepciones_definitivas')->countAllResults());
+        $this->assertSame($this->estados['FINALIZADA'], $this->estadoActual());
+
+        $cambios = $this->auditoriaDe('CORRECCION', 'recepciones_definitivas');
+        $this->assertCount(2, $cambios);
+        $porCampo = [];
+        foreach ($cambios as $c) {
+            $porCampo[$c->campo] = $c;
+        }
+
+        $this->assertSame('2025-06-30', $porCampo['fecha_recepcion']->valor_anterior);
+        $this->assertSame('2025-07-15', $porCampo['fecha_recepcion']->valor_nuevo);
+        $this->assertSame(null, $porCampo['observaciones']->valor_anterior);
+    }
+
+    public function testRechazaLaCorreccionIncompatibleConLaDefinitivaSinModificarNada(): void
+    {
+        $this->crearProvisoria('2025-01-01', 180);
+        $this->crearDefinitiva('2025-06-30');
+        $this->cambiarEstado($this->estados['FINALIZADA']);
+
+        $this->postComoAdmin('/obras/recepciones/provisoria/actualizar', [
+            'obra_id'                 => $this->obraId,
+            'fecha_recepcion'         => '2025-01-01',
+            'plazo_conservacion_dias' => '365',
+        ])->assertRedirectTo('/obras/recepciones/' . $this->obraId);
+
+        $this->assertSame('180', (string) $this->conn->table('recepciones_provisorias')->get()->getRow()->plazo_conservacion_dias);
+        $this->assertSame([], $this->auditoriaDe('CORRECCION', 'recepciones_provisorias'));
+    }
+
+    public function testLaCorreccionConjuntaEsAtomicaCuandoUnaParteEsIncompatible(): void
+    {
+        $this->crearProvisoria('2025-01-01', 180);
+        $this->crearDefinitiva('2025-06-30');
+        $this->cambiarEstado($this->estados['FINALIZADA']);
+
+        $this->postComoAdmin('/obras/recepciones/correccion', [
+            'obra_id' => $this->obraId,
+            'rp'      => ['fecha_recepcion' => '2025-01-02', 'plazo_conservacion_dias' => '180', 'observaciones' => '', 'documento_id' => ''],
+            'rd'      => ['fecha_recepcion' => '2025-06-30', 'observaciones' => '', 'documento_id' => ''],
+        ])->assertRedirectTo('/obras/recepciones/' . $this->obraId);
+
+        $this->assertSame('2025-01-01', $this->conn->table('recepciones_provisorias')->get()->getRow()->fecha_recepcion);
+        $this->assertSame('2025-06-30', $this->conn->table('recepciones_definitivas')->get()->getRow()->fecha_recepcion);
+        $this->assertSame([], $this->auditoriaDe('CORRECCION', 'recepciones_provisorias'));
+    }
+
+    public function testLaCorreccionConjuntaValidaAmbasRecepcionesYAuditaCadaUna(): void
+    {
+        $this->crearProvisoria('2025-01-01', 180);
+        $this->crearDefinitiva('2025-06-30');
+        $this->cambiarEstado($this->estados['FINALIZADA']);
+
+        $this->postComoAdmin('/obras/recepciones/correccion', [
+            'obra_id' => $this->obraId,
+            'rp'      => ['fecha_recepcion' => '2025-01-02', 'plazo_conservacion_dias' => '200', 'observaciones' => '', 'documento_id' => ''],
+            'rd'      => ['fecha_recepcion' => '2025-07-25', 'observaciones' => 'Conjunta', 'documento_id' => ''],
+        ])->assertRedirectTo('/obras/recepciones/' . $this->obraId);
+
+        $provisoria = $this->conn->table('recepciones_provisorias')->get()->getRow();
+        $definitiva = $this->conn->table('recepciones_definitivas')->get()->getRow();
+
+        $this->assertSame('2025-01-02', $provisoria->fecha_recepcion);
+        $this->assertSame('2025-07-21', $provisoria->fecha_prevista_definitiva);
+        $this->assertSame('2025-07-25', $definitiva->fecha_recepcion);
+        $this->assertNotEmpty($this->auditoriaDe('CORRECCION', 'recepciones_provisorias'));
+        $this->assertNotEmpty($this->auditoriaDe('CORRECCION', 'recepciones_definitivas'));
+    }
+
+    public function testLaCorreccionConjuntaRevierteAmbasSiFallaLaAuditoriaDeLaDefinitiva(): void
+    {
+        $this->crearProvisoria('2025-01-01', 180);
+        $this->crearDefinitiva('2025-06-30');
+        $this->cambiarEstado($this->estados['FINALIZADA']);
+
+        $this->conn->query("CREATE TRIGGER fallo_auditoria_rd_correccion BEFORE INSERT ON {$this->tabla('auditoria')}
+            WHEN NEW.entidad = 'recepciones_definitivas'
+            BEGIN SELECT RAISE(ABORT, 'fallo forzado'); END");
+
+        $this->postComoAdmin('/obras/recepciones/correccion', [
+            'obra_id' => $this->obraId,
+            'rp'      => ['fecha_recepcion' => '2025-01-02', 'plazo_conservacion_dias' => '200', 'observaciones' => '', 'documento_id' => ''],
+            'rd'      => ['fecha_recepcion' => '2025-07-25', 'observaciones' => '', 'documento_id' => ''],
+        ]);
+
+        $this->conn->query('DROP TRIGGER IF EXISTS fallo_auditoria_rd_correccion');
+
+        $this->assertSame('2025-01-01', $this->conn->table('recepciones_provisorias')->get()->getRow()->fecha_recepcion);
+        $this->assertSame(180, (int) $this->conn->table('recepciones_provisorias')->get()->getRow()->plazo_conservacion_dias);
+        $this->assertSame('2025-06-30', $this->conn->table('recepciones_definitivas')->get()->getRow()->fecha_recepcion);
+        $this->assertSame([], $this->auditoriaDe('CORRECCION', 'recepciones_provisorias'));
+    }
+
+    public function testNoCorrigeRecepcionesEnUnEstadoQueNoLoPermite(): void
+    {
+        $this->crearProvisoria('2025-01-01', 180);
+        $this->cambiarEstado($this->estados['NEUTRALIZADA']);
+
+        $this->postComoAdmin('/obras/recepciones/provisoria/actualizar', [
+            'obra_id'                 => $this->obraId,
+            'fecha_recepcion'         => '2025-01-02',
+            'plazo_conservacion_dias' => '180',
+        ])->assertRedirectTo('/obras/recepciones/' . $this->obraId);
+
+        $this->assertSame('2025-01-01', $this->conn->table('recepciones_provisorias')->get()->getRow()->fecha_recepcion);
+        $this->assertSame([], $this->auditoriaDe('CORRECCION', 'recepciones_provisorias'));
+    }
+
+    public function testRegularizaLaProvisoriaDesdeElActaConFechaConfirmadaYSinCerrarLaObra(): void
+    {
+        $actaId = $this->crearDocumento($this->obraId, $this->tipoActaProvisoriaId, 1);
+        $this->conn->table('documentos')->where('id', $actaId)->update(['created_at' => '2026-10-01 09:00:00']);
+
+        $this->postComoAdmin('/obras/recepciones/provisoria', [
+            'obra_id'                 => $this->obraId,
+            'fecha_recepcion'         => '2026-03-10',
+            'plazo_conservacion_dias' => '180',
+            'documento_id'            => (string) $actaId,
+        ])->assertRedirectTo('/obras/recepciones/' . $this->obraId);
+
+        $fila = $this->conn->table('recepciones_provisorias')->get()->getRow();
+
+        $this->assertNotNull($fila);
+        $this->assertSame('2026-03-10', $fila->fecha_recepcion);
+        $this->assertSame('2026-09-06', $fila->fecha_prevista_definitiva);
+        $this->assertSame($actaId, (int) $fila->documento_id);
+        $this->assertSame($this->estados['EN PLAZO DE CONSERVACIÓN'], $this->estadoActual());
+        $this->assertSame(0, $this->conn->table('recepciones_definitivas')->countAllResults());
+        $this->assertCount(1, $this->auditoriaDe('ALTA', 'recepciones_provisorias'));
+    }
+
+    public function testRechazaUnActaDeProvisoriaDeOtroTipo(): void
+    {
+        $actaDefinitiva = $this->crearDocumento($this->obraId, $this->tipoActaId, 1);
+
+        $this->postComoAdmin('/obras/recepciones/provisoria', [
+            'obra_id'                 => $this->obraId,
+            'fecha_recepcion'         => '2026-03-10',
+            'plazo_conservacion_dias' => '180',
+            'documento_id'            => (string) $actaDefinitiva,
+        ])->assertRedirectTo('/obras/recepciones/' . $this->obraId);
+
+        $this->assertSame(0, $this->conn->table('recepciones_provisorias')->countAllResults());
+        $this->assertSame($this->estados['EN EJECUCIÓN'], $this->estadoActual());
+    }
+
+    public function testLaPantallaMuestraElHistorialDeCorrecciones(): void
+    {
+        $this->crearProvisoria('2026-01-10', 180);
+        $this->cambiarEstado($this->estados['EN PLAZO DE CONSERVACIÓN']);
+
+        $this->postComoAdmin('/obras/recepciones/provisoria/actualizar', [
+            'obra_id'                 => $this->obraId,
+            'fecha_recepcion'         => '2026-01-15',
+            'plazo_conservacion_dias' => '180',
+        ]);
+
+        $resultado = $this->withSession([
+            'logged_in' => true,
+            'activo'    => true,
+            'user_id'   => 1,
+            'username'  => 'ADMIN_PRUEBA',
+            'user_name' => 'ADMIN PRUEBA',
+            'roles'     => ['ADMINISTRADOR'],
+        ])->get('/obras/recepciones/' . $this->obraId);
+
+        $resultado->assertStatus(200);
+        $resultado->assertSee('Historial de recepciones');
+        $resultado->assertSee('CORRECCION');
+    }
+
     public function testLaPantallaDeRecepcionesSeRenderizaParaConsulta(): void
     {
         $resultado = $this->withSession([
@@ -595,7 +842,7 @@ final class RecepcionesGestionTest extends CIUnitTestCase
             'expediente_municipal'     => 'EXP-001',
             'nombre'                   => 'OBRA DE PRUEBA',
             'estado_obra_id'           => $estadoId,
-            'fecha_inicio'             => '2026-01-05',
+            'fecha_inicio'             => '2024-01-01',
             'plazo_original_valor'     => 120,
             'plazo_original_unidad'    => 'DIAS',
             'plazo_original_dias'      => 120,
@@ -632,6 +879,19 @@ final class RecepcionesGestionTest extends CIUnitTestCase
             'created_at'      => $ahora,
             'updated_at'      => $ahora,
         ]);
+    }
+
+    /**
+     * @return list<object>
+     */
+    private function auditoriaDe(string $accion, string $entidad): array
+    {
+        return $this->conn->table('auditoria')
+            ->where('accion', $accion)
+            ->where('entidad', $entidad)
+            ->orderBy('id', 'ASC')
+            ->get()
+            ->getResult();
     }
 
     private function crearDocumento(int $obraId, int $tipoId, int $esVigente): int

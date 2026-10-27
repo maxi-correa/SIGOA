@@ -69,10 +69,32 @@ class RecepcionDefinitivaModel extends Model
     }
 
     /**
-     * Bloquea la edición directa del modelo.
+     * Corrige in situ los datos de la recepción definitiva.
      *
-     * La recepción definitiva es un hecho administrativo inmutable: no se
-     * corrige ni se elimina desde la aplicación.
+     * La corrección solo la realiza `RecepcionCorreccionService`, que valida
+     * la fecha contra la provisoria vigente y registra la auditoría de cada
+     * campo modificado. No se elimina ni se crea una segunda fila.
+     *
+     * @param array<string, mixed> $datos
+     */
+    public function actualizar(int $id, array $datos): bool
+    {
+        if ($this->find($id) === null) {
+            return false;
+        }
+
+        return $this->db->table($this->table)
+            ->where('id', $id)
+            ->update([
+                'fecha_recepcion' => $datos['fecha_recepcion'],
+                'documento_id'    => $datos['documento_id'] ?? null,
+                'observaciones'   => $datos['observaciones'] ?? null,
+                'updated_at'      => date('Y-m-d H:i:s'),
+            ]);
+    }
+
+    /**
+     * Bloquea la edición directa del modelo; la corrección pasa por `actualizar()`.
      *
      * @param array<string, mixed>|object|null $row
      */

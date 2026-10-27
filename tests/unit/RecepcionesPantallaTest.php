@@ -3,7 +3,8 @@
 use CodeIgniter\Test\CIUnitTestCase;
 
 /**
- * Contratos estructurales de la pantalla de recepciones (BLOQUE 3 RP/RD).
+ * Contratos estructurales de la pantalla y servicios de recepciones
+ * (BLOQUES 3 a 5).
  *
  * @internal
  */
@@ -27,6 +28,8 @@ final class RecepcionesPantallaTest extends CIUnitTestCase
         $this->assertStringContainsString("post('/obras/recepciones/provisoria', 'Recepciones::registrarProvisoria'", $rutas);
         $this->assertStringContainsString("post('/obras/recepciones/provisoria/actualizar', 'Recepciones::actualizarProvisoria'", $rutas);
         $this->assertStringContainsString("post('/obras/recepciones/definitiva', 'Recepciones::registrarDefinitiva'", $rutas);
+        $this->assertStringContainsString("post('/obras/recepciones/definitiva/actualizar', 'Recepciones::actualizarDefinitiva'", $rutas);
+        $this->assertStringContainsString("post('/obras/recepciones/correccion', 'Recepciones::corregirConjunta'", $rutas);
         $this->assertStringNotContainsString('Recepciones::eliminar', $rutas);
     }
 
@@ -36,54 +39,87 @@ final class RecepcionesPantallaTest extends CIUnitTestCase
 
         $this->assertStringContainsString('assets/css/pages/obra-recepciones.css', $vista);
         $this->assertStringNotContainsString('<style', $vista);
-        $this->assertStringNotContainsString('<script>', $vista);
-        $this->assertStringContainsString('Registrar recepción provisoria', $vista);
-        $this->assertStringContainsString('Registrar recepción definitiva', $vista);
-        $this->assertStringContainsString('Corregir datos de la recepción provisoria', $vista);
+        $this->assertStringNotContainsString('<script', $vista);
     }
 
-    public function testLaVistaExplicaLasReglasYLosEstados(): void
+    public function testLaVistaOfreceAltasCorreccionesYHistorial(): void
     {
         $vista = $this->leerApp('Views/obras/recepciones.php');
 
-        $this->assertStringContainsString('Recepción provisoria', $vista);
-        $this->assertStringContainsString('Recepción definitiva', $vista);
+        $this->assertStringContainsString('Registrar recepción provisoria', $vista);
+        $this->assertStringContainsString('Registrar recepción definitiva', $vista);
+        $this->assertStringContainsString('Corregir recepción provisoria', $vista);
+        $this->assertStringContainsString('Corregir recepción definitiva', $vista);
+        $this->assertStringContainsString('Corregir recepción provisoria y definitiva juntas', $vista);
+        $this->assertStringContainsString('Historial de recepciones', $vista);
+        $this->assertStringContainsString("'documento_id'", $vista);
+        $this->assertStringContainsString('name="rp[fecha_recepcion]"', $vista);
+        $this->assertStringContainsString('name="rd[fecha_recepcion]"', $vista);
+    }
+
+    public function testLaVistaUsaComponentesYEstadosExistentes(): void
+    {
+        $vista = $this->leerApp('Views/obras/recepciones.php');
+
         $this->assertStringContainsString('EN PLAZO DE CONSERVACIÓN', $vista);
         $this->assertStringContainsString('FINALIZADA', $vista);
-        $this->assertStringContainsString('fecha_prevista_definitiva', $vista);
         $this->assertStringContainsString('recepcion-estado-registrada', $vista);
         $this->assertStringContainsString('recepcion-estado-pendiente', $vista);
         $this->assertStringContainsString('ficha-btn-volver', $vista);
+        $this->assertStringContainsString('sigoa-table', $vista);
     }
 
-    public function testElControladorAplicaRolesYDelegaLaDefinitivaEnElServicio(): void
+    public function testElControladorDelegaEnLosServicios(): void
     {
         $controlador = $this->leerApp('Controllers/Recepciones.php');
 
         $this->assertStringContainsString('ROLES_EDICION', $controlador);
-        $this->assertStringContainsString('permiteRegistrarRecepcionProvisoria', $controlador);
-        $this->assertStringContainsString('permiteCorregirRecepcionProvisoria', $controlador);
-        $this->assertStringContainsString('PlazoObra::fechaPrevistaDefinitiva', $controlador);
-        $this->assertStringContainsString('transStart', $controlador);
-        $this->assertStringContainsString('bloquearObra', $controlador);
+        $this->assertStringContainsString('RecepcionProvisoriaService', $controlador);
+        $this->assertStringContainsString('RecepcionCorreccionService', $controlador);
         $this->assertStringContainsString('RecepcionDefinitivaService', $controlador);
+        $this->assertStringContainsString('historialRecepciones', $controlador);
+        $this->assertStringNotContainsString('transStart', $controlador);
+        $this->assertStringNotContainsString('transRollback', $controlador);
     }
 
-    public function testElServicioDeLaDefinitivaAplicaTransaccionYAuditoria(): void
+    public function testLosServiciosAplicanTransaccionAuditoriaYBloqueo(): void
     {
-        $servicio = $this->leerApp('Services/RecepcionDefinitivaService.php');
+        foreach ([
+            'Services/RecepcionProvisoriaService.php',
+            'Services/RecepcionCorreccionService.php',
+            'Services/RecepcionDefinitivaService.php',
+        ] as $servicio) {
+            $contenido = $this->leerApp($servicio);
 
-        $this->assertStringContainsString('transStart', $servicio);
-        $this->assertStringContainsString('transComplete', $servicio);
-        $this->assertStringContainsString('transRollback', $servicio);
-        $this->assertStringContainsString('bloquearObra', $servicio);
-        $this->assertStringContainsString('permiteRegistrarRecepcionDefinitiva', $servicio);
-        $this->assertStringContainsString('ESTADO_FINALIZADA', $servicio);
-        $this->assertStringContainsString('AuditoriaModel', $servicio);
-        $this->assertStringContainsString('ACTA DE RECEPCIÓN DEFINITIVA', $servicio);
+            $this->assertStringContainsString('transStart', $contenido, $servicio);
+            $this->assertStringContainsString('transComplete', $contenido, $servicio);
+            $this->assertStringContainsString('transRollback', $contenido, $servicio);
+            $this->assertStringContainsString('resetTransStatus', $contenido, $servicio);
+            $this->assertStringContainsString('bloquearObra', $contenido, $servicio);
+            $this->assertStringContainsString('AuditoriaModel', $contenido, $servicio);
+        }
+
+        $definitiva = $this->leerApp('Services/RecepcionDefinitivaService.php');
+        $this->assertStringContainsString('ESTADO_FINALIZADA', $definitiva);
+        $this->assertStringContainsString('TIPO_ACTA', $definitiva);
+
+        $provisoria = $this->leerApp('Services/RecepcionProvisoriaService.php');
+        $this->assertStringNotContainsString('ESTADO_FINALIZADA', $provisoria);
+        $this->assertStringNotContainsString('recepciones_definitivas\', ', $provisoria);
     }
 
-    public function testLosModelosBloqueanLaEdicionYLaEliminacionDirectas(): void
+    public function testLasReglasCompartidasDeValidacionEstanCentralizadas(): void
+    {
+        $validacion = $this->leerApp('Services/RecepcionValidacion.php');
+
+        $this->assertStringContainsString('function fechaProvisoria', $validacion);
+        $this->assertStringContainsString('function fechaDefinitiva', $validacion);
+        $this->assertStringContainsString('function plazo', $validacion);
+        $this->assertStringContainsString('function acta', $validacion);
+        $this->assertStringContainsString('PLAZO_MAXIMO_DIAS = 36500', $validacion);
+    }
+
+    public function testLosModelosSoloEscribenPorMetodosDeServicio(): void
     {
         $provisoria = $this->leerApp('Models/RecepcionProvisoriaModel.php');
         $definitiva = $this->leerApp('Models/RecepcionDefinitivaModel.php');
@@ -96,9 +132,19 @@ final class RecepcionesPantallaTest extends CIUnitTestCase
 
         $this->assertStringContainsString('function porObra(', $definitiva);
         $this->assertStringContainsString('function crear(', $definitiva);
+        $this->assertStringContainsString('function actualizar(', $definitiva);
         $this->assertStringContainsString('function update(', $definitiva);
         $this->assertStringContainsString('function delete(', $definitiva);
-        $this->assertStringNotContainsString('function actualizar(', $definitiva);
+    }
+
+    public function testElModeloDeAuditoriaSoloInserta(): void
+    {
+        $auditoria = $this->leerApp('Models/AuditoriaModel.php');
+
+        $this->assertStringContainsString('function registrar(', $auditoria);
+        $this->assertStringContainsString('function registrarCambios(', $auditoria);
+        $this->assertStringContainsString('function historialRecepciones(', $auditoria);
+        $this->assertStringNotContainsString('function delete(', $auditoria);
     }
 
     public function testElEstadoCentralizaLasReglasDeRecepcion(): void
