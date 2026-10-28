@@ -3,9 +3,21 @@
    =================================================================== */
 
 /* --- Contenedor principal: sidebar + contenido --- */
+html,
+body {
+    height: 100%;
+}
+
+.layout-auth {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
 .app-layout {
     display: flex;
     align-items: stretch;
+    flex: 1 0 auto;
 }
 
 /* --- Sidebar --- */
@@ -232,4 +244,10 @@
         padding: var(--space-lg) 1rem;
         width: 100%;
     }
+}
+
+
+/* --- Asegurar que el footer quede al final del flujo --- */
+.layout-auth .app-footer {
+    flex-shrink: 0;
 }

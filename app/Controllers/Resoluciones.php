@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Libraries\ResolucionObra;
+use App\Models\AuditoriaModel;
 use App\Models\EstadoObraModel;
 use App\Models\ObraModel;
 use App\Models\ResolucionModel;
@@ -94,10 +95,33 @@ class Resoluciones extends BaseController
                 ->with('errores_resolucion', $errores);
         }
 
-        if (! (new ResolucionModel())->crear($obra->id, $datos)) {
+        $resolucionModel = new ResolucionModel();
+        if (! $resolucionModel->crear($obra->id, $datos)) {
             return redirect()->to($destino)
                 ->withInput()
                 ->with('errores_resolucion', ['No se pudo registrar la resolución.']);
+        }
+
+        $ultima = $resolucionModel->where('obra_id', $obra->id)->orderBy('id', 'DESC')->first();
+        if ($ultima !== null) {
+            (new AuditoriaModel())->registrar(
+                'ALTA',
+                'resoluciones',
+                (int) $ultima->id,
+                (int) (session()->get('user_id') ?? 0) ?: null,
+                null,
+                null,
+                json_encode([
+                    'obra_id' => (int) $obra->id,
+                    'tipo_resolucion_id' => $datos['tipo_resolucion_id'] ?? null,
+                    'numero' => $datos['numero'] ?? null,
+                    'anio' => $datos['anio'] ?? null,
+                    'fecha_resolucion' => $datos['fecha_resolucion'] ?? null,
+                    'monto' => $datos['monto'] ?? null,
+                    'dias' => $datos['dias'] ?? null,
+                ], JSON_UNESCAPED_UNICODE),
+                'Alta de resolución'
+            );
         }
 
         return redirect()->to($destino)
@@ -144,11 +168,43 @@ class Resoluciones extends BaseController
                 ->with('errores_resolucion', $errores);
         }
 
-        if (! (new ResolucionModel())->actualizar($resolucionId, $datos)) {
+        $resolucionAntes = (new ResolucionModel())->find($resolucionId);
+        $antes = $resolucionAntes === null ? [] : [
+            'tipo_resolucion_id' => isset($resolucionAntes->tipo_resolucion_id) ? (string) $resolucionAntes->tipo_resolucion_id : null,
+            'numero'             => $resolucionAntes->numero === null ? null : (string) $resolucionAntes->numero,
+            'anio'               => $resolucionAntes->anio === null ? null : (string) $resolucionAntes->anio,
+            'fecha_resolucion'   => $resolucionAntes->fecha_resolucion ?? null,
+            'monto'              => $resolucionAntes->monto === null ? null : (string) $resolucionAntes->monto,
+            'dias'               => $resolucionAntes->dias === null ? null : (string) $resolucionAntes->dias,
+            'observaciones'      => $resolucionAntes->observaciones ?? null,
+        ];
+
+        $resolucionModel = new ResolucionModel();
+        if (! $resolucionModel->actualizar($resolucionId, $datos)) {
             return redirect()->to($destino)
                 ->withInput()
                 ->with('errores_resolucion', ['No se pudo modificar la resolución.']);
         }
+
+        $despues = [
+            'tipo_resolucion_id' => isset($datos['tipo_resolucion_id']) ? (string) $datos['tipo_resolucion_id'] : ($resolucionAntes->tipo_resolucion_id ?? null),
+            'numero'             => isset($datos['numero']) && $datos['numero'] !== '' && $datos['numero'] !== null ? (string) $datos['numero'] : null,
+            'anio'               => isset($datos['anio']) && $datos['anio'] !== '' && $datos['anio'] !== null ? (string) $datos['anio'] : null,
+            'fecha_resolucion'   => $datos['fecha_resolucion'] ?? null,
+            'monto'              => isset($datos['monto']) && $datos['monto'] !== '' && $datos['monto'] !== null ? (string) $datos['monto'] : null,
+            'dias'               => isset($datos['dias']) && $datos['dias'] !== '' && $datos['dias'] !== null ? (string) $datos['dias'] : null,
+            'observaciones'      => $datos['observaciones'] ?? null,
+        ];
+
+        (new AuditoriaModel())->registrarCambios(
+            'CAMBIO',
+            'resoluciones',
+            $resolucionId,
+            (int) (session()->get('user_id') ?? 0) ?: null,
+            $antes,
+            $despues,
+            'Modificación de resolución'
+        );
 
         return redirect()->to($destino)
             ->with('success', 'La resolución fue modificada.');
@@ -203,6 +259,19 @@ class Resoluciones extends BaseController
             $confirmada = (new ObraModel())->recalcularMontoContractualVigente((int) $obra->id);
         }
 
+        if ($confirmada) {
+            (new AuditoriaModel())->registrar(
+                'CAMBIO_ESTADO',
+                'resoluciones',
+                $resolucionId,
+                (int) (session()->get('user_id') ?? 0) ?: null,
+                'confirmada',
+                '0',
+                '1',
+                'Confirmación de resolución'
+            );
+        }
+
         $db->transComplete();
 
         if (! $confirmada || ! $db->transStatus()) {
@@ -245,9 +314,28 @@ class Resoluciones extends BaseController
                 ->with('error', 'Una resolución confirmada no puede eliminarse.');
         }
 
+        $resolucionElim = (new ResolucionModel())->find($resolucionId);
         if (! (new ResolucionModel())->delete($resolucionId)) {
             return redirect()->to($destino)
                 ->with('error', 'No se pudo eliminar la resolución.');
+        }
+
+        if ($resolucionElim !== null) {
+            (new AuditoriaModel())->registrar(
+                'BAJA',
+                'resoluciones',
+                $resolucionId,
+                (int) (session()->get('user_id') ?? 0) ?: null,
+                null,
+                json_encode([
+                    'obra_id' => (int) $obra->id,
+                    'tipo_resolucion_id' => $resolucionElim->tipo_resolucion_id ?? null,
+                    'numero' => $resolucionElim->numero ?? null,
+                    'anio' => $resolucionElim->anio ?? null,
+                ], JSON_UNESCAPED_UNICODE),
+                null,
+                'Eliminación de resolución no confirmada'
+            );
         }
 
         return redirect()->to($destino)

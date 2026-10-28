@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Libraries\MontoObra;
 use App\Libraries\PlazoObra;
+use App\Models\AuditoriaModel;
 use App\Models\BarrioModel;
 use App\Models\EmpresaModel;
 use App\Models\EstadoObraModel;
@@ -61,7 +62,7 @@ class Obras extends BaseController
 
         $codigo = $obraModel->generarCodigo();
 
-        $obraModel->crear([
+        $obraIdCreada = $obraModel->crear([
             'codigo'               => $codigo,
             'expediente_municipal' => mb_strtoupper($datos['expediente']),
             'nombre'               => mb_strtoupper($datos['nombre']),
@@ -71,6 +72,24 @@ class Obras extends BaseController
             'numero_licitacion'    => $datos['numero_licitacion'],
             'estado_obra_id'       => (int) $estadoPrevio->id,
         ]);
+
+        if ($obraIdCreada) {
+            (new AuditoriaModel())->registrar(
+                'ALTA',
+                'obras',
+                (int) $obraIdCreada,
+                (int) (session()->get('user_id') ?? 0) ?: null,
+                null,
+                null,
+                json_encode([
+                    'codigo'               => $codigo,
+                    'expediente_municipal' => mb_strtoupper($datos['expediente']),
+                    'nombre'               => mb_strtoupper($datos['nombre']),
+                    'estado_obra_id'       => (int) $estadoPrevio->id,
+                ], JSON_UNESCAPED_UNICODE),
+                'Alta inicial de obra'
+            );
+        }
 
         return redirect()->to($this->getDashboardPath($roles))
             ->with('success', 'La obra fue registrada correctamente.');
@@ -138,6 +157,17 @@ class Obras extends BaseController
                 ->with('reabrir_modal_obra', 'edicion');
         }
 
+        $obraAntes = $obraModel->find($obraId);
+        $antes = $obraAntes === null ? [] : [
+            'expediente_municipal' => $obraAntes->expediente_municipal ?? null,
+            'nombre'               => $obraAntes->nombre ?? null,
+            'barrio_id'            => isset($obraAntes->barrio_id) ? ($obraAntes->barrio_id === null ? null : (string) $obraAntes->barrio_id) : null,
+            'empresa_id'           => isset($obraAntes->empresa_id) ? ($obraAntes->empresa_id === null ? null : (string) $obraAntes->empresa_id) : null,
+            'tipo_licitacion_id'   => isset($obraAntes->tipo_licitacion_id) ? ($obraAntes->tipo_licitacion_id === null ? null : (string) $obraAntes->tipo_licitacion_id) : null,
+            'numero_licitacion'    => $obraAntes->numero_licitacion ?? null,
+            'estado_obra_id'       => isset($obraAntes->estado_obra_id) ? (string) $obraAntes->estado_obra_id : null,
+        ];
+
         $actualizado = $obraModel->actualizar($obraId, [
             'expediente_municipal' => mb_strtoupper($datos['expediente']),
             'nombre'               => mb_strtoupper($datos['nombre']),
@@ -150,8 +180,29 @@ class Obras extends BaseController
 
         if (! $actualizado) {
             return redirect()->to($this->getDashboardPath($roles))
-                ->with('error', 'No se pudieron guardar los cambios en la obra.');
+                ->withInput()
+                ->with('errores_obra', ['No se pudieron guardar los cambios en la obra.']);
         }
+
+        $despues = [
+            'expediente_municipal' => mb_strtoupper($datos['expediente']),
+            'nombre'               => mb_strtoupper($datos['nombre']),
+            'barrio_id'            => $datos['barrio_id'] === null ? null : (string) $datos['barrio_id'],
+            'empresa_id'           => $datos['empresa_id'] === null ? null : (string) $datos['empresa_id'],
+            'tipo_licitacion_id'   => $datos['tipo_licitacion_id'] === null ? null : (string) $datos['tipo_licitacion_id'],
+            'numero_licitacion'    => $datos['numero_licitacion'],
+            'estado_obra_id'       => $estadoId === null ? null : (string) $estadoId,
+        ];
+
+        (new AuditoriaModel())->registrarCambios(
+            'CAMBIO',
+            'obras',
+            $obraId,
+            (int) (session()->get('user_id') ?? 0) ?: null,
+            $antes,
+            $despues,
+            'Edición de datos básicos de obra'
+        );
 
         return redirect()->to($this->getDashboardPath($roles))
             ->with('success', 'Los datos de la obra fueron actualizados correctamente.');
@@ -299,6 +350,14 @@ class Obras extends BaseController
                 ->with('errores_ficha', $errores);
         }
 
+        $obraAntes = $obraModel->find($obraId);
+        $antes = $obraAntes === null ? [] : [
+            'fecha_inicio'          => $obraAntes->fecha_inicio ?? null,
+            'plazo_original_valor'  => isset($obraAntes->plazo_original_valor) ? ($obraAntes->plazo_original_valor === null ? null : (string) $obraAntes->plazo_original_valor) : null,
+            'plazo_original_unidad' => $obraAntes->plazo_original_unidad ?? null,
+            'plazo_original_dias'   => isset($obraAntes->plazo_original_dias) ? ($obraAntes->plazo_original_dias === null ? null : (string) $obraAntes->plazo_original_dias) : null,
+        ];
+
         if ($this->fichaSinCambios($datos, $obra)) {
             return redirect()->to($destino)
                 ->with('success', 'No se registraron cambios en los datos de la obra.');
@@ -308,6 +367,23 @@ class Obras extends BaseController
             return redirect()->to($destino)
                 ->with('error', 'No se pudieron guardar los cambios de los datos de la obra.');
         }
+
+        $despues = [
+            'fecha_inicio'          => $datos['fecha_inicio'] ?? null,
+            'plazo_original_valor'  => isset($datos['plazo_original_valor']) && $datos['plazo_original_valor'] !== '' ? (string) $datos['plazo_original_valor'] : null,
+            'plazo_original_unidad' => $datos['plazo_original_unidad'] ?? null,
+            'plazo_original_dias'   => isset($datos['plazo_original_dias']) && $datos['plazo_original_dias'] !== '' ? (string) $datos['plazo_original_dias'] : null,
+        ];
+
+        (new AuditoriaModel())->registrarCambios(
+            'CAMBIO',
+            'obras',
+            $obraId,
+            (int) (session()->get('user_id') ?? 0) ?: null,
+            $antes,
+            $despues,
+            'Actualización de ficha de obra'
+        );
 
         return redirect()->to($destino)
             ->with('success', 'Los datos iniciales de la obra fueron actualizados correctamente.');
@@ -346,7 +422,15 @@ class Obras extends BaseController
 
         $expediente = ($expedienteRaw === '') ? null : mb_strtoupper($expedienteRaw);
 
+        $obraAntes = $obraModel->find($obraId);
+        $expAntes = $obraAntes === null ? null : ($obraAntes->expediente_contable ?? null);
+
         if ($this->expedienteContableSinCambios(['expediente_contable' => $expediente], $obra)) {
+            return redirect()->to($destino)
+                ->with('success', 'No se registraron cambios en el Expte. contable.');
+        }
+
+        if ((string) ($expAntes ?? '') === (string) ($expediente ?? '')) {
             return redirect()->to($destino)
                 ->with('success', 'No se registraron cambios en el Expte. contable.');
         }
@@ -355,6 +439,17 @@ class Obras extends BaseController
             return redirect()->to($destino)
                 ->with('error', 'No se pudieron guardar los cambios del Expte. contable.');
         }
+
+        (new AuditoriaModel())->registrar(
+            'CAMBIO',
+            'obras',
+            $obraId,
+            (int) (session()->get('user_id') ?? 0) ?: null,
+            'expediente_contable',
+            $expAntes === null ? null : (string) $expAntes,
+            $expediente === null ? null : (string) $expediente,
+            'Actualización de expediente contable'
+        );
 
         return redirect()->to($destino)
             ->with('success', 'El Expte. contable de la obra fue actualizado correctamente.');
@@ -400,10 +495,37 @@ class Obras extends BaseController
                 ->with('errores_ficha', $errores);
         }
 
+        $obraAntes = $obraModel->find($obraId);
+        $antes = $obraAntes === null ? [] : [
+            'fecha_inicio'          => $obraAntes->fecha_inicio ?? null,
+            'plazo_original_valor'  => isset($obraAntes->plazo_original_valor) ? ($obraAntes->plazo_original_valor === null ? null : (string) $obraAntes->plazo_original_valor) : null,
+            'plazo_original_unidad' => $obraAntes->plazo_original_unidad ?? null,
+            'plazo_original_dias'   => isset($obraAntes->plazo_original_dias) ? ($obraAntes->plazo_original_dias === null ? null : (string) $obraAntes->plazo_original_dias) : null,
+            'plazo_inicial_confirmado' => isset($obraAntes->plazo_inicial_confirmado) ? (string) $obraAntes->plazo_inicial_confirmado : null,
+        ];
+
         if (! $obraModel->confirmarDatosIniciales($obraId, $datos)) {
             return redirect()->to($destino)
                 ->with('error', 'No se pudieron confirmar los datos iniciales de la obra.');
         }
+
+        $despues = [
+            'fecha_inicio'          => $datos['fecha_inicio'] ?? null,
+            'plazo_original_valor'  => isset($datos['plazo_original_valor']) && $datos['plazo_original_valor'] !== '' ? (string) $datos['plazo_original_valor'] : null,
+            'plazo_original_unidad' => $datos['plazo_original_unidad'] ?? null,
+            'plazo_original_dias'   => isset($datos['plazo_original_dias']) && $datos['plazo_original_dias'] !== '' ? (string) $datos['plazo_original_dias'] : null,
+            'plazo_inicial_confirmado' => '1',
+        ];
+
+        (new AuditoriaModel())->registrarCambios(
+            'CAMBIO',
+            'obras',
+            $obraId,
+            (int) (session()->get('user_id') ?? 0) ?: null,
+            $antes,
+            $despues,
+            'Confirmación de datos iniciales de obra'
+        );
 
         return redirect()->to($destino)
             ->with('success', 'La fecha de inicio y el plazo de la obra fueron confirmados. Ya no pueden modificarse.');
@@ -441,12 +563,26 @@ class Obras extends BaseController
                 ->with('errores_inspector', $errores);
         }
 
+        $vigenteAntes = $inspectoresModel->findVigentePorObra($obraId);
+        $inspectorAntesId = $vigenteAntes ? ($vigenteAntes->usuario_id ?? null) : null;
+
         if (! $inspectoresModel->cambiarAsignacion($obraId, $inspectorId, $fechaCambio)) {
             return redirect()->to('/obras/ver/' . $obraId)
                 ->with('error', 'No se pudo registrar el cambio de inspector.');
         }
 
         $obraModel->touch($obraId);
+
+        (new AuditoriaModel())->registrar(
+            'CAMBIO',
+            'obras',
+            $obraId,
+            (int) (session()->get('user_id') ?? 0) ?: null,
+            'inspector_vigente_id',
+            $inspectorAntesId === null ? null : (string) $inspectorAntesId,
+            (string) $inspectorId,
+            'Cambio de asignación de inspector'
+        );
 
         return redirect()->to('/obras/ver/' . $obraId)
             ->with('success', 'El inspector vigente fue actualizado correctamente.');
@@ -485,10 +621,24 @@ class Obras extends BaseController
                 ->with('errores_representante', $errores);
         }
 
+        $vigenteAntes = $representantesModel->findVigentePorObra($obraId);
+        $repAntesId = $vigenteAntes ? ($vigenteAntes->representante_tecnico_id ?? null) : null;
+
         if (! $representantesModel->cambiarAsignacion($obraId, $representanteId, $fechaCambio)) {
             return redirect()->to('/obras/ver/' . $obraId)
                 ->with('error', 'No se pudo registrar el cambio de representante técnico.');
         }
+
+        (new AuditoriaModel())->registrar(
+            'CAMBIO',
+            'obras',
+            $obraId,
+            (int) (session()->get('user_id') ?? 0) ?: null,
+            'representante_tecnico_vigente_id',
+            $repAntesId === null ? null : (string) $repAntesId,
+            (string) $representanteId,
+            'Cambio de asignación de representante técnico'
+        );
 
         return redirect()->to('/obras/ver/' . $obraId)
             ->with('success', 'El representante técnico vigente fue actualizado correctamente.');

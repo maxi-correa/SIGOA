@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Libraries\PlazoObra;
+use App\Models\AuditoriaModel;
 use App\Models\EstadoObraModel;
 use App\Models\NeutralizacionModel;
 use App\Models\ObraModel;
@@ -124,6 +125,7 @@ class Neutralizaciones extends BaseController
 
         $registrada = false;
         $erroresTx  = [];
+        $neutIdCreada = null;
 
         try {
             $this->bloquearObra((int) $obra->id);
@@ -144,11 +146,13 @@ class Neutralizaciones extends BaseController
                     );
 
                     if ($erroresTx === []) {
-                        $registrada = $neutModel->crear((int) $obra->id, [
+                        $neutIdCreada = $neutModel->crear((int) $obra->id, [
                             'numero'        => $neutModel->proximoNumero((int) $obra->id),
                             'fecha_inicio'  => $datos['fecha_inicio'],
                             'observaciones' => $datos['observaciones'],
                         ]);
+
+                        $registrada = $neutIdCreada !== null && $neutIdCreada !== false;
 
                         if ($registrada) {
                             $registrada = $this->cambiarEstado(
@@ -177,6 +181,32 @@ class Neutralizaciones extends BaseController
 
             return redirect()->to($destino)
                 ->with('error', 'No se pudo registrar la neutralización. Verifique el estado de la obra.');
+        }
+
+        if ($neutIdCreada !== null && $neutIdCreada !== false) {
+            (new AuditoriaModel())->registrar(
+                'ALTA',
+                'neutralizaciones',
+                (int) $neutIdCreada,
+                (int) (session()->get('user_id') ?? 0) ?: null,
+                null,
+                null,
+                json_encode([
+                    'obra_id' => (int) $obra->id,
+                    'fecha_inicio' => $datos['fecha_inicio'] ?? null,
+                ], JSON_UNESCAPED_UNICODE),
+                'Registro de neutralización'
+            );
+            (new AuditoriaModel())->registrar(
+                'CAMBIO_ESTADO',
+                'obras',
+                (int) $obra->id,
+                (int) (session()->get('user_id') ?? 0) ?: null,
+                'estado_obra_id',
+                null,
+                (string) (new EstadoObraModel())->findByEstado(EstadoObraModel::ESTADO_NEUTRALIZADA)->id ?? null,
+                'Paso a NEUTRALIZADA por neutralización'
+            );
         }
 
         $db->transComplete();
@@ -233,6 +263,7 @@ class Neutralizaciones extends BaseController
         $db->transStart();
 
         $reiniciada = false;
+        $abiertaActualId = null;
 
         try {
             $this->bloquearObra((int) $obra->id);
@@ -246,6 +277,7 @@ class Neutralizaciones extends BaseController
                 $abiertaActual = $neutModel->abierta((int) $obra->id);
 
                 if ($abiertaActual !== null) {
+                    $abiertaActualId = (int) $abiertaActual->id;
                     $reiniciada = $neutModel->reiniciar((int) $abiertaActual->id, $datos['fecha_reinicio']);
 
                     if ($reiniciada) {
@@ -268,6 +300,29 @@ class Neutralizaciones extends BaseController
 
             return redirect()->to($destino)
                 ->with('error', 'No se pudo registrar el reinicio de la obra.');
+        }
+
+        if ($abiertaActualId !== null) {
+            (new AuditoriaModel())->registrar(
+                'CAMBIO',
+                'neutralizaciones',
+                $abiertaActualId,
+                (int) (session()->get('user_id') ?? 0) ?: null,
+                'fecha_reinicio',
+                null,
+                $datos['fecha_reinicio'] ?? null,
+                'Reinicio de neutralización'
+            );
+            (new AuditoriaModel())->registrar(
+                'CAMBIO_ESTADO',
+                'obras',
+                (int) $obra->id,
+                (int) (session()->get('user_id') ?? 0) ?: null,
+                'estado_obra_id',
+                null,
+                (string) (new EstadoObraModel())->findByEstado(EstadoObraModel::ESTADO_EN_EJECUCION)->id ?? null,
+                'Vuelta a EN EJECUCIÓN por reinicio'
+            );
         }
 
         $db->transComplete();

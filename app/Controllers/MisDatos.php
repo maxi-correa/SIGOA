@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Models\AuditoriaModel;
 use App\Models\UsuarioModel;
 
 class MisDatos extends BaseController
@@ -118,6 +119,7 @@ class MisDatos extends BaseController
                 ->with('reabrir_dato', $campo);
         }
 
+        $valorAnterior = $usuario->{$campo} ?? null;
         $aGuardar = $valor;
 
         if ($campo === 'email') {
@@ -126,10 +128,32 @@ class MisDatos extends BaseController
             $aGuardar = mb_strtoupper($valor);
         }
 
+        if ((string) ($valorAnterior === null ? null : $valorAnterior) === (string) ($aGuardar === null ? null : $aGuardar)) {
+            $mensajes = [
+                'nombre'   => 'Su nombre fue actualizado correctamente.',
+                'apellido' => 'Su apellido fue actualizado correctamente.',
+                'email'    => 'El correo electrónico fue actualizado correctamente.',
+            ];
+
+            return redirect()->to('/mis-datos')
+                ->with('success', $mensajes[$campo]);
+        }
+
         if (! $this->usuarioModel->actualizarDatosPersonales((int) $usuario->id, [$campo => $aGuardar])) {
             return redirect()->to('/mis-datos')
                 ->with('error', 'No fue posible guardar la información.');
         }
+
+        (new AuditoriaModel())->registrar(
+            'CAMBIO',
+            'usuarios',
+            (int) $usuario->id,
+            (int) $usuario->id,
+            $campo,
+            $valorAnterior === null ? null : (string) $valorAnterior,
+            $aGuardar === null ? null : (string) $aGuardar,
+            'Modificación de datos propios (Mis Datos)'
+        );
 
         /* El nombre visible en la topbar se deriva de nombre + apellido */
         if ($campo === 'nombre' || $campo === 'apellido') {
@@ -254,6 +278,17 @@ class MisDatos extends BaseController
             return redirect()->to('/mis-datos')
                 ->with('error', 'No fue posible guardar la información.');
         }
+
+        (new AuditoriaModel())->registrar(
+            'CAMBIO',
+            'usuarios',
+            (int) $usuario->id,
+            (int) $usuario->id,
+            'password_hash',
+            null,
+            null,
+            'Cambio de contraseña propio (verificado)'
+        );
 
         $session->remove('contrasena_verificada');
 

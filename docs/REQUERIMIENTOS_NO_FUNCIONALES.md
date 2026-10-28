@@ -1552,6 +1552,7 @@ El layout contendrá exclusivamente elementos comunes:
 * carga de recursos globales (tipografía, iconografía, estilos base);
 * barra superior de navegación;
 * contenedor principal para el contenido de cada página;
+* pie de página institucional (`<footer>`);
 * carga de scripts globales.
 
 El layout no deberá contener contenido específico de ninguna página.
@@ -1559,6 +1560,19 @@ El layout no deberá contener contenido específico de ninguna página.
 Las páginas colocarán su contenido y sus recursos específicos mediante las secciones definidas por el layout.
 
 El login es una pantalla pública y no deberá extender el layout autenticado.
+
+## Pie de página institucional
+
+SIGOA incorporará un pie de página institucional común en los layouts que corresponda.
+
+* **Contenido:** «SIGOA» / Desarrollado por Maximiliano Correa / Todos los derechos reservados · © [AÑO ACTUAL].
+* **Año dinámico:** el año deberá generarse desde PHP mediante `date('Y')`, sin valor hardcodeado.
+* **Ubicación:** se integrará preferentemente en los layouts compartidos (`app/Views/layouts/auth.php`). Las pantallas públicas con layout propio (como el inicio de sesión) deberán incluirlo si forman parte de las vistas funcionales, respetando su propia estructura.
+* **Semántica y accesibilidad:** deberá utilizar el elemento `<footer>` con `role="contentinfo"`.
+* **Coherencia visual:** se integrará con la paleta oficial, tipografía, espaciado y estilos vigentes, con separación visual sutil respecto del contenido.
+* **Comportamiento:** permanecerá en el flujo normal del documento (no `position: fixed`). No deberá superponerse ni tapar contenido, botones, formularios, tablas, tarjetas o controles. Cuando el contenido sea escaso, el layout utilizará una estructura flexible para mantener el pie al final de la pantalla.
+* **Responsive:** en escritorio el contenido se distribuirá equilibrado; en celulares se reorganizará en varias líneas sin desbordamiento horizontal.
+* **Reutilización:** se cargará mediante estilos globales del componente (`assets/css/components/footer.css`) y se evitará duplicar el HTML en múltiples vistas.
 
 ---
 

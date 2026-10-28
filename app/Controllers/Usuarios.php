@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Models\AuditoriaModel;
 use App\Models\UsuarioModel;
 
 /**
@@ -110,12 +111,38 @@ class Usuarios extends BaseController
                 ->with('reabrir_modal_usuario', 'edicion');
         }
 
+        $usuarioAntes = $this->usuarioModel->find($usuarioId);
+        $antes = $usuarioAntes === null ? [] : [
+            'nombre'  => $usuarioAntes->nombre ?? null,
+            'apellido' => $usuarioAntes->apellido ?? null,
+            'email'   => $usuarioAntes->email ?? null,
+            'activo'  => isset($usuarioAntes->activo) ? (int) $usuarioAntes->activo : null,
+        ];
+
         $actualizado = $this->usuarioModel->actualizarDatosPersonales($usuarioId, [
             'nombre'  => $datos['nombre'],
             'apellido' => $datos['apellido'],
             'email'   => $datos['email'],
             'activo'  => $datos['activo'],
         ]);
+
+        if ($actualizado) {
+            $despues = [
+                'nombre'  => $datos['nombre'],
+                'apellido' => $datos['apellido'],
+                'email'   => $datos['email'],
+                'activo'  => (int) $datos['activo'],
+            ];
+            (new AuditoriaModel())->registrarCambios(
+                'CAMBIO',
+                'usuarios',
+                $usuarioId,
+                (int) $session->get('user_id'),
+                $antes,
+                $despues,
+                'Edición administrativa de usuario'
+            );
+        }
 
         return redirect()->to('/usuarios')
             ->with('success', 'Los datos del usuario fueron actualizados correctamente.');
@@ -178,6 +205,23 @@ class Usuarios extends BaseController
                 ->with('errores_usuario', ['No fue posible registrar el usuario. Verifique que el usuario no esté duplicado.'])
                 ->with('reabrir_modal_usuario', 'alta');
         }
+
+        (new AuditoriaModel())->registrar(
+            'ALTA',
+            'usuarios',
+            (int) $usuarioId,
+            (int) session()->get('user_id'),
+            null,
+            null,
+            json_encode([
+                'usuario' => $datos['usuario'],
+                'nombre'  => $datos['nombre'],
+                'apellido' => $datos['apellido'],
+                'email'   => $datos['email'],
+                'rol_id'  => $rolId,
+            ], JSON_UNESCAPED_UNICODE),
+            'Alta de usuario con asignación de rol'
+        );
 
         return redirect()->to('/usuarios')
             ->with('success', 'El usuario fue registrado correctamente.');

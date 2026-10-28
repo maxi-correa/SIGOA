@@ -1,0 +1,56 @@
+/* ===================================================================
+   SIGOA — Componente: Footer institucional
+   =================================================================== */
+
+.app-footer {
+    margin-top: auto;
+    border-top: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    line-height: 1.6;
+}
+
+.app-footer-inner {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: var(--space-md) 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.125rem;
+}
+
+.app-footer-line {
+    display: block;
+}
+
+.app-footer-line--primary {
+    color: var(--color-primary);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+}
+
+@media (min-width: 769px) {
+    .app-footer-inner {
+        padding: var(--space-md) 2rem;
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.5rem var(--space-lg);
+    }
+
+    .app-footer-line:not(:last-child)::after {
+        content: "·";
+        margin-left: var(--space-lg);
+        color: var(--color-border);
+    }
+}
+
+@media (max-width: 768px) {
+    .app-footer-inner {
+        padding: var(--space-md) 1rem;
+    }
+}

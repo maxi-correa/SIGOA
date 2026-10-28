@@ -2,12 +2,22 @@
    SIGOA — Página: Login
    =================================================================== */
 
+.login-layout {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
 .login-page {
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 100vh;
+    flex: 1 0 auto;
     padding: var(--space-md);
+}
+
+.login-layout .app-footer {
+    flex-shrink: 0;
 }
 
 .login-card {

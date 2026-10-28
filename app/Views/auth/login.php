@@ -16,9 +16,10 @@
     <link rel="stylesheet" href="<?= base_url('assets/css/components/forms.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/buttons.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/alerts.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('assets/css/components/footer.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/pages/login.css') ?>">
 </head>
-<body>
+<body class="login-layout">
     <main class="login-page">
         <div class="login-card">
 
@@ -99,6 +100,20 @@
 
         </div>
     </main>
+
+    <footer class="app-footer" role="contentinfo">
+        <div class="app-footer-inner">
+            <div class="app-footer-line app-footer-line--primary">
+                <strong>SIGOA</strong>
+            </div>
+            <div class="app-footer-line">
+                Desarrollado por Maximiliano Correa
+            </div>
+            <div class="app-footer-line">
+                Todos los derechos reservados · © <?= date('Y') ?>
+            </div>
+        </div>
+    </footer>
 
     <!-- Almacenamiento local: perfil de la sesión (copias descargadas) -->
     <script src="<?= base_url('assets/js/components/indexeddb.js') ?>"></script>

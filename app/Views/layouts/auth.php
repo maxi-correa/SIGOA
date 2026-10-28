@@ -58,6 +58,7 @@ $rolBadgeOcultoMovil = $rolPrincipal === 'INSPECTOR';
     <link rel="stylesheet" href="<?= base_url('assets/css/components/sidebar.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/tables.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/components/modal.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('assets/css/components/footer.css') ?>">
 
     <?= $this->renderSection('styles') ?>
 </head>
@@ -108,6 +109,20 @@ $rolBadgeOcultoMovil = $rolPrincipal === 'INSPECTOR';
             <?= $this->renderSection('content') ?>
         </main>
     </div>
+
+    <footer class="app-footer" role="contentinfo">
+        <div class="app-footer-inner">
+            <div class="app-footer-line app-footer-line--primary">
+                <strong>SIGOA</strong>
+            </div>
+            <div class="app-footer-line">
+                Desarrollado por Maximiliano Correa
+            </div>
+            <div class="app-footer-line">
+                Todos los derechos reservados · © <?= date('Y') ?>
+            </div>
+        </div>
+    </footer>
 
     <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
 
